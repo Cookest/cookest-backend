@@ -9,7 +9,7 @@ use crate::models::inventory::{AddInventoryItem, UpdateInventoryItem};
 use crate::models::profile::UpdateProfileRequest;
 use crate::models::interaction::RateRecipeRequest;
 use crate::models::meal_plan::GenerateMealPlanRequest;
-use crate::services::{InventoryService, ProfileService, InteractionService, MealPlanService};
+use crate::services::{InventoryService, ProfileService, InteractionService, MealPlanService, PushTokenService};
 use crate::middleware::Claims;
 
 // ── Inventory ────────────────────────────────────────────────────────────────
@@ -288,6 +288,44 @@ pub async fn get_nutrition_summary(
 
 // ── Route configuration ───────────────────────────────────────────────────────
 
+// ── Push Tokens ───────────────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct RegisterPushTokenBody {
+    pub token: String,
+    pub platform: String,
+}
+
+pub async fn register_push_token(
+    push_svc: web::Data<Arc<PushTokenService>>,
+    claims: web::ReqData<Claims>,
+    body: web::Json<RegisterPushTokenBody>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let body = body.into_inner();
+    let result = push_svc.upsert(user_id, body.token, body.platform).await?;
+    Ok(HttpResponse::Created().json(result))
+}
+
+pub async fn list_push_tokens(
+    push_svc: web::Data<Arc<PushTokenService>>,
+    claims: web::ReqData<Claims>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let tokens = push_svc.list(user_id).await?;
+    Ok(HttpResponse::Ok().json(tokens))
+}
+
+pub async fn delete_push_token(
+    push_svc: web::Data<Arc<PushTokenService>>,
+    claims: web::ReqData<Claims>,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    push_svc.delete(user_id, path.into_inner()).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "Push token removed" })))
+}
+
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg
         // Inventory
@@ -299,13 +337,16 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .route("/{id}", web::put().to(update_inventory_item))
                 .route("/{id}", web::delete().to(delete_inventory_item)),
         )
-        // Profile + history + favourites
+        // Profile + history + favourites + push tokens
         .service(
             web::scope("/api/me")
                 .route("", web::get().to(get_profile))
                 .route("", web::put().to(update_profile))
                 .route("/history", web::get().to(get_cooking_history))
-                .route("/favourites", web::get().to(get_favourites)),
+                .route("/favourites", web::get().to(get_favourites))
+                .route("/push-tokens", web::get().to(list_push_tokens))
+                .route("/push-tokens", web::post().to(register_push_token))
+                .route("/push-tokens/{id}", web::delete().to(delete_push_token)),
         )
         // Recipe interactions
         .service(

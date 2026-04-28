@@ -32,7 +32,7 @@ use crate::middleware::{JwtAuth, RateLimit};
 use crate::services::{
     AuthService, TokenService, RecipeService, IngredientService,
     MealPlanService, InventoryService, ProfileService, InteractionService, ChatService,
-    OnboardingService, ShoppingListService, SubscriptionService, StoreService,
+    OnboardingService, ShoppingListService, SubscriptionService, StoreService, PushTokenService,
 };
 
 #[actix_web::main]
@@ -600,6 +600,8 @@ async fn main() -> std::io::Result<()> {
         config.ollama_model.clone(),
     ));
 
+    let push_token_service = Arc::new(PushTokenService::new(db.clone()));
+
     tracing::info!("Server starting on {}", bind_address);
 
     HttpServer::new(move || {
@@ -638,6 +640,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(shopping_list_service.clone()))
             .app_data(web::Data::new(subscription_service.clone()))
             .app_data(web::Data::new(store_service.clone()))
+            .app_data(web::Data::new(push_token_service.clone()))
             .app_data(web::Data::new(db.clone()))
             // ── Public routes (no JWT required) ──────────────────────────────
             .configure(configure_auth)        // /api/auth/*
