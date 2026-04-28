@@ -24,11 +24,15 @@ use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
-use crate::handlers::{configure_auth, configure_recipes, configure_ingredients, configure_user, configure_chat};
+use crate::handlers::{
+    configure_auth, configure_recipes, configure_ingredients, configure_user, configure_chat,
+    configure_onboarding, configure_shopping_list, configure_subscription, configure_stores,
+};
 use crate::middleware::{JwtAuth, RateLimit};
 use crate::services::{
     AuthService, TokenService, RecipeService, IngredientService,
     MealPlanService, InventoryService, ProfileService, InteractionService, ChatService,
+    OnboardingService, ShoppingListService, SubscriptionService, StoreService,
 };
 
 #[actix_web::main]
@@ -386,6 +390,169 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_user_preferences_updated
             ON user_preferences(updated_at);
         "#,
+
+        // ── Schema v2: Subscription + onboarding fields on users ────────────
+        r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier TEXT NOT NULL DEFAULT 'free';"#,
+        r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_valid_until TIMESTAMPTZ;"#,
+        r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;"#,
+        r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS cooking_skill_level TEXT;"#,
+        r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_cuisines TEXT[] DEFAULT '{}';"#,
+        r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS health_goals TEXT[] DEFAULT '{}';"#,
+        r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_budget NUMERIC(10,2);"#,
+        r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_time_per_meal_min INTEGER;"#,
+        r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE;"#,
+        r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;"#,
+        r#"CREATE INDEX IF NOT EXISTS idx_users_stripe ON users(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;"#,
+
+        // ── Schema v2: Flex / energy fields on meal_plan_slots ──────────────
+        // recipe_id becomes nullable to support flex days (no recipe assigned)
+        r#"ALTER TABLE meal_plan_slots ALTER COLUMN recipe_id DROP NOT NULL;"#,
+        r#"ALTER TABLE meal_plan_slots ADD COLUMN IF NOT EXISTS is_flex BOOLEAN NOT NULL DEFAULT FALSE;"#,
+        r#"ALTER TABLE meal_plan_slots ADD COLUMN IF NOT EXISTS flex_type TEXT;"#,
+        r#"ALTER TABLE meal_plan_slots ADD COLUMN IF NOT EXISTS energy_level TEXT;"#,
+
+        // ── Schema v2: author_id on recipes ──────────────────────────────────
+        r#"ALTER TABLE recipes ADD COLUMN IF NOT EXISTS author_id UUID REFERENCES users(id) ON DELETE SET NULL;"#,
+        r#"ALTER TABLE recipes ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT TRUE;"#,
+        r#"CREATE INDEX IF NOT EXISTS idx_recipes_author ON recipes(author_id) WHERE author_id IS NOT NULL;"#,
+
+        // ── Stores ─────────────────────────────────────────────────────────────
+        // Must come before pdf_processing_jobs (jobs FK → stores)
+        r#"
+        CREATE TABLE IF NOT EXISTS stores (
+            id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            name        TEXT NOT NULL,
+            slug        TEXT UNIQUE NOT NULL,
+            website     TEXT,
+            logo_url    TEXT,
+            country     TEXT,
+            city        TEXT,
+            lat         DOUBLE PRECISION,
+            lng         DOUBLE PRECISION,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_stores_slug ON stores(slug);
+        "#,
+
+        // ── PDF Processing Jobs ───────────────────────────────────────────────
+        // Must come before candidates (candidates FK → jobs)
+        r#"
+        CREATE TABLE IF NOT EXISTS pdf_processing_jobs (
+            id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            store_id        UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+            file_path       TEXT NOT NULL,
+            status          TEXT NOT NULL DEFAULT 'pending',
+            error           TEXT,
+            retry_count     INTEGER NOT NULL DEFAULT 0,
+            started_at      TIMESTAMPTZ,
+            heartbeat_at    TIMESTAMPTZ,
+            processed_at    TIMESTAMPTZ,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_pdf_jobs_store  ON pdf_processing_jobs(store_id);
+        CREATE INDEX IF NOT EXISTS idx_pdf_jobs_status ON pdf_processing_jobs(status);
+        "#,
+
+        // ── Store Promotions (published, admin-approved) ──────────────────────
+        r#"
+        CREATE TABLE IF NOT EXISTS store_promotions (
+            id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            store_id            UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+            product_name        TEXT NOT NULL,
+            brand               TEXT,
+            original_price      NUMERIC(10,2),
+            discounted_price    NUMERIC(10,2) NOT NULL,
+            discount_pct        NUMERIC(5,2),
+            unit                TEXT,
+            valid_from          TIMESTAMPTZ,
+            valid_until         TIMESTAMPTZ,
+            is_active           BOOLEAN NOT NULL DEFAULT TRUE,
+            source_pdf_url      TEXT,
+            confidence          NUMERIC(4,3),
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_store_promotions_store  ON store_promotions(store_id);
+        CREATE INDEX IF NOT EXISTS idx_store_promotions_active ON store_promotions(store_id, is_active, valid_until);
+        CREATE INDEX IF NOT EXISTS idx_store_promotions_name_trgm
+            ON store_promotions USING GIN (product_name gin_trgm_ops);
+        "#,
+
+        // ── Store Promotion Ingredients (cross-reference) ─────────────────────
+        r#"
+        CREATE TABLE IF NOT EXISTS store_promotion_ingredients (
+            promotion_id    UUID NOT NULL REFERENCES store_promotions(id) ON DELETE CASCADE,
+            ingredient_id   BIGINT NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
+            similarity_score NUMERIC(4,3),
+            PRIMARY KEY (promotion_id, ingredient_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_promo_ingredients_ingredient
+            ON store_promotion_ingredients(ingredient_id);
+        "#,
+
+        // ── Store Promotion Candidates (AI staging, awaiting admin review) ────
+        r#"
+        CREATE TABLE IF NOT EXISTS store_promotion_candidates (
+            id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            store_id            UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+            job_id              UUID NOT NULL REFERENCES pdf_processing_jobs(id) ON DELETE CASCADE,
+            product_name        TEXT NOT NULL,
+            brand               TEXT,
+            original_price      NUMERIC(10,2),
+            discounted_price    NUMERIC(10,2) NOT NULL,
+            discount_pct        NUMERIC(5,2),
+            unit                TEXT,
+            valid_from          TIMESTAMPTZ,
+            valid_until         TIMESTAMPTZ,
+            confidence          NUMERIC(4,3),
+            review_status       TEXT NOT NULL DEFAULT 'pending',
+            reviewed_by         UUID REFERENCES users(id) ON DELETE SET NULL,
+            reviewed_at         TIMESTAMPTZ,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_candidates_job    ON store_promotion_candidates(job_id);
+        CREATE INDEX IF NOT EXISTS idx_candidates_review ON store_promotion_candidates(review_status);
+        "#,
+
+        // ── Shopping List ─────────────────────────────────────────────────────
+        r#"
+        CREATE TABLE IF NOT EXISTS shopping_list_items (
+            id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            ingredient_id   BIGINT REFERENCES ingredients(id) ON DELETE SET NULL,
+            name            TEXT NOT NULL,
+            quantity        NUMERIC(10,3),
+            unit            TEXT,
+            is_checked      BOOLEAN NOT NULL DEFAULT FALSE,
+            is_manual       BOOLEAN NOT NULL DEFAULT FALSE,
+            meal_plan_id    BIGINT REFERENCES meal_plans(id) ON DELETE SET NULL,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_shopping_list_user       ON shopping_list_items(user_id);
+        CREATE INDEX IF NOT EXISTS idx_shopping_list_ingredient ON shopping_list_items(ingredient_id) WHERE ingredient_id IS NOT NULL;
+        "#,
+
+        // ── User Push Tokens ─────────────────────────────────────────────────
+        r#"
+        CREATE TABLE IF NOT EXISTS user_push_tokens (
+            id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            token       TEXT UNIQUE NOT NULL,
+            platform    TEXT NOT NULL,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON user_push_tokens(user_id);
+        "#,
+
+        // ── Stripe Processed Events (idempotency) ─────────────────────────────
+        r#"
+        CREATE TABLE IF NOT EXISTS stripe_processed_events (
+            event_id        TEXT PRIMARY KEY,
+            processed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        "#,
     ];
 
     for sql in migrations {
@@ -415,6 +582,23 @@ async fn main() -> std::io::Result<()> {
     let profile_service = Arc::new(ProfileService::new(db.clone()));
     let interaction_service = Arc::new(InteractionService::new(db.clone()));
     let chat_service = Arc::new(ChatService::new(db.clone()));
+    let onboarding_service = Arc::new(OnboardingService::new(db.clone()));
+    let shopping_list_service = Arc::new(ShoppingListService::new(db.clone()));
+    let subscription_service = Arc::new(SubscriptionService::new(
+        db.clone(),
+        config.stripe_webhook_secret.clone(),
+    ));
+
+    // Ensure PDF upload directory exists
+    std::fs::create_dir_all(&config.pdf_upload_dir)
+        .expect("Failed to create PDF upload directory");
+
+    let store_service = Arc::new(StoreService::new(
+        db.clone(),
+        std::path::PathBuf::from(&config.pdf_upload_dir),
+        config.ollama_url.clone(),
+        config.ollama_model.clone(),
+    ));
 
     tracing::info!("Server starting on {}", bind_address);
 
@@ -450,16 +634,25 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(profile_service.clone()))
             .app_data(web::Data::new(interaction_service.clone()))
             .app_data(web::Data::new(chat_service.clone()))
+            .app_data(web::Data::new(onboarding_service.clone()))
+            .app_data(web::Data::new(shopping_list_service.clone()))
+            .app_data(web::Data::new(subscription_service.clone()))
+            .app_data(web::Data::new(store_service.clone()))
+            .app_data(web::Data::new(db.clone()))
             // ── Public routes (no JWT required) ──────────────────────────────
             .configure(configure_auth)        // /api/auth/*
             .configure(configure_recipes)     // /api/recipes/* (read-only browsing)
             .configure(configure_ingredients) // /api/ingredients/* (search)
+            .configure(configure_subscription) // /api/webhooks/stripe (raw body, no JWT)
             // ── Protected routes (JWT required) ──────────────────────────────
             .service(
                 web::scope("")
                     .wrap(JwtAuth::new(token_service.clone()))
-                    .configure(configure_user)  // /api/me/*, /api/inventory/*, /api/recipes/:id/rate, /api/meal-plans/*
-                    .configure(configure_chat)  // /api/chat/*
+                    .configure(configure_user)          // /api/me/*, /api/inventory/*, /api/meal-plans/*
+                    .configure(configure_chat)          // /api/chat/*
+                    .configure(configure_onboarding)    // /api/onboarding, /api/me/change-password, /api/me
+                    .configure(configure_shopping_list) // /api/shopping-list/*
+                    .configure(configure_stores)        // /api/stores/*, /api/admin/stores/*
             )
             // Health check (public, no auth)
             .route("/health", web::get().to(|| async {
