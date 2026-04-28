@@ -4,7 +4,8 @@
 //! - Argon2id with OWASP-recommended parameters
 //! - Timing-safe password verification
 //! - Account lockout after failed attempts
-//! - Refresh token rotation
+//! - Refresh token rotation with SHA-256 hashing (not DefaultHasher)
+//! - Subscription tier always read from DB when issuing access tokens
 
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
@@ -12,11 +13,12 @@ use argon2::{
 };
 use chrono::{Duration, Utc};
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::entity::user::{self, ActiveModel, Entity as User, Model as UserModel, UserResponse};
 use crate::errors::AppError;
-use crate::services::token::{TokenPair, TokenService};
+use crate::services::token::{SubscriptionTier, TokenPair, TokenService};
 use crate::validation::{normalize_email, LoginRequest, RegisterRequest};
 
 /// Maximum failed login attempts before lockout
@@ -87,6 +89,16 @@ impl AuthService {
             totp_secret: Set(None),
             failed_login_attempts: Set(0),
             locked_until: Set(None),
+            subscription_tier: Set("free".to_string()),
+            subscription_valid_until: Set(None),
+            stripe_customer_id: Set(None),
+            cooking_skill_level: Set(None),
+            preferred_cuisines: Set(None),
+            health_goals: Set(None),
+            weekly_budget: Set(None),
+            preferred_time_per_meal_min: Set(None),
+            onboarding_completed: Set(false),
+            is_admin: Set(false),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -124,12 +136,16 @@ impl AuthService {
             return Err(AppError::AuthenticationFailed);
         }
 
-        // Generate tokens
-        let access_token = self.token_service.generate_access_token(user.id, &user.email)?;
+        // Read tier and admin status from DB (authoritative source)
+        let tier = SubscriptionTier::from_str(&user.subscription_tier);
+        let is_admin = user.is_admin;
+
+        // Generate tokens — tier embedded in access token only
+        let access_token = self.token_service.generate_access_token(user.id, &user.email, tier, is_admin)?;
         let refresh_token = self.token_service.generate_refresh_token(user.id, &user.email)?;
 
-        // Hash and store refresh token for rotation tracking
-        let refresh_token_hash = self.hash_token(&refresh_token);
+        // Hash and store refresh token for rotation tracking (SHA-256)
+        let refresh_token_hash = hash_token_sha256(&refresh_token);
 
         // Reset failed attempts and store refresh token hash
         let mut active_user: ActiveModel = user.clone().into();
@@ -150,28 +166,27 @@ impl AuthService {
         Ok((token_pair, refresh_token, user))
     }
 
-    /// Refresh access token using refresh token
+    /// Refresh access token using refresh token — always reads tier from DB
     pub async fn refresh_token(&self, refresh_token: &str) -> Result<(TokenPair, String, UserModel), AppError> {
-        // Validate refresh token
+        // Validate refresh token structure
         let claims = self.token_service.validate_refresh_token(refresh_token)?;
         
         let user_id = Uuid::parse_str(&claims.sub)
             .map_err(|_| AppError::InvalidToken)?;
 
-        // Find user
+        // Find user — tier is always read fresh from DB here
         let user = User::find_by_id(user_id)
             .one(&self.db)
             .await?
             .ok_or(AppError::InvalidToken)?;
 
-        // Verify refresh token hash matches (token rotation)
-        let current_hash = self.hash_token(refresh_token);
+        // Verify refresh token hash matches (token rotation via SHA-256)
+        let current_hash = hash_token_sha256(refresh_token);
         match &user.refresh_token_hash {
             Some(stored_hash) if stored_hash == &current_hash => {}
             _ => {
-                // Token reuse detected or invalid token
-                tracing::warn!("Refresh token reuse or invalid token detected for user: {}", user.id);
-                // Invalidate all refresh tokens for this user (security measure)
+                // Token reuse detected or invalid — invalidate all sessions
+                tracing::warn!("Refresh token reuse or invalid token for user: {}", user.id);
                 let mut active_user: ActiveModel = user.clone().into();
                 active_user.refresh_token_hash = Set(None);
                 active_user.update(&self.db).await?;
@@ -179,12 +194,16 @@ impl AuthService {
             }
         }
 
+        // Read current tier from DB (subscription may have changed since last login)
+        let tier = SubscriptionTier::from_str(&user.subscription_tier);
+        let is_admin = user.is_admin;
+
         // Generate new token pair (token rotation)
-        let new_access_token = self.token_service.generate_access_token(user.id, &user.email)?;
+        let new_access_token = self.token_service.generate_access_token(user.id, &user.email, tier, is_admin)?;
         let new_refresh_token = self.token_service.generate_refresh_token(user.id, &user.email)?;
 
         // Store new refresh token hash
-        let new_refresh_hash = self.hash_token(&new_refresh_token);
+        let new_refresh_hash = hash_token_sha256(&new_refresh_token);
         let mut active_user: ActiveModel = user.clone().into();
         active_user.refresh_token_hash = Set(Some(new_refresh_hash));
         active_user.updated_at = Set(Utc::now().fixed_offset());
@@ -216,6 +235,50 @@ impl AuthService {
         Ok(())
     }
 
+    /// Change user password — invalidates all sessions
+    pub async fn change_password(
+        &self,
+        user_id: Uuid,
+        current_password: &str,
+        new_password: &str,
+    ) -> Result<(), AppError> {
+        let user = User::find_by_id(user_id)
+            .one(&self.db)
+            .await?
+            .ok_or(AppError::AuthenticationFailed)?;
+
+        if !self.verify_password(current_password, &user.password_hash)? {
+            return Err(AppError::AuthenticationFailed);
+        }
+
+        let new_hash = self.hash_password(new_password)?;
+
+        let mut active_user: ActiveModel = user.into();
+        active_user.password_hash = Set(new_hash);
+        active_user.refresh_token_hash = Set(None); // invalidate all sessions
+        active_user.updated_at = Set(Utc::now().fixed_offset());
+        active_user.update(&self.db).await?;
+
+        tracing::info!("Password changed for user: {}", user_id);
+        Ok(())
+    }
+
+    /// Delete account — verifies password before deletion
+    pub async fn delete_account(&self, user_id: Uuid, password: &str) -> Result<(), AppError> {
+        let user = User::find_by_id(user_id)
+            .one(&self.db)
+            .await?
+            .ok_or(AppError::AuthenticationFailed)?;
+
+        if !self.verify_password(password, &user.password_hash)? {
+            return Err(AppError::AuthenticationFailed);
+        }
+
+        User::delete_by_id(user_id).exec(&self.db).await?;
+        tracing::info!("Account deleted for user: {}", user_id);
+        Ok(())
+    }
+
     /// Hash password using Argon2id
     fn hash_password(&self, password: &str) -> Result<String, AppError> {
         let salt = SaltString::generate(&mut OsRng);
@@ -232,16 +295,6 @@ impl AuthService {
             .map_err(|e| AppError::Internal(format!("Invalid password hash: {}", e)))?;
 
         Ok(self.argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok())
-    }
-
-    /// Hash token for storage (using SHA-256 would be overkill, simple hash suffices)
-    fn hash_token(&self, token: &str) -> String {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        
-        let mut hasher = DefaultHasher::new();
-        token.hash(&mut hasher);
-        format!("{:x}", hasher.finish())
     }
 
     /// Increment failed login attempts and lock if necessary
@@ -263,3 +316,11 @@ impl AuthService {
         Ok(())
     }
 }
+
+/// Hash a token using SHA-256 (cryptographically secure, replaces DefaultHasher)
+pub fn hash_token_sha256(token: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
