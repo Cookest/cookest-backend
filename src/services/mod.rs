@@ -8,6 +8,10 @@ pub mod inventory;
 pub mod profile;
 pub mod interaction;
 pub mod chat;
+pub mod onboarding;
+pub mod shopping_list;
+pub mod subscription;
+pub mod store;
 
 pub use auth::AuthService;
 pub use token::TokenService;
@@ -19,3 +23,7 @@ pub use inventory::InventoryService;
 pub use profile::ProfileService;
 pub use interaction::InteractionService;
 pub use chat::ChatService;
+pub use onboarding::OnboardingService;
+pub use shopping_list::ShoppingListService;
+pub use subscription::SubscriptionService;
+pub use store::StoreService;
