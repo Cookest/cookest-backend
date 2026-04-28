@@ -10,7 +10,7 @@
 use chrono::{Datelike, Duration, NaiveDate, Utc};
 use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
-    ActiveModelTrait, Set,
+    ActiveModelTrait, Set, PaginatorTrait,
 };
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -53,7 +53,8 @@ impl MealPlanService {
         }
     }
 
-    /// Generate a full week meal plan for a user and save it to the database
+    /// Generate a full week meal plan for a user and save it to the database.
+    /// Generates 4 slots per day × 7 days: breakfast, lunch, dinner, snack.
     pub async fn generate_week_plan(
         &self,
         user_id: Uuid,
@@ -62,29 +63,21 @@ impl MealPlanService {
     ) -> Result<meal_plan::Model, AppError> {
         // ── 1. Load context data ──────────────────────────────────────────────
 
-        // User's inventory
         let inventory = inventory_item::Entity::find()
             .filter(inventory_item::Column::UserId.eq(user_id))
             .all(&self.db)
             .await?;
 
-        // Ingredients user has (set of ingredient_ids)
         let user_ingredient_ids: std::collections::HashSet<i64> =
             inventory.iter().map(|i| i.ingredient_id).collect();
 
-        // Ingredients expiring within 7 days
         let expiry_threshold = Utc::now().date_naive() + Duration::days(7);
         let expiring_ids: std::collections::HashSet<i64> = inventory
             .iter()
-            .filter(|i| {
-                i.expiry_date
-                    .map(|d| d <= expiry_threshold)
-                    .unwrap_or(false)
-            })
+            .filter(|i| i.expiry_date.map(|d| d <= expiry_threshold).unwrap_or(false))
             .map(|i| i.ingredient_id)
             .collect();
 
-        // Recipes cooked in last 14 days (to apply variety penalty)
         let two_weeks_ago = Utc::now().fixed_offset() - Duration::days(14);
         let recent_recipes: std::collections::HashSet<i64> = cooking_history::Entity::find()
             .filter(cooking_history::Column::UserId.eq(user_id))
@@ -95,7 +88,6 @@ impl MealPlanService {
             .map(|h| h.recipe_id)
             .collect();
 
-        // User's favourite recipes (preference boost)
         let favourite_ids: std::collections::HashSet<i64> = user_favorite::Entity::find()
             .filter(user_favorite::Column::UserId.eq(user_id))
             .all(&self.db)
@@ -104,20 +96,17 @@ impl MealPlanService {
             .map(|f| f.recipe_id)
             .collect();
 
-        // All candidate recipes (excluding recently cooked)
         let all_recipes = recipe::Entity::find()
             .order_by_asc(recipe::Column::Id)
             .all(&self.db)
             .await?;
 
-        // Load all recipe ingredients in bulk
         let all_recipe_ids: Vec<i64> = all_recipes.iter().map(|r| r.id).collect();
         let all_recipe_ingredients = recipe_ingredient::Entity::find()
             .filter(recipe_ingredient::Column::RecipeId.is_in(all_recipe_ids.clone()))
             .all(&self.db)
             .await?;
 
-        // Group ingredients by recipe_id
         let mut ingredients_by_recipe: HashMap<i64, Vec<i64>> = HashMap::new();
         for ri in &all_recipe_ingredients {
             ingredients_by_recipe
@@ -126,7 +115,6 @@ impl MealPlanService {
                 .push(ri.ingredient_id);
         }
 
-        // Load all recipe nutrition in bulk
         let nutrition_by_recipe: HashMap<i64, _> = recipe_nutrition::Entity::find()
             .filter(recipe_nutrition::Column::RecipeId.is_in(all_recipe_ids))
             .all(&self.db)
@@ -139,12 +127,10 @@ impl MealPlanService {
 
         let mut scored: Vec<RecipeScore> = Vec::new();
 
-        // Track weekly nutrition totals (updated as we select recipes)
         let weekly_calories = 0.0_f64;
         let weekly_protein = 0.0_f64;
 
         for recipe in &all_recipes {
-            // Skip recently cooked (last 7 days — full penalty)
             if recent_recipes.contains(&recipe.id) {
                 continue;
             }
@@ -154,7 +140,6 @@ impl MealPlanService {
                 .cloned()
                 .unwrap_or_default();
 
-            // ── ingredient_coverage (0.0–1.0) ────────────────────────────────
             let total_ings = recipe_ing_ids.len().max(1);
             let owned_ings = recipe_ing_ids
                 .iter()
@@ -162,54 +147,41 @@ impl MealPlanService {
                 .count();
             let ingredient_coverage = owned_ings as f64 / total_ings as f64;
 
-            // ── expiry_urgency (0.0–1.0) ──────────────────────────────────────
             let expiring_used = recipe_ing_ids
                 .iter()
                 .filter(|id| expiring_ids.contains(id))
                 .count();
-            // The more expiring ingredients a recipe uses, the higher the score
             let expiry_urgency = (expiring_used as f64 / total_ings as f64).min(1.0);
 
-            // ── ml_preference (0.0–1.0) — scored against learned vector ──────
             let ml_preference = self
                 .preference_service
                 .score_recipe_for_user(user_id, recipe.id)
                 .await
-                .unwrap_or(0.5); // Default neutral if no preferences yet
+                .unwrap_or(0.5);
 
-            // ── variety_bonus (-0.3–0.1) ──────────────────────────────────────
             let variety_bonus = if recent_recipes.contains(&recipe.id) {
                 -0.3
             } else if favourite_ids.contains(&recipe.id) {
-                0.1 // Small boost for favourites
+                0.1
             } else {
                 0.0
             };
 
-            // ── nutrition_balance (0.0–1.0) ───────────────────────────────────
-            // How much does adding this recipe help fill the weekly nutritional gap?
             let nutrition_balance = if let Some(n) = nutrition_by_recipe.get(&recipe.id) {
-                // Scale by servings ratio (household_size / recipe.servings)
                 let scale = household_size as f64 / recipe.servings.max(1) as f64;
                 let cal = f64::try_from(n.calories.unwrap_or_default()).unwrap_or(0.0) * scale;
                 let pro = f64::try_from(n.protein_g.unwrap_or_default()).unwrap_or(0.0) * scale;
-                let _carb = f64::try_from(n.carbs_g.unwrap_or_default()).unwrap_or(0.0) * scale;
-                let _fat = f64::try_from(n.fat_g.unwrap_or_default()).unwrap_or(0.0) * scale;
-                let _fib = f64::try_from(n.fiber_g.unwrap_or_default()).unwrap_or(0.0) * scale;
 
-                // Remaining weekly targets (7 meals selected, 21 total slots)
                 let cal_gap = (DAILY_CALORIES * 7.0 - weekly_calories).max(0.0);
                 let pro_gap = (DAILY_PROTEIN_G * 7.0 - weekly_protein).max(0.0);
 
-                // Normalised score: does this recipe contribute meaningfully?
                 let cal_score = (cal / cal_gap.max(1.0)).min(1.0);
                 let pro_score = (pro / pro_gap.max(1.0)).min(1.0);
                 (cal_score + pro_score) / 2.0
             } else {
-                0.5 // No nutrition data — neutral
+                0.5
             };
 
-            // ── Combined weighted score ────────────────────────────────────────
             let total_score = (ingredient_coverage * 0.30)
                 + (expiry_urgency * 0.25)
                 + (ml_preference * 0.25)
@@ -225,54 +197,54 @@ impl MealPlanService {
             });
         }
 
-        // Sort by score descending
         scored.sort_by(|a, b| b.total_score.partial_cmp(&a.total_score).unwrap());
 
-        // ── 3. Greedy selection — 14 meals (2 per day × 7 days) ──────────────
+        // ── 3. Greedy selection — 28 slots (4 per day × 7 days) ──────────────
+        // Meal types: breakfast, lunch, dinner, snack
 
-        let mut selected: Vec<(i64, u8, &str)> = Vec::new(); // (recipe_id, day, meal_type)
+        let mut selected: Vec<(i64, u8, &str)> = Vec::new();
         let mut used_recipe_ids: std::collections::HashSet<i64> = std::collections::HashSet::new();
         let mut used_cuisines_today: HashMap<u8, String> = HashMap::new();
 
-        let mut score_iter = scored.iter();
+        let meal_slots: &[(&str, fn(&Option<String>, &str) -> bool)] = &[
+            ("breakfast", |cat, mt| Self::fits_meal_type_static(cat, mt)),
+            ("lunch",     |cat, mt| Self::fits_meal_type_static(cat, mt)),
+            ("dinner",    |cat, mt| Self::fits_meal_type_static(cat, mt)),
+            ("snack",     |cat, mt| Self::fits_meal_type_static(cat, mt)),
+        ];
 
         for day in 0u8..7 {
-            // Lunch
-            if let Some(recipe) = score_iter.find(|r| {
-                !used_recipe_ids.contains(&r.recipe_id)
-                    && self.fits_meal_type(&r.category, "lunch")
-            }) {
-                selected.push((recipe.recipe_id, day, "lunch"));
-                used_recipe_ids.insert(recipe.recipe_id);
-                if let Some(cuisine) = &recipe.cuisine {
-                    used_cuisines_today.insert(day, cuisine.clone());
-                }
-            }
+            for (meal_type, fits) in meal_slots {
+                // Avoid same cuisine for lunch and dinner on same day
+                let avoid_cuisine = used_cuisines_today.get(&day).cloned();
 
-            // Dinner — ideally different cuisine from lunch
-            if let Some(recipe) = score_iter.find(|r| {
-                !used_recipe_ids.contains(&r.recipe_id)
-                    && self.fits_meal_type(&r.category, "dinner")
-                    && r.cuisine.as_ref() != used_cuisines_today.get(&day)
-            }) {
-                selected.push((recipe.recipe_id, day, "dinner"));
-                used_recipe_ids.insert(recipe.recipe_id);
+                if let Some(recipe) = scored.iter().find(|r| {
+                    !used_recipe_ids.contains(&r.recipe_id)
+                        && fits(&r.category, meal_type)
+                        && !(meal_type == &"dinner"
+                            && avoid_cuisine.as_ref() == r.cuisine.as_ref())
+                }) {
+                    selected.push((recipe.recipe_id, day, meal_type));
+                    used_recipe_ids.insert(recipe.recipe_id);
+                    if meal_type == &"lunch" {
+                        if let Some(cuisine) = &recipe.cuisine {
+                            used_cuisines_today.insert(day, cuisine.clone());
+                        }
+                    }
+                }
             }
         }
 
         // ── 4. Save meal plan + slots to database ─────────────────────────────
 
-        // Upsert meal plan for this user/week
         let now = Utc::now().fixed_offset();
 
-        // Delete existing plan for this week if it exists
         if let Some(existing) = meal_plan::Entity::find()
             .filter(meal_plan::Column::UserId.eq(user_id))
             .filter(meal_plan::Column::WeekStart.eq(week_start))
             .one(&self.db)
             .await?
         {
-            // Delete all slots first (cascade would handle it, but explicit is safer)
             meal_plan_slot::Entity::delete_many()
                 .filter(meal_plan_slot::Column::MealPlanId.eq(existing.id))
                 .exec(&self.db)
@@ -294,7 +266,6 @@ impl MealPlanService {
 
         let saved_plan = plan.insert(&self.db).await?;
 
-        // Insert all slots
         for (recipe_id, day, meal_type) in selected {
             let slot = meal_plan_slot::ActiveModel {
                 meal_plan_id: Set(saved_plan.id),
@@ -311,16 +282,24 @@ impl MealPlanService {
         Ok(saved_plan)
     }
 
-    /// Heuristic: which meal types fit a recipe's category
-    fn fits_meal_type(&self, category: &Option<String>, meal_type: &str) -> bool {
+    /// Heuristic: which meal types fit a recipe's category (static version for closures)
+    fn fits_meal_type_static(category: &Option<String>, meal_type: &str) -> bool {
         match (category.as_deref(), meal_type) {
             (Some("breakfast"), "breakfast") => true,
             (Some("breakfast"), _) => false,
+            (Some("dessert"), "snack") => true,
             (Some("dessert"), _) => false,
-            (_, "lunch") => true,
-            (_, "dinner") => true,
+            (Some("snack"), "snack") => true,
+            (Some("snack"), _) => false,
+            (_, "snack") => false,
+            (_, "breakfast") => false,
             _ => true,
         }
+    }
+
+    /// Heuristic: which meal types fit a recipe's category
+    fn fits_meal_type(&self, category: &Option<String>, meal_type: &str) -> bool {
+        Self::fits_meal_type_static(category, meal_type)
     }
 
     /// Get the current week's meal plan with full recipe details per slot
@@ -329,7 +308,6 @@ impl MealPlanService {
         user_id: Uuid,
     ) -> Result<Option<serde_json::Value>, AppError> {
         let today = Utc::now().date_naive();
-        // Week starts on Monday
         let days_since_monday = today.weekday().num_days_from_monday() as i64;
         let week_start = today - chrono::Duration::days(days_since_monday);
 
@@ -343,54 +321,223 @@ impl MealPlanService {
             return Ok(None);
         };
 
-        // Load slots
+        Ok(Some(self.plan_to_json(&plan).await?))
+    }
+
+    /// List all meal plans for a user (newest first, paginated)
+    pub async fn list_plans(
+        &self,
+        user_id: Uuid,
+        page: u64,
+        per_page: u64,
+    ) -> Result<serde_json::Value, AppError> {
+        let paginator = meal_plan::Entity::find()
+            .filter(meal_plan::Column::UserId.eq(user_id))
+            .order_by_desc(meal_plan::Column::WeekStart)
+            .paginate(&self.db, per_page);
+
+        let total = paginator.num_items().await?;
+        let plans = paginator.fetch_page(page.saturating_sub(1)).await?;
+
+        let mut plan_list = Vec::new();
+        for p in plans {
+            plan_list.push(serde_json::json!({
+                "id": p.id,
+                "week_start": p.week_start,
+                "is_ai_generated": p.is_ai_generated,
+                "created_at": p.created_at,
+            }));
+        }
+
+        Ok(serde_json::json!({
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "plans": plan_list,
+        }))
+    }
+
+    /// Get a specific meal plan by ID (must belong to user)
+    pub async fn get_plan(
+        &self,
+        user_id: Uuid,
+        plan_id: i64,
+    ) -> Result<serde_json::Value, AppError> {
+        let plan = meal_plan::Entity::find_by_id(plan_id)
+            .one(&self.db)
+            .await?
+            .filter(|p| p.user_id == user_id)
+            .ok_or(AppError::NotFound("Meal plan".into()))?;
+
+        self.plan_to_json(&plan).await
+    }
+
+    /// Delete a meal plan and all its slots
+    pub async fn delete_plan(&self, user_id: Uuid, plan_id: i64) -> Result<(), AppError> {
+        let plan = meal_plan::Entity::find_by_id(plan_id)
+            .one(&self.db)
+            .await?
+            .filter(|p| p.user_id == user_id)
+            .ok_or(AppError::NotFound("Meal plan".into()))?;
+
+        meal_plan_slot::Entity::delete_many()
+            .filter(meal_plan_slot::Column::MealPlanId.eq(plan.id))
+            .exec(&self.db)
+            .await?;
+
+        meal_plan::Entity::delete_by_id(plan.id)
+            .exec(&self.db)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Swap the recipe in a slot (or mark it as a flex day by passing recipe_id=null)
+    pub async fn swap_slot(
+        &self,
+        user_id: Uuid,
+        plan_id: i64,
+        slot_id: i64,
+        recipe_id: Option<i64>,
+        flex_type: Option<String>,
+        energy_level: Option<String>,
+    ) -> Result<serde_json::Value, AppError> {
+        meal_plan::Entity::find_by_id(plan_id)
+            .one(&self.db)
+            .await?
+            .filter(|p| p.user_id == user_id)
+            .ok_or(AppError::NotFound("Meal plan".into()))?;
+
+        let slot = meal_plan_slot::Entity::find_by_id(slot_id)
+            .one(&self.db)
+            .await?
+            .filter(|s| s.meal_plan_id == plan_id)
+            .ok_or(AppError::NotFound("Slot".into()))?;
+
+        let mut active: meal_plan_slot::ActiveModel = slot.into();
+        active.recipe_id = Set(recipe_id);
+        active.is_flex = Set(recipe_id.is_none());
+        if let Some(ft) = flex_type {
+            active.flex_type = Set(Some(ft));
+        }
+        if let Some(el) = energy_level {
+            active.energy_level = Set(Some(el));
+        }
+        let updated = active.update(&self.db).await?;
+
+        Ok(serde_json::json!({
+            "id": updated.id,
+            "recipe_id": updated.recipe_id,
+            "is_flex": updated.is_flex,
+            "flex_type": updated.flex_type,
+            "energy_level": updated.energy_level,
+            "meal_type": updated.meal_type,
+            "day_of_week": updated.day_of_week,
+        }))
+    }
+
+    /// Mark a slot as a flex/relief day (clears recipe, sets flex metadata)
+    pub async fn mark_slot_flex(
+        &self,
+        user_id: Uuid,
+        plan_id: i64,
+        slot_id: i64,
+        flex_type: String,
+        energy_level: Option<String>,
+    ) -> Result<(), AppError> {
+        self.swap_slot(user_id, plan_id, slot_id, None, Some(flex_type), energy_level)
+            .await?;
+        Ok(())
+    }
+
+    /// Weekly nutrition summary: macro totals for all slots vs user goals
+    pub async fn get_nutrition_summary(
+        &self,
+        user_id: Uuid,
+        plan_id: i64,
+    ) -> Result<serde_json::Value, AppError> {
+        let plan = meal_plan::Entity::find_by_id(plan_id)
+            .one(&self.db)
+            .await?
+            .filter(|p| p.user_id == user_id)
+            .ok_or(AppError::NotFound("Meal plan".into()))?;
+
         let slots = meal_plan_slot::Entity::find()
             .filter(meal_plan_slot::Column::MealPlanId.eq(plan.id))
             .all(&self.db)
             .await?;
 
-        // Load recipe details in bulk
         let recipe_ids: Vec<i64> = slots.iter().filter_map(|s| s.recipe_id).collect();
+
+        let nutrition: HashMap<i64, _> = recipe_nutrition::Entity::find()
+            .filter(recipe_nutrition::Column::RecipeId.is_in(recipe_ids))
+            .all(&self.db)
+            .await?
+            .into_iter()
+            .map(|n| (n.recipe_id, n))
+            .collect();
+
         let recipes: HashMap<i64, recipe::Model> = recipe::Entity::find()
-            .filter(recipe::Column::Id.is_in(recipe_ids))
+            .filter(recipe::Column::Id.is_in(slots.iter().filter_map(|s| s.recipe_id).collect::<Vec<_>>()))
             .all(&self.db)
             .await?
             .into_iter()
             .map(|r| (r.id, r))
             .collect();
 
-        let slot_json: Vec<serde_json::Value> = slots
-            .into_iter()
-            .map(|s| {
-                let r = s.recipe_id.and_then(|rid| recipes.get(&rid));
-                serde_json::json!({
-                    "id": s.id,
-                    "day_of_week": s.day_of_week,
-                    "meal_type": s.meal_type,
-                    "is_completed": s.is_completed,
-                    "servings": s.servings_override,
-                    "recipe": r.map(|r| serde_json::json!({
-                        "id": r.id,
-                        "name": r.name,
-                        "cuisine": r.cuisine,
-                        "category": r.category,
-                        "total_time_min": r.total_time_min,
-                        "difficulty": r.difficulty,
-                        "average_rating": r.average_rating,
-                    }))
-                })
-            })
-            .collect();
+        let mut totals = NutritionTotals::default();
 
-        Ok(Some(serde_json::json!({
-            "id": plan.id,
+        for slot in &slots {
+            let Some(rid) = slot.recipe_id else { continue };
+            let Some(n) = nutrition.get(&rid) else { continue };
+            let servings = slot.servings_override.unwrap_or(1);
+            let recipe_servings = recipes.get(&rid).map(|r| r.servings).unwrap_or(1).max(1);
+            let scale = servings as f64 / recipe_servings as f64;
+
+            totals.calories  += f64::try_from(n.calories.unwrap_or_default()).unwrap_or(0.0) * scale;
+            totals.protein_g += f64::try_from(n.protein_g.unwrap_or_default()).unwrap_or(0.0) * scale;
+            totals.carbs_g   += f64::try_from(n.carbs_g.unwrap_or_default()).unwrap_or(0.0) * scale;
+            totals.fat_g     += f64::try_from(n.fat_g.unwrap_or_default()).unwrap_or(0.0) * scale;
+            totals.fiber_g   += f64::try_from(n.fiber_g.unwrap_or_default()).unwrap_or(0.0) * scale;
+        }
+
+        let slot_count = slots.len().max(1) as f64;
+
+        Ok(serde_json::json!({
             "week_start": plan.week_start,
-            "is_ai_generated": plan.is_ai_generated,
-            "slots": slot_json
-        })))
+            "totals": {
+                "calories":  totals.calories,
+                "protein_g": totals.protein_g,
+                "carbs_g":   totals.carbs_g,
+                "fat_g":     totals.fat_g,
+                "fiber_g":   totals.fiber_g,
+            },
+            "daily_average": {
+                "calories":  totals.calories / 7.0,
+                "protein_g": totals.protein_g / 7.0,
+                "carbs_g":   totals.carbs_g / 7.0,
+                "fat_g":     totals.fat_g / 7.0,
+                "fiber_g":   totals.fiber_g / 7.0,
+            },
+            "goals": {
+                "calories":  DAILY_CALORIES * 7.0,
+                "protein_g": DAILY_PROTEIN_G * 7.0,
+                "carbs_g":   DAILY_CARBS_G * 7.0,
+                "fat_g":     DAILY_FAT_G * 7.0,
+                "fiber_g":   DAILY_FIBER_G * 7.0,
+            },
+            "percent_of_goal": {
+                "calories":  (totals.calories  / (DAILY_CALORIES  * 7.0) * 100.0).round(),
+                "protein_g": (totals.protein_g / (DAILY_PROTEIN_G * 7.0) * 100.0).round(),
+                "carbs_g":   (totals.carbs_g   / (DAILY_CARBS_G   * 7.0) * 100.0).round(),
+                "fat_g":     (totals.fat_g     / (DAILY_FAT_G     * 7.0) * 100.0).round(),
+                "fiber_g":   (totals.fiber_g   / (DAILY_FIBER_G   * 7.0) * 100.0).round(),
+            },
+            "slots_with_data": slot_count as usize,
+        }))
     }
 
-    /// Generate shopping list: ingredients needed for this week's meal plan minus what's already in inventory
+    /// Generate shopping list: ingredients needed minus what's in inventory
     pub async fn get_shopping_list(
         &self,
         user_id: Uuid,
@@ -411,7 +558,6 @@ impl MealPlanService {
             return Ok(vec![]);
         };
 
-        // Get all recipe IDs in this plan
         let slots = meal_plan_slot::Entity::find()
             .filter(meal_plan_slot::Column::MealPlanId.eq(plan.id))
             .filter(meal_plan_slot::Column::IsCompleted.eq(false))
@@ -420,13 +566,11 @@ impl MealPlanService {
 
         let recipe_ids: Vec<i64> = slots.iter().filter_map(|s| s.recipe_id).collect();
 
-        // Load all required ingredients
         let required_ingredients = recipe_ingredient::Entity::find()
             .filter(recipe_ingredient::Column::RecipeId.is_in(recipe_ids))
             .all(&self.db)
             .await?;
 
-        // Aggregate required quantities per ingredient
         let mut needed: HashMap<i64, rust_decimal::Decimal> = HashMap::new();
         for ri in &required_ingredients {
             if let Some(qty) = ri.quantity_grams {
@@ -434,7 +578,6 @@ impl MealPlanService {
             }
         }
 
-        // Load what user already has in inventory
         let inventory: HashMap<i64, rust_decimal::Decimal> =
             inventory_item::Entity::find()
                 .filter(inventory_item::Column::UserId.eq(user_id))
@@ -444,7 +587,6 @@ impl MealPlanService {
                 .map(|i| (i.ingredient_id, i.quantity))
                 .collect();
 
-        // Ingredient names
         let ingredient_ids: Vec<i64> = needed.keys().cloned().collect();
         let names: HashMap<i64, String> = ingredient::Entity::find()
             .filter(ingredient::Column::Id.is_in(ingredient_ids))
@@ -454,7 +596,6 @@ impl MealPlanService {
             .map(|i| (i.id, i.name))
             .collect();
 
-        // Build shopping list: only items where needed > have
         let mut list = Vec::new();
         for (ingredient_id, needed_qty) in &needed {
             let have = inventory.get(ingredient_id).cloned().unwrap_or_default();
@@ -471,7 +612,6 @@ impl MealPlanService {
             }
         }
 
-        // Sort by name
         list.sort_by(|a, b| {
             a["name"].as_str().unwrap_or("").cmp(b["name"].as_str().unwrap_or(""))
         });
@@ -486,7 +626,6 @@ impl MealPlanService {
         plan_id: i64,
         slot_id: i64,
     ) -> Result<(), AppError> {
-        // Verify the plan belongs to the user
         meal_plan::Entity::find_by_id(plan_id)
             .one(&self.db)
             .await?
@@ -504,4 +643,66 @@ impl MealPlanService {
 
         Ok(())
     }
+
+    // ── Internal helpers ──────────────────────────────────────────────────────
+
+    async fn plan_to_json(&self, plan: &meal_plan::Model) -> Result<serde_json::Value, AppError> {
+        let slots = meal_plan_slot::Entity::find()
+            .filter(meal_plan_slot::Column::MealPlanId.eq(plan.id))
+            .order_by_asc(meal_plan_slot::Column::DayOfWeek)
+            .all(&self.db)
+            .await?;
+
+        let recipe_ids: Vec<i64> = slots.iter().filter_map(|s| s.recipe_id).collect();
+        let recipes: HashMap<i64, recipe::Model> = recipe::Entity::find()
+            .filter(recipe::Column::Id.is_in(recipe_ids))
+            .all(&self.db)
+            .await?
+            .into_iter()
+            .map(|r| (r.id, r))
+            .collect();
+
+        let slot_json: Vec<serde_json::Value> = slots
+            .into_iter()
+            .map(|s| {
+                let r = s.recipe_id.and_then(|rid| recipes.get(&rid));
+                serde_json::json!({
+                    "id": s.id,
+                    "day_of_week": s.day_of_week,
+                    "meal_type": s.meal_type,
+                    "is_completed": s.is_completed,
+                    "is_flex": s.is_flex,
+                    "flex_type": s.flex_type,
+                    "energy_level": s.energy_level,
+                    "servings": s.servings_override,
+                    "recipe": r.map(|r| serde_json::json!({
+                        "id": r.id,
+                        "name": r.name,
+                        "cuisine": r.cuisine,
+                        "category": r.category,
+                        "total_time_min": r.total_time_min,
+                        "difficulty": r.difficulty,
+                        "average_rating": r.average_rating,
+                    }))
+                })
+            })
+            .collect();
+
+        Ok(serde_json::json!({
+            "id": plan.id,
+            "week_start": plan.week_start,
+            "is_ai_generated": plan.is_ai_generated,
+            "slots": slot_json,
+        }))
+    }
 }
+
+#[derive(Default)]
+struct NutritionTotals {
+    calories: f64,
+    protein_g: f64,
+    carbs_g: f64,
+    fat_g: f64,
+    fiber_g: f64,
+}
+

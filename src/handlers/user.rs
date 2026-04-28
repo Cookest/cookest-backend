@@ -195,6 +195,97 @@ pub async fn mark_slot_complete(
     Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "Slot marked as completed" })))
 }
 
+#[derive(serde::Deserialize)]
+pub struct ListPlansQuery {
+    pub page: Option<u64>,
+    pub per_page: Option<u64>,
+}
+
+pub async fn list_meal_plans(
+    meal_svc: web::Data<Arc<MealPlanService>>,
+    claims: web::ReqData<Claims>,
+    query: web::Query<ListPlansQuery>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let page = query.page.unwrap_or(1);
+    let per_page = query.per_page.unwrap_or(10).min(50);
+    let result = meal_svc.list_plans(user_id, page, per_page).await?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
+pub async fn get_meal_plan(
+    meal_svc: web::Data<Arc<MealPlanService>>,
+    claims: web::ReqData<Claims>,
+    path: web::Path<i64>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let result = meal_svc.get_plan(user_id, path.into_inner()).await?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
+pub async fn delete_meal_plan(
+    meal_svc: web::Data<Arc<MealPlanService>>,
+    claims: web::ReqData<Claims>,
+    path: web::Path<i64>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    meal_svc.delete_plan(user_id, path.into_inner()).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "Meal plan deleted" })))
+}
+
+#[derive(serde::Deserialize)]
+pub struct SwapSlotBody {
+    pub recipe_id: Option<i64>,
+    pub flex_type: Option<String>,
+    pub energy_level: Option<String>,
+}
+
+pub async fn swap_slot(
+    meal_svc: web::Data<Arc<MealPlanService>>,
+    claims: web::ReqData<Claims>,
+    path: web::Path<(i64, i64)>,
+    body: web::Json<SwapSlotBody>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let (plan_id, slot_id) = path.into_inner();
+    let body = body.into_inner();
+    let result = meal_svc
+        .swap_slot(user_id, plan_id, slot_id, body.recipe_id, body.flex_type, body.energy_level)
+        .await?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
+#[derive(serde::Deserialize)]
+pub struct MarkFlexBody {
+    pub flex_type: String,
+    pub energy_level: Option<String>,
+}
+
+pub async fn mark_slot_flex(
+    meal_svc: web::Data<Arc<MealPlanService>>,
+    claims: web::ReqData<Claims>,
+    path: web::Path<(i64, i64)>,
+    body: web::Json<MarkFlexBody>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let (plan_id, slot_id) = path.into_inner();
+    let body = body.into_inner();
+    meal_svc
+        .mark_slot_flex(user_id, plan_id, slot_id, body.flex_type, body.energy_level)
+        .await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "Slot marked as flex day" })))
+}
+
+pub async fn get_nutrition_summary(
+    meal_svc: web::Data<Arc<MealPlanService>>,
+    claims: web::ReqData<Claims>,
+    path: web::Path<i64>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let result = meal_svc.get_nutrition_summary(user_id, path.into_inner()).await?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
 // ── Route configuration ───────────────────────────────────────────────────────
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
@@ -226,9 +317,15 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         // Meal planning
         .service(
             web::scope("/api/meal-plans")
+                .route("", web::get().to(list_meal_plans))
                 .route("/generate", web::post().to(generate_meal_plan))
                 .route("/current", web::get().to(get_current_meal_plan))
                 .route("/current/shopping-list", web::get().to(get_shopping_list))
-                .route("/{plan_id}/slots/{slot_id}/complete", web::put().to(mark_slot_complete)),
+                .route("/{id}", web::get().to(get_meal_plan))
+                .route("/{id}", web::delete().to(delete_meal_plan))
+                .route("/{id}/nutrition", web::get().to(get_nutrition_summary))
+                .route("/{plan_id}/slots/{slot_id}", web::put().to(swap_slot))
+                .route("/{plan_id}/slots/{slot_id}/complete", web::put().to(mark_slot_complete))
+                .route("/{plan_id}/slots/{slot_id}/flex", web::put().to(mark_slot_flex)),
         );
 }
