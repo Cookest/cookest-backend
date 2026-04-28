@@ -10,6 +10,10 @@ pub struct Config {
     pub host: String,
     pub port: u16,
     pub cors_origin: String,
+    pub ollama_url: String,
+    pub ollama_model: String,
+    pub pdf_upload_dir: String,
+    pub stripe_webhook_secret: Option<String>,
 }
 
 impl Config {
@@ -49,6 +53,17 @@ impl Config {
         let cors_origin = env::var("CORS_ORIGIN")
             .unwrap_or_else(|_| "http://localhost:3000".to_string());
 
+        let ollama_url = env::var("OLLAMA_URL")
+            .unwrap_or_else(|_| "http://localhost:11434".to_string());
+
+        let ollama_model = env::var("OLLAMA_MODEL")
+            .unwrap_or_else(|_| "llava".to_string());
+
+        let pdf_upload_dir = env::var("PDF_UPLOAD_DIR")
+            .unwrap_or_else(|_| "/tmp/cookest_pdfs".to_string());
+
+        let stripe_webhook_secret = env::var("STRIPE_WEBHOOK_SECRET").ok();
+
         Ok(Self {
             database_url: SecretString::from(database_url),
             jwt_secret: SecretString::from(jwt_secret),
@@ -57,6 +72,10 @@ impl Config {
             host,
             port,
             cors_origin,
+            ollama_url,
+            ollama_model,
+            pdf_upload_dir,
+            stripe_webhook_secret,
         })
     }
 
