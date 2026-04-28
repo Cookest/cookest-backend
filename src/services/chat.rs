@@ -413,7 +413,7 @@ impl ChatService {
                 .await?;
 
             if !slots.is_empty() {
-                let recipe_ids: Vec<i64> = slots.iter().map(|s| s.recipe_id).collect();
+                let recipe_ids: Vec<i64> = slots.iter().filter_map(|s| s.recipe_id).collect();
                 let recipes: std::collections::HashMap<i64, String> = recipe::Entity::find()
                     .filter(recipe::Column::Id.is_in(recipe_ids))
                     .all(&self.db)
@@ -427,10 +427,10 @@ impl ChatService {
                     .iter()
                     .map(|s| {
                         let day = day_names[s.day_of_week as usize % 7];
-                        let recipe_name = recipes
-                            .get(&s.recipe_id)
+                        let recipe_name = s.recipe_id
+                            .and_then(|rid| recipes.get(&rid))
                             .cloned()
-                            .unwrap_or_else(|| "Unknown".to_string());
+                            .unwrap_or_else(|| "Flex day".to_string());
                         let done = if s.is_completed { "✓" } else { "" };
                         format!("{} {}: {} {}", day, s.meal_type, recipe_name, done)
                     })

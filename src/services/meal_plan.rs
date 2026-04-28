@@ -298,7 +298,7 @@ impl MealPlanService {
         for (recipe_id, day, meal_type) in selected {
             let slot = meal_plan_slot::ActiveModel {
                 meal_plan_id: Set(saved_plan.id),
-                recipe_id: Set(recipe_id),
+                recipe_id: Set(Some(recipe_id)),
                 day_of_week: Set(day as i16),
                 meal_type: Set(meal_type.to_string()),
                 servings_override: Set(Some(household_size)),
@@ -350,7 +350,7 @@ impl MealPlanService {
             .await?;
 
         // Load recipe details in bulk
-        let recipe_ids: Vec<i64> = slots.iter().map(|s| s.recipe_id).collect();
+        let recipe_ids: Vec<i64> = slots.iter().filter_map(|s| s.recipe_id).collect();
         let recipes: HashMap<i64, recipe::Model> = recipe::Entity::find()
             .filter(recipe::Column::Id.is_in(recipe_ids))
             .all(&self.db)
@@ -362,7 +362,7 @@ impl MealPlanService {
         let slot_json: Vec<serde_json::Value> = slots
             .into_iter()
             .map(|s| {
-                let r = recipes.get(&s.recipe_id);
+                let r = s.recipe_id.and_then(|rid| recipes.get(&rid));
                 serde_json::json!({
                     "id": s.id,
                     "day_of_week": s.day_of_week,
@@ -418,7 +418,7 @@ impl MealPlanService {
             .all(&self.db)
             .await?;
 
-        let recipe_ids: Vec<i64> = slots.iter().map(|s| s.recipe_id).collect();
+        let recipe_ids: Vec<i64> = slots.iter().filter_map(|s| s.recipe_id).collect();
 
         // Load all required ingredients
         let required_ingredients = recipe_ingredient::Entity::find()
