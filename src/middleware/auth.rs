@@ -13,14 +13,44 @@ use actix_web::{
     body::EitherBody,
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     http::StatusCode,
-    Error, HttpMessage, HttpResponse,
+    Error, FromRequest, HttpMessage, HttpRequest, HttpResponse,
 };
 use futures::future::{ok, LocalBoxFuture, Ready};
 use serde_json::json;
+use std::future::{ready, Ready as StdReady};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::services::token::TokenService;
+use crate::services::token::{Claims, TokenService};
+
+/// Convenience extractor for handlers — provides strongly-typed `id: Uuid` + full `claims`
+pub struct AuthenticatedUser {
+    pub id: uuid::Uuid,
+    pub claims: Claims,
+}
+
+impl FromRequest for AuthenticatedUser {
+    type Error = Error;
+    type Future = StdReady<Result<Self, Self::Error>>;
+
+    fn from_request(req: &HttpRequest, _payload: &mut actix_web::dev::Payload) -> Self::Future {
+        let result = req.extensions().get::<Claims>().map(|claims| {
+            let id = uuid::Uuid::parse_str(&claims.sub)
+                .unwrap_or_else(|_| uuid::Uuid::nil());
+            AuthenticatedUser { id, claims: claims.clone() }
+        });
+
+        match result {
+            Some(user) => ready(Ok(user)),
+            None => {
+                let err = actix_web::error::ErrorUnauthorized(
+                    json!({ "error": "Unauthorized" }).to_string(),
+                );
+                ready(Err(err))
+            }
+        }
+    }
+}
 
 /// Middleware factory — wrap a scope with `.wrap(JwtAuth::new(token_service))`
 pub struct JwtAuth {
