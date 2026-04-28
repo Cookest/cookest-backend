@@ -5,6 +5,7 @@
 //! - Refresh tokens stored as hashes in DB
 //! - Secure random token generation
 //! - Algorithm explicitly specified (prevents algorithm confusion attacks)
+//! - Subscription tier embedded ONLY in access tokens, never in refresh tokens
 
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, TokenData, Validation};
@@ -14,6 +15,38 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::errors::AppError;
+
+/// Subscription tier — determines feature access throughout the API
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SubscriptionTier {
+    Free,
+    Pro,
+    Family,
+}
+
+impl SubscriptionTier {
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "pro" => SubscriptionTier::Pro,
+            "family" => SubscriptionTier::Family,
+            _ => SubscriptionTier::Free,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SubscriptionTier::Free => "free",
+            SubscriptionTier::Pro => "pro",
+            SubscriptionTier::Family => "family",
+        }
+    }
+
+    /// Returns true if this tier is Pro or Family
+    pub fn is_pro_or_above(&self) -> bool {
+        matches!(self, SubscriptionTier::Pro | SubscriptionTier::Family)
+    }
+}
 
 /// JWT Claims structure
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -30,6 +63,12 @@ pub struct Claims {
     pub iat: i64,
     /// JWT ID (unique identifier for this token)
     pub jti: String,
+    /// Subscription tier — ONLY present in access tokens
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tier: Option<SubscriptionTier>,
+    /// Whether the user is an admin — ONLY present in access tokens
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_admin: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -66,8 +105,14 @@ impl TokenService {
         }
     }
 
-    /// Generate access token (short-lived)
-    pub fn generate_access_token(&self, user_id: Uuid, email: &str) -> Result<String, AppError> {
+    /// Generate access token (short-lived) — embeds tier and admin flag
+    pub fn generate_access_token(
+        &self,
+        user_id: Uuid,
+        email: &str,
+        tier: SubscriptionTier,
+        is_admin: bool,
+    ) -> Result<String, AppError> {
         let now = Utc::now();
         let exp = now + Duration::seconds(self.access_expiry_seconds);
 
@@ -78,13 +123,15 @@ impl TokenService {
             exp: exp.timestamp(),
             iat: now.timestamp(),
             jti: generate_jti(),
+            tier: Some(tier),
+            is_admin: Some(is_admin),
         };
 
         encode(&Header::default(), &claims, &self.encoding_key)
             .map_err(|e| AppError::Internal(format!("Token generation failed: {}", e)))
     }
 
-    /// Generate refresh token (long-lived)
+    /// Generate refresh token (long-lived) — does NOT embed tier (tier read from DB on refresh)
     pub fn generate_refresh_token(&self, user_id: Uuid, email: &str) -> Result<String, AppError> {
         let now = Utc::now();
         let exp = now + Duration::seconds(self.refresh_expiry_seconds);
@@ -96,6 +143,8 @@ impl TokenService {
             exp: exp.timestamp(),
             iat: now.timestamp(),
             jti: generate_jti(),
+            tier: None,
+            is_admin: None,
         };
 
         encode(&Header::default(), &claims, &self.encoding_key)
@@ -153,19 +202,15 @@ impl TokenService {
 fn generate_jti() -> String {
     let mut rng = rand::thread_rng();
     let random_bytes: [u8; 16] = rng.gen();
-    hex::encode(&random_bytes)
+    hex_encode(&random_bytes)
 }
 
-// Add hex encoding for jti
-mod hex {
+fn hex_encode(bytes: &[u8]) -> String {
     const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
-
-    pub fn encode(bytes: &[u8]) -> String {
-        let mut result = String::with_capacity(bytes.len() * 2);
-        for byte in bytes {
-            result.push(HEX_CHARS[(byte >> 4) as usize] as char);
-            result.push(HEX_CHARS[(byte & 0x0f) as usize] as char);
-        }
-        result
+    let mut result = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        result.push(HEX_CHARS[(byte >> 4) as usize] as char);
+        result.push(HEX_CHARS[(byte & 0x0f) as usize] as char);
     }
+    result
 }
