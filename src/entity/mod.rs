@@ -24,9 +24,24 @@ pub mod inventory_item;
 pub mod meal_plan;
 pub mod meal_plan_slot;
 
+// Shopping list
+pub mod shopping_list_item;
+
+// Push notifications
+pub mod user_push_token;
+
 // AI Chat
 pub mod chat_session;
 pub mod chat_message;
 
 // ML Preferences
 pub mod user_preference;
+
+// Store & price system
+pub mod store;
+pub mod store_promotion;
+pub mod store_promotion_candidate;
+pub mod pdf_processing_job;
+
+// Stripe idempotency
+pub mod stripe_processed_event;

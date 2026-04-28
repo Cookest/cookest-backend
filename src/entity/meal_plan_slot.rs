@@ -11,7 +11,9 @@ pub struct Model {
     pub id: i64,
 
     pub meal_plan_id: i64,
-    pub recipe_id: i64,
+
+    /// NULL when slot is a flex/relief day (no recipe assigned)
+    pub recipe_id: Option<i64>,
 
     /// 0 = Monday, 1 = Tuesday, ..., 6 = Sunday
     pub day_of_week: i16,
@@ -25,6 +27,15 @@ pub struct Model {
 
     /// Whether the user has marked this meal as completed
     pub is_completed: bool,
+
+    /// Whether this is a flex/relief day slot (no recipe, intentional rest)
+    pub is_flex: bool,
+
+    /// Type of flex day: "effort" | "nutrition" | "mental" | "social"
+    pub flex_type: Option<String>,
+
+    /// Energy level tag: "high" | "medium" | "low" | "emergency"
+    pub energy_level: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
