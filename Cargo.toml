@@ -10,7 +10,7 @@ actix-rt = "2"
 actix-cors = "0.7"
 
 # SeaORM - Async ORM
-sea-orm = { version = "1.1", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+sea-orm = { version = "1.1", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros", "postgres-array"] }
 sea-orm-migration = "1.1"
 
 # Authentication & Security
@@ -56,6 +56,16 @@ cookie = { version = "0.18", features = ["secure"] }
 
 # Random for secure token generation
 rand = "0.8"
+
+# File upload (multipart/form-data)
+actix-multipart = "0.7"
+
+# Base64 encoding (images for Ollama vision model)
+base64 = "0.22"
+
+# Cryptographic hashing (Stripe webhook HMAC, token hashing)
+sha2 = "0.10"
+hmac = "0.12"
 
 [dev-dependencies]
 actix-rt = "2"
