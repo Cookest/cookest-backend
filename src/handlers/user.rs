@@ -119,11 +119,13 @@ pub async fn get_favourites(
 
 pub async fn mark_cooked(
     interaction: web::Data<Arc<InteractionService>>,
+    profile: web::Data<Arc<ProfileService>>,
     claims: web::ReqData<Claims>,
     path: web::Path<i64>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
-    let res = interaction.mark_cooked(user_id, path.into_inner(), 2).await?;
+    let household_size = profile.get_profile(user_id).await?.household_size;
+    let res = interaction.mark_cooked(user_id, path.into_inner(), household_size).await?;
     Ok(HttpResponse::Ok().json(res))
 }
 
