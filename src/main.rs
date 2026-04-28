@@ -33,6 +33,7 @@ use crate::services::{
     AuthService, TokenService, RecipeService, IngredientService,
     MealPlanService, InventoryService, ProfileService, InteractionService, ChatService,
     OnboardingService, ShoppingListService, SubscriptionService, StoreService, PushTokenService,
+    PreferenceService,
 };
 
 #[actix_web::main]
@@ -581,6 +582,7 @@ async fn main() -> std::io::Result<()> {
     let inventory_service = Arc::new(InventoryService::new(db.clone()));
     let profile_service = Arc::new(ProfileService::new(db.clone()));
     let interaction_service = Arc::new(InteractionService::new(db.clone()));
+    let preference_service = Arc::new(PreferenceService::new(db.clone()));
     let chat_service = Arc::new(ChatService::new(db.clone()));
     let onboarding_service = Arc::new(OnboardingService::new(db.clone()));
     let shopping_list_service = Arc::new(ShoppingListService::new(db.clone()));
@@ -635,6 +637,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(inventory_service.clone()))
             .app_data(web::Data::new(profile_service.clone()))
             .app_data(web::Data::new(interaction_service.clone()))
+            .app_data(web::Data::new(preference_service.clone()))
             .app_data(web::Data::new(chat_service.clone()))
             .app_data(web::Data::new(onboarding_service.clone()))
             .app_data(web::Data::new(shopping_list_service.clone()))

@@ -9,7 +9,7 @@ use crate::models::inventory::{AddInventoryItem, UpdateInventoryItem};
 use crate::models::profile::UpdateProfileRequest;
 use crate::models::interaction::RateRecipeRequest;
 use crate::models::meal_plan::GenerateMealPlanRequest;
-use crate::services::{InventoryService, ProfileService, InteractionService, MealPlanService, PushTokenService};
+use crate::services::{InventoryService, ProfileService, InteractionService, MealPlanService, PushTokenService, PreferenceService};
 use crate::middleware::Claims;
 
 // ── Inventory ────────────────────────────────────────────────────────────────
@@ -286,10 +286,27 @@ pub async fn get_nutrition_summary(
     Ok(HttpResponse::Ok().json(result))
 }
 
-// ── Route configuration ───────────────────────────────────────────────────────
+// ── Preference Weights ────────────────────────────────────────────────────────
+
+pub async fn get_preferences(
+    pref_svc: web::Data<Arc<PreferenceService>>,
+    claims: web::ReqData<Claims>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let prefs = pref_svc.get_preferences(user_id).await?;
+    Ok(HttpResponse::Ok().json(prefs))
+}
+
+pub async fn reset_preferences(
+    pref_svc: web::Data<Arc<PreferenceService>>,
+    claims: web::ReqData<Claims>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    pref_svc.reset_preferences(user_id).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "Preference weights reset" })))
+}
 
 // ── Push Tokens ───────────────────────────────────────────────────────────────
-
 #[derive(serde::Deserialize)]
 pub struct RegisterPushTokenBody {
     pub token: String,
@@ -337,7 +354,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .route("/{id}", web::put().to(update_inventory_item))
                 .route("/{id}", web::delete().to(delete_inventory_item)),
         )
-        // Profile + history + favourites + push tokens
+        // Profile + history + favourites + push tokens + preferences
         .service(
             web::scope("/api/me")
                 .route("", web::get().to(get_profile))
@@ -346,7 +363,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .route("/favourites", web::get().to(get_favourites))
                 .route("/push-tokens", web::get().to(list_push_tokens))
                 .route("/push-tokens", web::post().to(register_push_token))
-                .route("/push-tokens/{id}", web::delete().to(delete_push_token)),
+                .route("/push-tokens/{id}", web::delete().to(delete_push_token))
+                .route("/preferences", web::get().to(get_preferences))
+                .route("/preferences", web::delete().to(reset_preferences)),
         )
         // Recipe interactions
         .service(

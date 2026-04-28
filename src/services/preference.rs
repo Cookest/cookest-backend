@@ -249,6 +249,44 @@ impl PreferenceService {
     }
 
     /// Get or create a user's preference record (initialised with neutral weights)
+    /// Get a user's current taste preference weights
+    pub async fn get_preferences(&self, user_id: Uuid) -> Result<serde_json::Value, AppError> {
+        let pref = self.get_or_create(user_id).await?;
+        Ok(serde_json::json!({
+            "user_id": pref.user_id,
+            "cuisine_weights": pref.cuisine_weights,
+            "ingredient_weights": pref.ingredient_weights,
+            "macro_bias": pref.macro_bias,
+            "difficulty_weights": pref.difficulty_weights,
+            "preferred_time_min": pref.preferred_time_min,
+            "interaction_count": pref.interaction_count,
+            "updated_at": pref.updated_at,
+        }))
+    }
+
+    /// Reset all preference weights to neutral (0.0) — effectively re-bootstraps learning
+    pub async fn reset_preferences(&self, user_id: Uuid) -> Result<(), AppError> {
+        let now = Utc::now().fixed_offset();
+        // Delete and re-insert to cleanly reset
+        user_preference::Entity::delete_by_id(user_id)
+            .exec(&self.db)
+            .await
+            .ok(); // ignore not-found
+
+        let new_pref = user_preference::ActiveModel {
+            user_id: Set(user_id),
+            cuisine_weights: Set(json!({})),
+            ingredient_weights: Set(json!({})),
+            macro_bias: Set(json!({"protein": 0.0, "carbs": 0.0, "fat": 0.0})),
+            difficulty_weights: Set(json!({"easy": 0.0, "medium": 0.0, "hard": 0.0})),
+            preferred_time_min: Set(30),
+            interaction_count: Set(0),
+            updated_at: Set(now),
+        };
+        new_pref.insert(&self.db).await?;
+        Ok(())
+    }
+
     pub async fn get_or_create(
         &self,
         user_id: Uuid,
