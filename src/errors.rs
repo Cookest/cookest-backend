@@ -25,6 +25,10 @@ pub enum AppError {
     Internal(String),
     /// Rate limit exceeded
     RateLimitExceeded,
+    /// Subscription upgrade required to access this feature
+    SubscriptionRequired { feature: String },
+    /// Forbidden — authenticated but not allowed (e.g. not admin, not owner)
+    Forbidden,
 }
 
 #[derive(Serialize)]
@@ -46,6 +50,10 @@ impl fmt::Display for AppError {
             AppError::NotFound(r) => write!(f, "{} not found", r),
             AppError::Internal(_) => write!(f, "Internal server error"),
             AppError::RateLimitExceeded => write!(f, "Too many requests"),
+            AppError::SubscriptionRequired { feature } => {
+                write!(f, "Subscription required for: {}", feature)
+            }
+            AppError::Forbidden => write!(f, "Forbidden"),
         }
     }
 }
@@ -131,6 +139,23 @@ impl ResponseError for AppError {
                 actix_web::http::StatusCode::TOO_MANY_REQUESTS,
                 ErrorResponse {
                     error: "Too many requests. Please try again later.".to_string(),
+                    details: None,
+                },
+            ),
+            AppError::SubscriptionRequired { feature } => (
+                actix_web::http::StatusCode::PAYMENT_REQUIRED,
+                ErrorResponse {
+                    error: format!(
+                        "A Pro or Family subscription is required to use: {}",
+                        feature
+                    ),
+                    details: None,
+                },
+            ),
+            AppError::Forbidden => (
+                actix_web::http::StatusCode::FORBIDDEN,
+                ErrorResponse {
+                    error: "You do not have permission to perform this action.".to_string(),
                     details: None,
                 },
             ),
