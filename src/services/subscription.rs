@@ -139,4 +139,15 @@ impl SubscriptionService {
 
         Ok(())
     }
+
+    /// Require Pro or Family tier; returns HTTP 402 if the user is on Free tier.
+    pub async fn require_pro(&self, claims: &crate::middleware::Claims) -> Result<(), AppError> {
+        let tier = claims.tier.as_ref().unwrap_or(&SubscriptionTier::Free);
+        match tier {
+            SubscriptionTier::Pro | SubscriptionTier::Family => Ok(()),
+            SubscriptionTier::Free => Err(AppError::SubscriptionRequired {
+                feature: FEATURE_USER_RECIPES.to_string(),
+            }),
+        }
+    }
 }

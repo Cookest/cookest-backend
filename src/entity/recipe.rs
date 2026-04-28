@@ -60,6 +60,12 @@ pub struct Model {
     /// Total number of ratings
     pub rating_count: i32,
 
+    /// User who created this recipe (NULL for seeded/admin recipes)
+    pub author_id: Option<Uuid>,
+
+    /// Whether this recipe is publicly visible (false = only the author sees it)
+    pub is_public: bool,
+
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }
