@@ -417,7 +417,25 @@ ollama pull llava
 
 ---
 
-## Documentation index
+## Documentation
 
-- Build and operational docs: [`docs/BUILD_AND_USAGE.md`](docs/BUILD_AND_USAGE.md)
+The full project documentation is maintained in the Fumadocs site at `../docs/`. Run it with:
+
+```bash
+cd ../docs
+bun run dev
+# Open http://localhost:3000/docs
+```
+
+| Section | URL path |
+|---|---|
+| Architecture overview | `/docs/architecture/overview` |
+| API authentication | `/docs/backend/authentication` |
+| API endpoints | `/docs/backend/endpoints/recipes` |
+| Mobile app (Flutter) | `/docs/mobile/theme` |
+| User guide | `/docs/user-guide/overview` |
+
+Local reference files in this folder:
+
+- Build and operational guide: [`docs/BUILD_AND_USAGE.md`](docs/BUILD_AND_USAGE.md)
 - Database schema: [`docs/database/SCHEMA.md`](docs/database/SCHEMA.md)

@@ -44,19 +44,19 @@ Para configuração detalhada e orientação por endpoint, consulte [`docs/pt-PT
 
 ## Visão Geral do Ramo UI
 
-O repositório está organizado em torno de um **track principal de backend**, e um **track de ramo UI** separado para trabalho no cliente Flutter.
+O código Flutter foi **movido para a sua própria pasta dedicada** (`../UI/`) no monorepo do projeto.
 
-- **Foco do ramo main:** API backend + schema + lógica de serviços.
-- **Foco do ramo UI:** aplicação Flutter que integra com esta API.
+Anteriormente o frontend era mantido num `ramo ui` separado dentro deste repositório da API. Foi extraído para uma pasta independente de forma a que o frontend e o backend possam evoluir de forma autónoma, mantendo um único ponto de entrada no repositório.
 
-Fluxo recomendado para a equipa:
+Para trabalhar no frontend:
 
-1. Manter contratos de API estáveis em `main`.
-2. Desenvolver/polir ecrãs no ramo UI.
-3. Validar integração apontando o ramo UI para uma instância local da API.
-4. Fazer merge de atualizações UI após verificação de compatibilidade de endpoints e ambiente.
+```bash
+cd ../UI
+flutter pub get
+flutter run
+```
 
-Se o seu checkout local só tiver ficheiros backend, isso é esperado neste ramo.
+Consulte [`../UI/README.md`](../UI/README.md) para instruções de configuração completas.
 
 ## Início rápido
 
@@ -86,9 +86,26 @@ Por omissão, faz bind em `127.0.0.1:8080`, salvo override por variáveis de amb
 
 ## Índice de documentação
 
-- Guia de build, execução e operação: [`docs/pt-PT/BUILD_AND_USAGE.md`](docs/pt-PT/BUILD_AND_USAGE.md)
-- Schema da base de dados + diagrama ER: [`docs/database/SCHEMA.pt-PT.md`](docs/database/SCHEMA.pt-PT.md)
-- Notas de schema legado: [`DB_SCHEMA.md`](DB_SCHEMA.md)
+A documentação completa do projeto está no site Fumadocs em `../docs/`. Execute com:
+
+```bash
+cd ../docs
+bun run dev
+# Abra http://localhost:3000/docs
+```
+
+| Secção | Caminho |
+|---|---|
+| Visão geral da arquitetura | `/docs/architecture/overview` |
+| Autenticação da API | `/docs/backend/authentication` |
+| Endpoints da API | `/docs/backend/endpoints/recipes` |
+| App móvel (Flutter) | `/docs/mobile/theme` |
+| Guia do utilizador | `/docs/user-guide/overview` |
+
+Ficheiros de referência locais nesta pasta:
+
+- Guia de build e operação: [`docs/pt-PT/BUILD_AND_USAGE.md`](docs/pt-PT/BUILD_AND_USAGE.md)
+- Schema da base de dados: [`docs/database/SCHEMA.md`](docs/database/SCHEMA.md)
 
 ## Notas do âmbito atual
 
