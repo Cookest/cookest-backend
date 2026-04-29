@@ -610,6 +610,13 @@ async fn main() -> std::io::Result<()> {
         // Configure CORS
         let cors = Cors::default()
             .allowed_origin(&cors_origin)
+            .allowed_origin_fn(|origin, _req_head| {
+                if let Ok(origin_str) = std::str::from_utf8(origin.as_bytes()) {
+                    origin_str.starts_with("http://localhost:") || origin_str.starts_with("http://127.0.0.1:")
+                } else {
+                    false
+                }
+            })
             .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
             .allowed_headers(vec![
                 header::AUTHORIZATION,
