@@ -120,17 +120,19 @@ Base URL examples below assume:
   - `GET /api/chat/sessions/{id}/messages`
   - `DELETE /api/chat/sessions/{id}`
 
-## 8. UI branch integration notes
+## 8. Flutter app integration notes
 
-The UI implementation is maintained in a dedicated UI branch track.
+> **⚠️ UI branch deprecated.** The `ui` branch that previously existed in this repository is **no longer active**. The Flutter codebase has been extracted from that branch into the `UI/` folder at the monorepo root (`../UI/`). All future Flutter development happens there.
 
-Recommended integration checklist:
+To connect the Flutter app (`../UI/`) to this API:
 
-1. Point UI environment to backend base URL (`HOST:PORT`).
-2. Align auth token handling with backend login/refresh contract.
-3. Verify CORS origin in backend env matches UI dev origin.
-4. Validate all protected route calls with a real authenticated user.
-5. Confirm chat features only when Ollama is running.
+1. Point the Flutter app to the backend base URL — update `baseUrl` in `UI/lib/src/core/api/`.
+2. Set `CORS_ORIGIN` in this API's `.env` to the Flutter dev origin (or leave default for emulator use).
+3. Ensure the access token is stored in memory only (never in SharedPreferences) — the httpOnly refresh cookie handles persistence.
+4. Handle HTTP **402** responses from Pro-gated endpoints by showing the upgrade paywall.
+5. Confirm Ollama is running and accessible at `OLLAMA_URL` before testing AI chat features.
+
+See [`../UI/README.md`](../UI/README.md) for full Flutter setup instructions.
 
 ## 9. Troubleshooting
 

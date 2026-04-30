@@ -2,6 +2,9 @@
 
 Cookest is an AI-assisted meal planning and kitchen management platform. This repository contains the **Rust backend API** powering authentication, recipes, inventory tracking, meal planning, subscription management, AI chat, and supermarket price scraping.
 
+> **⚠️ UI branch notice**
+> The `ui` branch that previously existed in this repository is **no longer active**. The Flutter mobile app has been extracted from that branch and now lives in the dedicated `UI/` folder at the monorepo root (`../UI/`). All future Flutter development happens there. The `ui` branch will not receive further updates and should be considered archived. See [`../UI/README.md`](../UI/README.md) for the current Flutter codebase.
+
 ---
 
 ## Table of Contents
