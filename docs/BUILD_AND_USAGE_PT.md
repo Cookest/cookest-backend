@@ -120,17 +120,19 @@ Os exemplos abaixo assumem base URL:
   - `GET /api/chat/sessions/{id}/messages`
   - `DELETE /api/chat/sessions/{id}`
 
-## 8. Notas de integração com o ramo UI
+## 8. Notas de integração com a app Flutter
 
-A implementação UI é mantida num track de ramo UI dedicado.
+> **⚠️ Ramo UI descontinuado.** O ramo `ui` que existia anteriormente neste repositório **já não está ativo**. O código Flutter foi extraído desse ramo para a pasta `UI/` na raiz do monorepo (`../UI/`). Todo o desenvolvimento Flutter futuro acontece lá.
 
-Checklist recomendado de integração:
+Para ligar a app Flutter (`../UI/`) a esta API:
 
-1. Apontar o ambiente UI para a base URL do backend (`HOST:PORT`).
-2. Alinhar gestão de tokens com o contrato login/refresh do backend.
-3. Verificar se `CORS_ORIGIN` no backend coincide com a origem de desenvolvimento da UI.
-4. Validar chamadas a rotas protegidas com utilizador autenticado real.
-5. Confirmar funcionalidades de chat apenas quando Ollama estiver ativo.
+1. Apontar a app Flutter para a base URL do backend — atualizar `baseUrl` em `UI/lib/src/core/api/`.
+2. Definir `CORS_ORIGIN` no `.env` desta API para a origem de desenvolvimento Flutter (ou manter o valor por omissão para uso em emulador).
+3. Garantir que o access token é guardado apenas em memória (nunca em SharedPreferences) — o cookie httpOnly de refresh trata da persistência.
+4. Tratar respostas HTTP **402** de endpoints exclusivos Pro mostrando o paywall de upgrade.
+5. Confirmar que Ollama está em execução e acessível em `OLLAMA_URL` antes de testar funcionalidades de chat IA.
+
+Consulte [`../UI/README.md`](../UI/README.md) para instruções completas de configuração do Flutter.
 
 ## 9. Resolução de problemas
 
