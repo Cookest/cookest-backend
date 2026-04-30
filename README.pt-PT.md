@@ -40,7 +40,7 @@ O Cookest expõe endpoints estilo REST sob `/api/*`:
 - `/api/meal-plans/*` — gerar/plano atual/lista de compras/marcar concluído
 - `/api/chat/*` — sessões e mensagens de chat com IA
 
-Para configuração detalhada e orientação por endpoint, consulte [`docs/pt-PT/BUILD_AND_USAGE.md`](docs/pt-PT/BUILD_AND_USAGE.md).
+Para configuração detalhada e orientação por endpoint, consulte [`docs/BUILD_AND_USAGE_PT.md`](docs/BUILD_AND_USAGE_PT.md).
 
 ## Visão Geral do Ramo UI
 
@@ -104,8 +104,8 @@ bun run dev
 
 Ficheiros de referência locais nesta pasta:
 
-- Guia de build e operação: [`docs/pt-PT/BUILD_AND_USAGE.md`](docs/pt-PT/BUILD_AND_USAGE.md)
-- Schema da base de dados: [`docs/database/SCHEMA.md`](docs/database/SCHEMA.md)
+- Guia de build e operação: [`docs/BUILD_AND_USAGE_PT.md`](docs/BUILD_AND_USAGE_PT.md)
+- Schema da base de dados: [`docs/database/SCHEMA.pt-PT.md`](docs/database/SCHEMA.pt-PT.md)
 
 ## Notas do âmbito atual
 
