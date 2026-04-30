@@ -141,5 +141,5 @@ Checklist recomendado de integração:
 
 ## 10. Documentação complementar
 
-- Schema e relações da base de dados: [`../database/SCHEMA.pt-PT.md`](../database/SCHEMA.pt-PT.md)
-- Visão geral do repositório: [`../../README.pt-PT.md`](../../README.pt-PT.md)
+- Schema e relações da base de dados: [`database/SCHEMA.pt-PT.md`](database/SCHEMA.pt-PT.md)
+- Visão geral do repositório: [`../README.pt-PT.md`](../README.pt-PT.md)
