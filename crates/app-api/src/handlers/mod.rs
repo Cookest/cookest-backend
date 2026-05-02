@@ -1,0 +1,21 @@
+pub mod auth;
+pub mod recipe;
+pub mod ingredient;
+pub mod user;
+pub mod chat;
+pub mod onboarding;
+pub mod shopping_list;
+pub mod subscription;
+pub mod store;
+
+pub use auth::configure as configure_auth;
+pub use recipe::configure as configure_recipes;
+pub use recipe::configure_protected as configure_recipes_protected;
+pub use ingredient::configure as configure_ingredients;
+pub use user::configure as configure_user;
+pub use chat::configure_chat;
+pub use onboarding::configure_onboarding;
+pub use shopping_list::configure_shopping_list;
+pub use subscription::configure_subscription;
+pub use subscription::configure_subscription_protected;
+pub use store::configure_stores;
