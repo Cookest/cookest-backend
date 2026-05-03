@@ -1,21 +1,92 @@
 services:
-  postgres:
+  # ── Food API Database ────────────────────────────────────────────────────
+  food-db:
     image: postgres:16-alpine
-    container_name: auth_db
+    container_name: cookest_food_db
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: auth_db
+      POSTGRES_DB: cookest_food
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - food_db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cookest_food"]
       interval: 5s
       timeout: 5s
       retries: 5
 
+  # ── App API Database ─────────────────────────────────────────────────────
+  app-db:
+    image: postgres:16-alpine
+    container_name: cookest_app_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: cookest_app
+    ports:
+      - "5433:5432"
+    volumes:
+      - app_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cookest_app"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Food API ─────────────────────────────────────────────────────────────
+  food-api:
+    build:
+      context: .
+      dockerfile: crates/food-api/Dockerfile
+    container_name: cookest_food_api
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      FOOD_DATABASE_URL: postgresql://postgres:postgres@food-db:5432/cookest_food
+      FOOD_HOST: 0.0.0.0
+      FOOD_PORT: 8081
+      FOOD_CORS_ORIGIN: "*"
+      RUST_LOG: info,cookest_food_api=debug
+    depends_on:
+      food-db:
+        condition: service_healthy
+
+  # ── App API ──────────────────────────────────────────────────────────────
+  app-api:
+    build:
+      context: .
+      dockerfile: crates/app-api/Dockerfile
+    container_name: cookest_app_api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      APP_DATABASE_URL: postgresql://postgres:postgres@app-db:5432/cookest_app
+      HOST: 0.0.0.0
+      PORT: 8080
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-at-least-32-chars}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llava}
+      PDF_UPLOAD_DIR: /data/pdfs
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      FOOD_API_URL: http://food-api:8081
+      FOOD_API_KEY: ${FOOD_API_KEY:-}
+      RUST_LOG: info,cookest_app_api=debug
+    volumes:
+      - pdf_uploads:/data/pdfs
+    depends_on:
+      app-db:
+        condition: service_healthy
+      food-api:
+        condition: service_started
+
 volumes:
-  postgres_data:
+  food_db_data:
+  app_db_data:
+  pdf_uploads:
