@@ -267,15 +267,20 @@ async fn main() -> std::io::Result<()> {
     tracing::info!("Food API starting on {}", bind_address);
 
     HttpServer::new(move || {
-        let cors = Cors::default()
-            .allowed_origin(&cors_origin)
-            .allowed_origin_fn(|origin, _| {
-                if let Ok(s) = std::str::from_utf8(origin.as_bytes()) {
-                    s.starts_with("http://localhost:") || s.starts_with("http://127.0.0.1:")
-                } else {
-                    false
-                }
-            })
+        let cors_base = if cors_origin == "*" {
+            Cors::default().send_wildcard()
+        } else {
+            Cors::default()
+                .allowed_origin(&cors_origin)
+                .allowed_origin_fn(|origin, _| {
+                    if let Ok(s) = std::str::from_utf8(origin.as_bytes()) {
+                        s.starts_with("http://localhost:") || s.starts_with("http://127.0.0.1:")
+                    } else {
+                        false
+                    }
+                })
+        };
+        let cors = cors_base
             .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
             .allowed_headers(vec![
                 actix_web::http::header::AUTHORIZATION,
