@@ -19,7 +19,9 @@ RUN mkdir -p crates/shared/src crates/food-api/src crates/app-api/src && \
 # Copy real sources and build
 COPY crates/shared crates/shared
 COPY crates/app-api crates/app-api
-RUN touch crates/app-api/src/main.rs && \
+# Touch shared lib.rs so Cargo recompiles it with the real module tree
+RUN find crates/shared/src -name "*.rs" -exec touch {} + && \
+    touch crates/app-api/src/main.rs && \
     cargo build --release -p cookest-app-api
 
 # Runtime
