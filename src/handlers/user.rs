@@ -1,6 +1,7 @@
 //! Inventory, Profile, Interaction, and Meal Plan handlers
 
 use actix_web::{web, HttpResponse};
+use chrono::{Datelike, Duration, Utc};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -144,12 +145,18 @@ pub async fn generate_meal_plan(
     meal_svc: web::Data<Arc<MealPlanService>>,
     profile_svc: web::Data<Arc<ProfileService>>,
     claims: web::ReqData<Claims>,
-    body: web::Json<GenerateMealPlanRequest>,
+    body: Option<web::Json<GenerateMealPlanRequest>>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
     let profile = profile_svc.get_profile(user_id).await?;
+    let default_week_start = {
+        let today = Utc::now().date_naive();
+        let days_from_monday = i64::from(today.weekday().num_days_from_monday());
+        today - Duration::days(days_from_monday)
+    };
+    let week_start = body.map_or(default_week_start, |b| b.week_start);
     let plan = meal_svc
-        .generate_week_plan(user_id, profile.household_size, body.week_start)
+        .generate_week_plan(user_id, profile.household_size, week_start)
         .await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "id": plan.id,

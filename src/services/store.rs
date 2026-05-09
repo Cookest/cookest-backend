@@ -418,7 +418,10 @@ async fn process_pdf_job(
     }
     png_files.sort();
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
 
     for png_path in &png_files {
         let png_bytes = tokio::fs::read(png_path).await
@@ -455,20 +458,39 @@ Return ONLY the JSON array, no other text.
             "stream": false
         });
 
-        let resp = client
-            .post(format!("{}/api/generate", ollama_url))
-            .json(&req_body)
-            .send()
-            .await
-            .map_err(|e| AppError::Internal(format!("Ollama request failed: {}", e)))?;
+        let mut response_json: Option<serde_json::Value> = None;
+        for base in ollama_base_candidates(ollama_url) {
+            match client
+                .post(format!("{}/api/generate", base))
+                .json(&req_body)
+                .send()
+                .await
+            {
+                Ok(resp) => {
+                    if !resp.status().is_success() {
+                        tracing::warn!("Ollama returned {} on {}", resp.status(), base);
+                        continue;
+                    }
 
-        if !resp.status().is_success() {
-            tracing::warn!("Ollama returned {}", resp.status());
-            continue;
+                    match resp.json::<serde_json::Value>().await {
+                        Ok(parsed) => {
+                            response_json = Some(parsed);
+                            break;
+                        }
+                        Err(e) => {
+                            tracing::warn!("Ollama JSON parse failed on {}: {}", base, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Ollama request failed on {}: {}", base, e);
+                }
+            }
         }
 
-        let resp_json: serde_json::Value = resp.json().await
-            .map_err(|e| AppError::Internal(format!("Ollama JSON parse failed: {}", e)))?;
+        let Some(resp_json) = response_json else {
+            continue;
+        };
 
         let raw_text = resp_json["response"].as_str().unwrap_or("");
         // Extract JSON array from response (model may include surrounding text)
@@ -496,6 +518,24 @@ Return ONLY the JSON array, no other text.
     }
 
     Ok(())
+}
+
+fn ollama_base_candidates(base: &str) -> Vec<String> {
+    let normalized = base.trim_end_matches('/').to_string();
+    let mut candidates = vec![normalized.clone()];
+
+    if normalized.contains("localhost") || normalized.contains("127.0.0.1") {
+        candidates.push(
+            normalized
+                .replace("localhost", "host.docker.internal")
+                .replace("127.0.0.1", "host.docker.internal"),
+        );
+    } else if normalized.contains("host.docker.internal") {
+        candidates.push(normalized.replace("host.docker.internal", "localhost"));
+    }
+
+    candidates.dedup();
+    candidates
 }
 
 /// Insert a single AI-extracted item into the staging table

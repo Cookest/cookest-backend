@@ -583,7 +583,11 @@ async fn main() -> std::io::Result<()> {
     let profile_service = Arc::new(ProfileService::new(db.clone()));
     let interaction_service = Arc::new(InteractionService::new(db.clone()));
     let preference_service = Arc::new(PreferenceService::new(db.clone()));
-    let chat_service = Arc::new(ChatService::new(db.clone()));
+    let chat_service = Arc::new(ChatService::new(
+        db.clone(),
+        config.ollama_url.clone(),
+        config.ollama_model.clone(),
+    ));
     let onboarding_service = Arc::new(OnboardingService::new(db.clone()));
     let shopping_list_service = Arc::new(ShoppingListService::new(db.clone()));
     let subscription_service = Arc::new(SubscriptionService::new(

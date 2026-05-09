@@ -1,3 +1,5 @@
+name: "cookest"
+
 services:
   # ── Food API Database ────────────────────────────────────────────────────
   food-db:
@@ -72,7 +74,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production-at-least-32-chars}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llava}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1}
       PDF_UPLOAD_DIR: /data/pdfs
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       FOOD_API_URL: http://food-api:8081

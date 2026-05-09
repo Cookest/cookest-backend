@@ -12,6 +12,7 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
 };
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::entity::{
@@ -88,15 +89,13 @@ pub struct ChatService {
 }
 
 impl ChatService {
-    pub fn new(db: DatabaseConnection) -> Self {
-        let ollama_url = std::env::var("OLLAMA_URL")
-            .unwrap_or_else(|_| "http://localhost:11434".to_string());
-        let model = std::env::var("OLLAMA_MODEL")
-            .unwrap_or_else(|_| "llama3.2".to_string());
-
+    pub fn new(db: DatabaseConnection, ollama_url: String, model: String) -> Self {
         Self {
             db,
-            http: Client::new(),
+            http: Client::builder()
+                .timeout(Duration::from_secs(90))
+                .build()
+                .unwrap_or_else(|_| Client::new()),
             ollama_url,
             model,
         }
@@ -187,15 +186,37 @@ impl ChatService {
             stream: false,
         };
 
-        let resp = self.http
-            .post(format!("{}/api/chat", self.ollama_url))
-            .json(&ollama_req)
-            .send()
-            .await
-            .map_err(|e| {
-                tracing::error!("Ollama request failed: {}", e);
-                AppError::Internal("AI service unavailable".into())
-            })?;
+        let mut last_error = String::new();
+        let mut resp_opt = None;
+        for base in ollama_base_candidates(&self.ollama_url) {
+            match self
+                .http
+                .post(format!("{}/api/chat", base))
+                .json(&ollama_req)
+                .send()
+                .await
+            {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        resp_opt = Some(resp);
+                        break;
+                    }
+                    let status = resp.status();
+                    let body = resp.text().await.unwrap_or_default();
+                    last_error = format!("{} {}", status, body);
+                    tracing::warn!("Ollama error on {}: {}", base, last_error);
+                }
+                Err(e) => {
+                    last_error = e.to_string();
+                    tracing::warn!("Ollama request failed on {}: {}", base, last_error);
+                }
+            }
+        }
+
+        let resp = resp_opt.ok_or_else(|| {
+            tracing::error!("All Ollama endpoints failed: {}", last_error);
+            AppError::Internal("AI service unavailable. Check OLLAMA_URL / local Ollama server.".into())
+        })?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -495,4 +516,22 @@ impl ChatService {
             truncated
         }
     }
+}
+
+fn ollama_base_candidates(base: &str) -> Vec<String> {
+    let normalized = base.trim_end_matches('/').to_string();
+    let mut candidates = vec![normalized.clone()];
+
+    if normalized.contains("localhost") || normalized.contains("127.0.0.1") {
+        candidates.push(
+            normalized
+                .replace("localhost", "host.docker.internal")
+                .replace("127.0.0.1", "host.docker.internal"),
+        );
+    } else if normalized.contains("host.docker.internal") {
+        candidates.push(normalized.replace("host.docker.internal", "localhost"));
+    }
+
+    candidates.dedup();
+    candidates
 }

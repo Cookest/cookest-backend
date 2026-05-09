@@ -13,6 +13,7 @@ pub mod shopping_list;
 pub mod subscription;
 pub mod store;
 pub mod push_token;
+pub mod email;
 
 pub use auth::AuthService;
 pub use token::TokenService;
@@ -29,3 +30,4 @@ pub use shopping_list::ShoppingListService;
 pub use subscription::SubscriptionService;
 pub use store::StoreService;
 pub use push_token::PushTokenService;
+pub use email::EmailService;

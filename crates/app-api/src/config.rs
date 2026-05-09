@@ -17,6 +17,8 @@ pub struct Config {
     pub stripe_webhook_secret: Option<String>,
     pub food_api_url: String,
     pub food_api_key: Option<String>,
+    pub resend_api_key: Option<SecretString>,
+    pub resend_from_email: String,
 }
 
 impl Config {
@@ -73,6 +75,13 @@ impl Config {
 
         let food_api_key = env::var("FOOD_API_KEY").ok();
 
+        let resend_api_key = env::var("RESEND_API_KEY")
+            .map(SecretString::from)
+            .ok();
+
+        let resend_from_email = env::var("RESEND_FROM_EMAIL")
+            .unwrap_or_else(|_| "noreply@m.cookest.app".to_string());
+
         Ok(Self {
             database_url: SecretString::from(database_url),
             jwt_secret: SecretString::from(jwt_secret),
@@ -87,6 +96,8 @@ impl Config {
             stripe_webhook_secret,
             food_api_url,
             food_api_key,
+            resend_api_key,
+            resend_from_email,
         })
     }
 

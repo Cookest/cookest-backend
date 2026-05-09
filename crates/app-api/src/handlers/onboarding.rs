@@ -9,7 +9,12 @@ use crate::middleware::auth::AuthenticatedUser;
 use crate::services::auth::AuthService;
 use crate::services::onboarding::{OnboardingRequest, OnboardingService};
 
-pub fn configure_onboarding(_cfg: &mut web::ServiceConfig) {}
+pub fn configure_onboarding(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/api/auth")
+            .route("/onboarding", web::post().to(complete_onboarding)),
+    );
+}
 
 pub async fn complete_onboarding(
     user: AuthenticatedUser,

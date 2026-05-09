@@ -38,6 +38,7 @@ pub async fn register(
 /// Authenticates user and returns access token + refresh token (in cookie)
 pub async fn login(
     auth_service: web::Data<Arc<AuthService>>,
+    req: HttpRequest,
     body: web::Json<LoginRequest>,
 ) -> Result<HttpResponse, AppError> {
     // Validate input
@@ -45,11 +46,13 @@ pub async fn login(
 
     let (token_pair, refresh_token, _user) = auth_service.login(body.into_inner()).await?;
 
+    let secure_cookie = should_use_secure_cookie(&req);
+
     // Create HttpOnly cookie for refresh token
     let refresh_cookie = Cookie::build("refresh_token", refresh_token)
         .path("/api/auth")
         .http_only(true)
-        .secure(true) // Only send over HTTPS
+        .secure(secure_cookie)
         .same_site(SameSite::Strict)
         .max_age(cookie::time::Duration::days(7))
         .finish();
@@ -74,11 +77,13 @@ pub async fn refresh(
 
     let (token_pair, new_refresh_token, _user) = auth_service.refresh_token(&refresh_token).await?;
 
+    let secure_cookie = should_use_secure_cookie(&req);
+
     // Rotate refresh token cookie
     let refresh_cookie = Cookie::build("refresh_token", new_refresh_token)
         .path("/api/auth")
         .http_only(true)
-        .secure(true)
+        .secure(secure_cookie)
         .same_site(SameSite::Strict)
         .max_age(cookie::time::Duration::days(7))
         .finish();
@@ -102,11 +107,13 @@ pub async fn logout(
         let _ = refresh_cookie.value();
     }
 
+    let secure_cookie = should_use_secure_cookie(&req);
+
     // Clear refresh token cookie
     let mut clear_cookie = Cookie::build("refresh_token", "")
         .path("/api/auth")
         .http_only(true)
-        .secure(true)
+        .secure(secure_cookie)
         .same_site(SameSite::Strict)
         .finish();
     clear_cookie.make_removal();
@@ -116,6 +123,14 @@ pub async fn logout(
         .json(serde_json::json!({
             "message": "Logged out successfully"
         })))
+}
+
+fn should_use_secure_cookie(req: &HttpRequest) -> bool {
+    if let Ok(value) = std::env::var("COOKIE_SECURE") {
+        let normalized = value.trim().to_ascii_lowercase();
+        return normalized == "1" || normalized == "true" || normalized == "yes";
+    }
+    req.connection_info().scheme() == "https"
 }
 
 /// Configure auth routes

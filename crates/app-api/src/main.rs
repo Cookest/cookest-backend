@@ -21,6 +21,7 @@ use actix_cors::Cors;
 use actix_web::{http::header, middleware::Logger, web, App, HttpServer};
 use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use secrecy::ExposeSecret;
 
 use crate::config::Config;
 use crate::handlers::{
@@ -33,7 +34,7 @@ use crate::services::{
     AuthService, TokenService, RecipeService, IngredientService,
     MealPlanService, InventoryService, ProfileService, InteractionService, ChatService,
     OnboardingService, ShoppingListService, SubscriptionService, StoreService, PushTokenService,
-    PreferenceService,
+    PreferenceService, EmailService,
 };
 
 #[actix_web::main]
@@ -601,6 +602,20 @@ async fn main() -> std::io::Result<()> {
 
     let push_token_service = Arc::new(PushTokenService::new(db.clone()));
 
+    // Initialize email service if Resend API key is available
+    let email_service = if let Some(api_key) = &config.resend_api_key {
+        Arc::new(EmailService::new(
+            api_key.expose_secret().to_string(),
+            config.resend_from_email.clone(),
+        ))
+    } else {
+        tracing::warn!("RESEND_API_KEY not configured - email notifications disabled");
+        Arc::new(EmailService::new(
+            String::new(),
+            config.resend_from_email.clone(),
+        ))
+    };
+
     tracing::info!("Server starting on {}", bind_address);
 
     HttpServer::new(move || {
@@ -648,6 +663,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(subscription_service.clone()))
             .app_data(web::Data::new(store_service.clone()))
             .app_data(web::Data::new(push_token_service.clone()))
+            .app_data(web::Data::new(email_service.clone()))
             .app_data(web::Data::new(db.clone()))
             // ── Public routes (no JWT required) ──────────────────────────────
             .configure(configure_auth)        // /api/auth/*
