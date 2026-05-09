@@ -1,5 +1,5 @@
 # Multi-stage build for cookest-food-api
-FROM rust:1.78-slim-bookworm AS builder
+FROM rust:1.85-slim-bookworm AS builder
 
 RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 
