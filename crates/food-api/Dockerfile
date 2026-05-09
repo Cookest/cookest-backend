@@ -8,12 +8,14 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/shared/Cargo.toml crates/shared/Cargo.toml
 COPY crates/food-api/Cargo.toml crates/food-api/Cargo.toml
 COPY crates/app-api/Cargo.toml crates/app-api/Cargo.toml
+COPY crates/dataset-importer/Cargo.toml crates/dataset-importer/Cargo.toml
 
 # Create dummy sources for dependency caching
-RUN mkdir -p crates/shared/src crates/food-api/src crates/app-api/src && \
+RUN mkdir -p crates/shared/src crates/food-api/src crates/app-api/src crates/dataset-importer/src && \
     echo "pub fn stub() {}" > crates/shared/src/lib.rs && \
     echo "fn main() {}" > crates/food-api/src/main.rs && \
     echo "fn main() {}" > crates/app-api/src/main.rs && \
+    echo "fn main() {}" > crates/dataset-importer/src/main.rs && \
     cargo build --release -p cookest-food-api 2>/dev/null || true
 
 # Copy real sources and build
