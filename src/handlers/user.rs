@@ -191,14 +191,60 @@ pub async fn get_shopping_list(
     })))
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+fn from_str_or_int<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrInt {
+        String(String),
+        Int(i64),
+    }
+
+    match StringOrInt::deserialize(deserializer)? {
+        StringOrInt::String(s) => s.parse::<i64>().map_err(serde::de::Error::custom),
+        StringOrInt::Int(i) => Ok(i),
+    }
+}
+
+fn from_str_or_int_opt<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrInt {
+        String(String),
+        Int(i64),
+        Null,
+    }
+
+    match Option::<StringOrInt>::deserialize(deserializer)? {
+        Some(StringOrInt::String(s)) => s.parse::<i64>().map(Some).map_err(serde::de::Error::custom),
+        Some(StringOrInt::Int(i)) => Ok(Some(i)),
+        Some(StringOrInt::Null) | None => Ok(None),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct SlotPath {
+    pub plan_id: i64,
+    pub slot_id: i64,
+}
+
 pub async fn mark_slot_complete(
     meal_svc: web::Data<Arc<MealPlanService>>,
     claims: web::ReqData<Claims>,
-    path: web::Path<(i64, i64)>,
+    path: web::Path<SlotPath>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
-    let (plan_id, slot_id) = path.into_inner();
-    meal_svc.mark_slot_complete(user_id, plan_id, slot_id).await?;
+    let p = path.into_inner();
+    meal_svc.mark_slot_complete(user_id, p.plan_id, p.slot_id).await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "Slot marked as completed" })))
 }
 
@@ -242,6 +288,7 @@ pub async fn delete_meal_plan(
 
 #[derive(serde::Deserialize)]
 pub struct AddSlotBody {
+    #[serde(deserialize_with = "from_str_or_int")]
     pub recipe_id: i64,
     pub day_of_week: i16,
     pub meal_type: String,
@@ -265,6 +312,7 @@ pub async fn add_slot(
 
 #[derive(serde::Deserialize)]
 pub struct SwapSlotBody {
+    #[serde(deserialize_with = "from_str_or_int_opt")]
     pub recipe_id: Option<i64>,
     pub flex_type: Option<String>,
     pub energy_level: Option<String>,
@@ -273,14 +321,14 @@ pub struct SwapSlotBody {
 pub async fn swap_slot(
     meal_svc: web::Data<Arc<MealPlanService>>,
     claims: web::ReqData<Claims>,
-    path: web::Path<(i64, i64)>,
+    path: web::Path<SlotPath>,
     body: web::Json<SwapSlotBody>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
-    let (plan_id, slot_id) = path.into_inner();
+    let p = path.into_inner();
     let body = body.into_inner();
     let result = meal_svc
-        .swap_slot(user_id, plan_id, slot_id, body.recipe_id, body.flex_type, body.energy_level)
+        .swap_slot(user_id, p.plan_id, p.slot_id, body.recipe_id, body.flex_type, body.energy_level)
         .await?;
     Ok(HttpResponse::Ok().json(result))
 }
@@ -294,14 +342,14 @@ pub struct MarkFlexBody {
 pub async fn mark_slot_flex(
     meal_svc: web::Data<Arc<MealPlanService>>,
     claims: web::ReqData<Claims>,
-    path: web::Path<(i64, i64)>,
+    path: web::Path<SlotPath>,
     body: web::Json<MarkFlexBody>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
-    let (plan_id, slot_id) = path.into_inner();
+    let p = path.into_inner();
     let body = body.into_inner();
     meal_svc
-        .mark_slot_flex(user_id, plan_id, slot_id, body.flex_type, body.energy_level)
+        .mark_slot_flex(user_id, p.plan_id, p.slot_id, body.flex_type, body.energy_level)
         .await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "Slot marked as flex day" })))
 }
