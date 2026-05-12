@@ -1,15 +1,18 @@
 //! Inventory, Profile, Interaction, and Meal Plan handlers
 
 use actix_web::{web, HttpResponse};
+use actix_multipart::Multipart;
+use futures::StreamExt;
 use std::sync::Arc;
 use uuid::Uuid;
 
 use cookest_shared::errors::AppError;
-use crate::models::inventory::{AddInventoryItem, UpdateInventoryItem};
+use crate::models::inventory::{AddInventoryItem, UpdateInventoryItem, QuickAddItem};
 use crate::models::profile::UpdateProfileRequest;
 use crate::models::interaction::RateRecipeRequest;
 use crate::models::meal_plan::GenerateMealPlanRequest;
-use crate::services::{InventoryService, ProfileService, InteractionService, MealPlanService, PushTokenService, PreferenceService};
+use crate::services::{InventoryService, ProfileService, InteractionService, MealPlanService, PushTokenService, PreferenceService, ScanService};
+use crate::services::scan::BulkAddItem;
 use crate::middleware::Claims;
 use crate::handlers::onboarding::{complete_onboarding, change_password, delete_account};
 
@@ -62,6 +65,90 @@ pub async fn expiring_soon(
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
     let items = inv.expiring_soon(user_id, 5).await?;
     Ok(HttpResponse::Ok().json(items))
+}
+
+/// POST /api/inventory/quick — add by name (find-or-create ingredient)
+pub async fn quick_add_item(
+    inv: web::Data<Arc<InventoryService>>,
+    claims: web::ReqData<Claims>,
+    body: web::Json<QuickAddItem>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let b = body.into_inner();
+    let expiry = b.expiry_date.as_deref()
+        .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+    let item = inv.quick_add(user_id, b.name, b.quantity, b.unit, b.storage_location, expiry).await?;
+    Ok(HttpResponse::Created().json(item))
+}
+
+/// POST /api/inventory/bulk — bulk-add items from scan result
+pub async fn bulk_add_items(
+    inv: web::Data<Arc<InventoryService>>,
+    claims: web::ReqData<Claims>,
+    body: web::Json<Vec<BulkAddItem>>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let results = inv.bulk_add(user_id, body.into_inner()).await?;
+    Ok(HttpResponse::Created().json(results))
+}
+
+/// GET /api/inventory/suggestions — recipes the user can make with current pantry
+pub async fn recipe_suggestions(
+    inv: web::Data<Arc<InventoryService>>,
+    claims: web::ReqData<Claims>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let suggestions = inv.recipe_suggestions(user_id, 0.3, 10).await?;
+    Ok(HttpResponse::Ok().json(suggestions))
+}
+
+/// POST /api/inventory/scan — upload an image, detect groceries with AI
+pub async fn scan_groceries(
+    scan_svc: web::Data<Arc<ScanService>>,
+    claims: web::ReqData<Claims>,
+    mut payload: Multipart,
+) -> Result<HttpResponse, AppError> {
+    // Validate auth (claims must be present)
+    let _user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+
+    let mut image_bytes: Option<Vec<u8>> = None;
+
+    while let Some(field) = payload.next().await {
+        let mut field = field.map_err(|e| AppError::Internal(format!("Multipart error: {}", e)))?;
+        let field_name = field.name().unwrap_or("").to_string();
+
+        if field_name == "image" {
+            let mut bytes = Vec::new();
+            while let Some(chunk) = field.next().await {
+                let chunk = chunk.map_err(|e| AppError::Internal(format!("Chunk error: {}", e)))?;
+                bytes.extend_from_slice(&chunk);
+                // Max 20 MB
+                if bytes.len() > 20 * 1024 * 1024 {
+                    return Err(AppError::Validation({
+                        let mut errors = validator::ValidationErrors::new();
+                        let mut e = validator::ValidationError::new("too_large");
+                        e.message = Some("Image must be under 20 MB".into());
+                        errors.add("image", e);
+                        errors
+                    }));
+                }
+            }
+            if !bytes.is_empty() {
+                image_bytes = Some(bytes);
+            }
+        }
+    }
+
+    let bytes = image_bytes.ok_or_else(|| AppError::Validation({
+        let mut errors = validator::ValidationErrors::new();
+        let mut e = validator::ValidationError::new("missing");
+        e.message = Some("Image field is required".into());
+        errors.add("image", e);
+        errors
+    }))?;
+
+    let result = scan_svc.scan_groceries(bytes).await?;
+    Ok(HttpResponse::Ok().json(result))
 }
 
 // ── Profile ──────────────────────────────────────────────────────────────────
@@ -425,6 +512,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .route("", web::get().to(list_inventory))
                 .route("", web::post().to(add_inventory_item))
                 .route("/expiring", web::get().to(expiring_soon))
+                .route("/quick", web::post().to(quick_add_item))
+                .route("/bulk", web::post().to(bulk_add_items))
+                .route("/suggestions", web::get().to(recipe_suggestions))
+                .route("/scan", web::post().to(scan_groceries))
                 .route("/{id}", web::put().to(update_inventory_item))
                 .route("/{id}", web::delete().to(delete_inventory_item)),
         )
