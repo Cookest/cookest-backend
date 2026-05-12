@@ -312,9 +312,11 @@ pub async fn add_slot(
 
 #[derive(serde::Deserialize)]
 pub struct SwapSlotBody {
-    #[serde(deserialize_with = "from_str_or_int_opt")]
+    #[serde(default, deserialize_with = "from_str_or_int_opt")]
     pub recipe_id: Option<i64>,
+    #[serde(default)]
     pub flex_type: Option<String>,
+    #[serde(default)]
     pub energy_level: Option<String>,
 }
 
