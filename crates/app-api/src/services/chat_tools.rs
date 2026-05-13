@@ -120,6 +120,14 @@ pub fn tool_definitions() -> Vec<Value> {
         json!({
             "type": "function",
             "function": {
+                "name": "clear_meal_plan",
+                "description": "Remove ALL recipes from the user's current week meal plan, leaving it completely empty so they can start fresh. Use this when the user explicitly asks to clear, reset, or start over their meal plan.",
+                "parameters": { "type": "object", "properties": {}, "required": [] }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
                 "name": "get_recipe_details",
                 "description": "Get full details of a recipe including ingredients, nutrition, and cooking steps.",
                 "parameters": {
@@ -154,6 +162,7 @@ impl ToolDispatch {
             "get_pantry"           => self.get_pantry(user_id).await,
             "add_to_pantry"        => self.add_to_pantry(user_id, args).await,
             "remove_from_pantry"   => self.remove_from_pantry(user_id, args).await,
+            "clear_meal_plan"      => self.clear_meal_plan(user_id).await,
             "get_recipe_details"   => self.get_recipe_details(args).await,
             _ => format!("{{\"error\": \"Unknown tool: {}\"}}", name),
         }
@@ -527,5 +536,46 @@ impl ToolDispatch {
             "steps": steps_json,
         })
         .to_string()
+    }
+
+    async fn clear_meal_plan(&self, user_id: Uuid) -> String {
+        use chrono::{Datelike, Duration, Utc};
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        use crate::entity::{meal_plan, meal_plan_slot};
+
+        let today = Utc::now().date_naive();
+        let days_since_monday = today.weekday().num_days_from_monday() as i64;
+        let week_start = today - Duration::days(days_since_monday);
+
+        let plan = meal_plan::Entity::find()
+            .filter(meal_plan::Column::UserId.eq(user_id))
+            .filter(meal_plan::Column::WeekStart.eq(week_start))
+            .one(&self.db)
+            .await;
+
+        match plan {
+            Ok(Some(p)) => {
+                let res = meal_plan_slot::Entity::delete_many()
+                    .filter(meal_plan_slot::Column::MealPlanId.eq(p.id))
+                    .exec(&self.db)
+                    .await;
+
+                match res {
+                    Ok(r) => json!({
+                        "success": true,
+                        "slots_removed": r.rows_affected
+                    })
+                    .to_string(),
+                    Err(e) => json!({"error": e.to_string()}).to_string(),
+                }
+            }
+            Ok(None) => json!({
+                "success": true,
+                "slots_removed": 0,
+                "note": "No meal plan exists for this week"
+            })
+            .to_string(),
+            Err(e) => json!({"error": e.to_string()}).to_string(),
+        }
     }
 }
