@@ -66,29 +66,18 @@ fi
 # ── Tune systemd service for EPYC Zen4 ───────────────────────────────────────
 echo "==> Writing EPYC-tuned systemd override..."
 mkdir -p /etc/systemd/system/ollama.service.d
-cat > /etc/systemd/system/ollama.service.d/override.conf << EOF
-[Service]
+# Use printf to avoid heredoc variable-expansion surprises under set -u
+printf '[Service]\n' > /etc/systemd/system/ollama.service.d/override.conf
 # Expose on all interfaces so app-api can reach this server over the network
-Environment="OLLAMA_HOST=${OLLAMA_HOST}"
-
-# Use physical core count only — HT threads hurt llama.cpp matrix ops
-# Zen4 AVX-512 VNNI saturates the L3 cache per core; extra threads add contention
-Environment="OLLAMA_NUM_THREADS=${PHYSICAL_CORES}"
-
+printf 'Environment="OLLAMA_HOST=%s"\n' "${OLLAMA_HOST}"              >> /etc/systemd/system/ollama.service.d/override.conf
+# Physical cores only — HT threads hurt llama.cpp matrix-multiply cache perf
+printf 'Environment="OLLAMA_NUM_THREADS=%s"\n' "${PHYSICAL_CORES}"   >> /etc/systemd/system/ollama.service.d/override.conf
 # CPU-only — no GPU layers
-Environment="OLLAMA_NUM_GPU=0"
-
-# Flash attention: reduces KV cache memory ~30%, speeds up longer contexts
-Environment="OLLAMA_FLASH_ATTENTION=1"
-
-# Keep loaded model resident for KEEP_ALIVE after last request
-# Prevents cold-start reload penalty (~10s for 7B)
-Environment="OLLAMA_KEEP_ALIVE=${KEEP_ALIVE}"
-
-# llama.cpp will auto-detect AVX-512 VNNI on Zen4 — no extra flags needed
-# MMAP the model file for faster cold start and lower RSS
-Environment="OLLAMA_NOHISTORY=0"
-EOF
+printf 'Environment="OLLAMA_NUM_GPU=0"\n'                             >> /etc/systemd/system/ollama.service.d/override.conf
+# Flash attention: -30% KV-cache RAM, faster long contexts
+printf 'Environment="OLLAMA_FLASH_ATTENTION=1"\n'                     >> /etc/systemd/system/ollama.service.d/override.conf
+# Keep model resident between requests (avoids ~10s cold-start reload)
+printf 'Environment="OLLAMA_KEEP_ALIVE=%s"\n' "${KEEP_ALIVE}"        >> /etc/systemd/system/ollama.service.d/override.conf
 
 systemctl daemon-reload
 systemctl enable ollama
@@ -96,14 +85,18 @@ systemctl restart ollama
 
 # ── Wait for service ──────────────────────────────────────────────────────────
 echo "==> Waiting for Ollama to come up..."
-for i in $(seq 1 30); do
-    if curl -sf http://localhost:11434/api/tags > /dev/null 2>&1; then
-        echo "    Ready."
-        break
+ATTEMPTS=0
+until curl -sf http://localhost:11434/api/tags > /dev/null 2>&1; do
+    ATTEMPTS=$((ATTEMPTS + 1))
+    if [ "${ATTEMPTS}" -ge 30 ]; then
+        echo "ERROR: Ollama did not start after 60s"
+        journalctl -u ollama --no-pager -n 20
+        exit 1
     fi
-    echo "    [$i/30] waiting..."
+    echo "    [${ATTEMPTS}/30] waiting..."
     sleep 2
 done
+echo "    Ready."
 
 # ── Pull models ───────────────────────────────────────────────────────────────
 echo ""
