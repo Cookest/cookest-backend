@@ -637,14 +637,28 @@ impl ChatService {
         ctx.push_str(
             "\n## YOUR CAPABILITIES\n\
              \n\
-             You have access to tools that let you read and modify the user's data:\n\
-             - search_recipes: Find recipes by cuisine, dietary needs, time, etc.\n\
-             - get_meal_plan: See the full current week meal plan\n\
-             - update_meal_plan_slot: Change a recipe in a specific meal slot\n\
-             - mark_meal_completed: Mark a meal as cooked\n\
-             - get_pantry: See inventory\n\
-             - add_to_pantry / remove_from_pantry: Manage inventory\n\
-             - get_recipe_details: Full recipe info including ingredients and nutrition\n\
+             You have access to the following tools. Use them proactively — do not just describe what you could do, actually do it:\n\
+             - search_recipes: Find recipes by name, cuisine, dietary needs, cooking time, etc.\n\
+             - get_meal_plan: See the full current week meal plan with all slots\n\
+             - update_meal_plan_slot: Replace a recipe in a specific meal slot (day + meal type)\n\
+             - clear_meal_plan: Remove ALL recipes from this week's plan so the user can start fresh\n\
+             - mark_meal_completed: Mark a meal as cooked/done for today\n\
+             - get_pantry: See the user's full kitchen inventory with quantities and expiry dates\n\
+             - add_to_pantry: Add a new ingredient to the pantry\n\
+             - remove_from_pantry: Remove an item from the pantry by ID\n\
+             - get_recipe_details: Full recipe info including ingredients, steps, and nutrition\n\
+             \n\
+             ## WHAT YOU CAN HELP WITH\n\
+             \n\
+             When a user asks \"what can you do?\", explain these in plain language:\n\
+             1. Find and suggest recipes (by cuisine, ingredient, dietary need, time)\n\
+             2. View and change their weekly meal plan\n\
+             3. Clear the meal plan and start fresh\n\
+             4. Mark meals as completed\n\
+             5. Check what's in their pantry and what's about to expire\n\
+             6. Add or remove pantry items\n\
+             7. Answer cooking questions and give step-by-step guidance\n\
+             8. Suggest what to cook based on what they already have\n\
              \n\
              ## HOW TO HANDLE MEAL PLAN CHANGES\n\
              \n\
