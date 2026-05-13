@@ -254,9 +254,16 @@ impl ChatService {
 
                         let result = tools.execute(user_id, name, args).await;
 
+                        // Prefix errors clearly so the model cannot miss them
+                        let result_with_status = if result.contains("\"error\"") {
+                            format!("TOOL_ERROR: {}", result)
+                        } else {
+                            format!("TOOL_SUCCESS: {}", result)
+                        };
+
                         ollama_messages.push(OllamaMessage {
                             role: "tool".to_string(),
-                            content: result,
+                            content: result_with_status,
                             tool_calls: None,
                         });
                     }
@@ -270,7 +277,91 @@ impl ChatService {
         }
 
         if reply.is_empty() {
-            reply = "I've completed the requested actions.".to_string();
+            reply = "I'm sorry, I wasn't able to complete that action. Please try again.".to_string();
+        }
+
+        // ── Post-loop: hallucination guard ────────────────────────────────────
+        // If the AI claims it performed an action but called no tools, catch it.
+        if actions_taken.is_empty() && Self::reply_claims_action(&reply) {
+            tracing::warn!("Hallucination detected — reply claims action but no tools were called");
+            ollama_messages.push(OllamaMessage {
+                role: "assistant".to_string(),
+                content: reply.clone(),
+                tool_calls: None,
+            });
+            ollama_messages.push(OllamaMessage {
+                role: "user".to_string(),
+                content: "SYSTEM CORRECTION: You said you performed an action but you did not call \
+                           any tool. If you have a tool that can do this, call it now. If you do not \
+                           have that tool, tell the user honestly that you cannot do it.".to_string(),
+                tool_calls: None,
+            });
+
+            // One corrective round
+            let req = OllamaRequest {
+                model: self.model.clone(),
+                messages: ollama_messages.clone(),
+                stream: false,
+                tools: Some(tool_definitions()),
+            };
+            if let Ok(body) = serde_json::to_string(&req) {
+                if let Ok(resp) = reqwest::Client::new()
+                    .post(format!("{}/api/chat", self.ollama_url))
+                    .header("Content-Type", "application/json")
+                    .body(body)
+                    .send()
+                    .await
+                {
+                    if let Ok(corrected) = resp.json::<OllamaResponse>().await {
+                        // If the correction spawned a tool call, run the full dispatch
+                        if let Some(ref calls) = corrected.message.tool_calls {
+                            if !calls.is_empty() {
+                                ollama_messages.push(corrected.message.clone());
+                                for call in calls {
+                                    let name = &call.function.name;
+                                    let args = call.function.arguments.clone();
+                                    actions_taken.push(name.clone());
+                                    let result = tools.execute(user_id, name, args).await;
+                                    let result_with_status = if result.contains("\"error\"") {
+                                        format!("TOOL_ERROR: {}", result)
+                                    } else {
+                                        format!("TOOL_SUCCESS: {}", result)
+                                    };
+                                    ollama_messages.push(OllamaMessage {
+                                        role: "tool".to_string(),
+                                        content: result_with_status,
+                                        tool_calls: None,
+                                    });
+                                }
+                                // One final reply after the corrected tool calls
+                                let final_req = OllamaRequest {
+                                    model: self.model.clone(),
+                                    messages: ollama_messages,
+                                    stream: false,
+                                    tools: Some(tool_definitions()),
+                                };
+                                if let Ok(final_body) = serde_json::to_string(&final_req) {
+                                    if let Ok(final_resp) = reqwest::Client::new()
+                                        .post(format!("{}/api/chat", self.ollama_url))
+                                        .header("Content-Type", "application/json")
+                                        .body(final_body)
+                                        .send()
+                                        .await
+                                    {
+                                        if let Ok(final_msg) = final_resp.json::<OllamaResponse>().await {
+                                            reply = final_msg.message.content;
+                                        }
+                                    }
+                                }
+                            } else {
+                                reply = corrected.message.content;
+                            }
+                        } else {
+                            reply = corrected.message.content;
+                        }
+                    }
+                }
+            }
         }
 
         // ── 7. Save assistant reply to DB ─────────────────────────────────────
@@ -577,7 +668,15 @@ impl ChatService {
              - For the meal plan, always work with real data from get_meal_plan\n\
              - If no meal plan exists for the week, tell the user they need to generate one first\n\
              - Respect user's dietary restrictions and allergies at ALL times (they are in your context)\n\
-             - Keep responses concise but warm — max 3-4 sentences for routine changes, more for complex questions\n"
+             - Keep responses concise but warm — max 3-4 sentences for routine changes, more for complex questions\n\
+             \n\
+             ## ANTI-HALLUCINATION RULES (CRITICAL — follow these exactly)\n\
+             - NEVER say \"I've done X\", \"I cleared\", \"I updated\", \"I added\", \"I removed\", or any completed-action phrase UNLESS you actually called a tool in this response that returned a success result.\n\
+             - If the user asks you to perform an action and you have a tool for it → CALL THE TOOL immediately, then report the real result.\n\
+             - If the user asks you to perform an action and you do NOT have a tool for it → say \"I don't have the ability to do that yet\" — do NOT pretend.\n\
+             - If a tool returns {{\"error\": ...}} or {{\"success\": false}} → tell the user it failed. NEVER say \"done\" or \"I've updated\" after a failed tool call.\n\
+             - Do NOT describe what you are about to do as if it already happened. Only describe things AFTER the tool confirms them.\n\
+             - If you are unsure whether an action succeeded, say so and ask the user to verify.\n"
         );
 
         Ok(ctx)
@@ -591,5 +690,25 @@ impl ChatService {
         } else {
             truncated
         }
+    }
+
+    /// Returns true if the reply text contains past-tense action language that
+    /// suggests the AI claimed to have done something — used to catch hallucinations
+    /// where no tool was actually called.
+    fn reply_claims_action(reply: &str) -> bool {
+        let lower = reply.to_lowercase();
+        let action_phrases = [
+            "i've cleared", "i've updated", "i've added", "i've removed",
+            "i've deleted", "i've created", "i've changed", "i've replaced",
+            "i've set", "i've scheduled", "i've marked", "i've reset",
+            "i have cleared", "i have updated", "i have added", "i have removed",
+            "i have deleted", "i have created", "i have changed",
+            "all done", "done!", "successfully cleared", "successfully updated",
+            "successfully added", "successfully removed",
+            "your meal plan has been cleared", "your plan has been",
+            "your pantry has been", "i cleared", "i updated", "i deleted",
+            "i removed", "i added", "i replaced", "i changed",
+        ];
+        action_phrases.iter().any(|p| lower.contains(p))
     }
 }
