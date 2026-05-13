@@ -1,38 +1,31 @@
-//! Recipe step entity
-//! Ordered cooking instructions, each with optional step image
+//! User favorites entity
+//! Allows users to bookmark recipes
 
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "recipe_steps")]
+#[sea_orm(table_name = "user_favorites")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
 
+    pub user_id: Uuid,
     pub recipe_id: i64,
-
-    /// 1-based step number
-    pub step_number: i32,
-
-    /// The instruction text for this step
-    #[sea_orm(column_type = "Text")]
-    pub instruction: String,
-
-    /// Optional duration hint for this step in minutes
-    pub duration_min: Option<i32>,
-
-    /// Optional image specific to this step (stored path or URL)
-    #[sea_orm(column_type = "Text", nullable)]
-    pub image_url: Option<String>,
-
-    /// Optional tip or warning for this step
-    #[sea_orm(column_type = "Text", nullable)]
-    pub tip: Option<String>,
+    pub saved_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::user::Entity",
+        from = "Column::UserId",
+        to = "super::user::Column::Id",
+        on_update = "Cascade",
+        on_delete = "Cascade"
+    )]
+    User,
+
     #[sea_orm(
         belongs_to = "super::recipe::Entity",
         from = "Column::RecipeId",
@@ -41,6 +34,12 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Recipe,
+}
+
+impl Related<super::user::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::User.def()
+    }
 }
 
 impl Related<super::recipe::Entity> for Entity {

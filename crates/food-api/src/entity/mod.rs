@@ -1,7 +1,6 @@
 pub mod ingredient;
 pub mod ingredient_nutrient;
 pub mod ingredient_allergen;
-pub mod ingredient_alias;
 pub mod portion_size;
 pub mod recipe;
 pub mod recipe_ingredient;
@@ -9,4 +8,3 @@ pub mod recipe_step;
 pub mod recipe_image;
 pub mod recipe_nutrition;
 pub mod api_key;
-pub mod etl_scrape_log;

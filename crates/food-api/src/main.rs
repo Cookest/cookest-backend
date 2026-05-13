@@ -247,67 +247,6 @@ async fn main() -> std::io::Result<()> {
         )
         "#,
         r#"CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)"#,
-
-        // --- Migration 002: Dataset enrichment fields ---
-
-        // Recipes: language, tags, source_site, scraped_at, language-aware search
-        r#"ALTER TABLE recipes ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en'"#,
-        r#"ALTER TABLE recipes ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}'"#,
-        r#"ALTER TABLE recipes ADD COLUMN IF NOT EXISTS source_site TEXT"#,
-        r#"ALTER TABLE recipes ADD COLUMN IF NOT EXISTS scraped_at TIMESTAMPTZ"#,
-
-        // GIN index on tags array for fast tag-based filtering
-        r#"CREATE INDEX IF NOT EXISTS idx_recipes_tags ON recipes USING GIN (tags)"#,
-        // Trigram index on description for full-text search
-        r#"CREATE INDEX IF NOT EXISTS idx_recipes_description_trgm
-            ON recipes USING GIN (description gin_trgm_ops)
-            WHERE description IS NOT NULL"#,
-        // Index for source_site (for deduplication)
-        r#"CREATE INDEX IF NOT EXISTS idx_recipes_source_site ON recipes(source_site) WHERE source_site IS NOT NULL"#,
-
-        // Ingredient aliases — multilingual search support
-        r#"
-        CREATE TABLE IF NOT EXISTS ingredient_aliases (
-            id              BIGSERIAL PRIMARY KEY,
-            ingredient_id   BIGINT NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
-            alias           TEXT NOT NULL,
-            language        TEXT NOT NULL DEFAULT 'en',
-            UNIQUE(alias, language)
-        )
-        "#,
-        r#"CREATE INDEX IF NOT EXISTS idx_ingredient_aliases_ingredient
-            ON ingredient_aliases(ingredient_id)"#,
-        r#"CREATE INDEX IF NOT EXISTS idx_ingredient_aliases_alias_trgm
-            ON ingredient_aliases USING GIN (alias gin_trgm_ops)"#,
-
-        // Ingredients: add region hint (European vs US vs global)
-        r#"ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS region TEXT"#,
-        r#"ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en'"#,
-
-        // Recipe images: add local_path for self-hosted images
-        r#"ALTER TABLE recipe_images ADD COLUMN IF NOT EXISTS local_path TEXT"#,
-
-        // Recipe steps: track step images properly
-        r#"ALTER TABLE recipe_steps ADD COLUMN IF NOT EXISTS local_image_path TEXT"#,
-
-        // ETL tracking table — know what has been scraped
-        r#"
-        CREATE TABLE IF NOT EXISTS etl_scrape_log (
-            id              BIGSERIAL PRIMARY KEY,
-            source_url      TEXT NOT NULL UNIQUE,
-            source_site     TEXT NOT NULL,
-            scraped_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            status          TEXT NOT NULL DEFAULT 'success',
-            recipe_id       BIGINT REFERENCES recipes(id) ON DELETE SET NULL,
-            error_msg       TEXT
-        )
-        "#,
-        r#"CREATE INDEX IF NOT EXISTS idx_etl_scrape_log_source_site
-            ON etl_scrape_log(source_site)"#,
-        r#"CREATE INDEX IF NOT EXISTS idx_etl_scrape_log_status
-            ON etl_scrape_log(status)"#,
-        r#"CREATE INDEX IF NOT EXISTS idx_etl_scrape_log_scraped_at
-            ON etl_scrape_log(scraped_at)"#,
     ];
 
     for sql in migrations {

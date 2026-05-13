@@ -60,10 +60,10 @@ pub struct Model {
     /// Total number of ratings
     pub rating_count: i32,
 
-    /// Optional contributor ID (no FK to users — food-api has no user table)
+    /// User who created this recipe (NULL for seeded/admin recipes)
     pub author_id: Option<Uuid>,
 
-    /// Whether this recipe is publicly visible
+    /// Whether this recipe is publicly visible (false = only the author sees it)
     pub is_public: bool,
 
     pub created_at: DateTimeWithTimeZone,
@@ -83,6 +83,18 @@ pub enum Relation {
 
     #[sea_orm(has_one = "super::recipe_nutrition::Entity")]
     RecipeNutrition,
+
+    #[sea_orm(has_many = "super::user_favorite::Entity")]
+    UserFavorites,
+
+    #[sea_orm(has_many = "super::recipe_rating::Entity")]
+    RecipeRatings,
+
+    #[sea_orm(has_many = "super::cooking_history::Entity")]
+    CookingHistory,
+
+    #[sea_orm(has_many = "super::meal_plan_slot::Entity")]
+    MealPlanSlots,
 }
 
 impl Related<super::recipe_ingredient::Entity> for Entity {
@@ -106,6 +118,30 @@ impl Related<super::recipe_image::Entity> for Entity {
 impl Related<super::recipe_nutrition::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::RecipeNutrition.def()
+    }
+}
+
+impl Related<super::user_favorite::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::UserFavorites.def()
+    }
+}
+
+impl Related<super::recipe_rating::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::RecipeRatings.def()
+    }
+}
+
+impl Related<super::cooking_history::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::CookingHistory.def()
+    }
+}
+
+impl Related<super::meal_plan_slot::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::MealPlanSlots.def()
     }
 }
 

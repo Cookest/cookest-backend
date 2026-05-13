@@ -4,10 +4,12 @@ use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
     PaginatorTrait, Condition, ActiveModelTrait, Set,
 };
+use uuid::Uuid;
 use chrono::Utc;
 
 use crate::entity::{
     recipe, recipe_ingredient, recipe_step, recipe_image, recipe_nutrition, ingredient,
+    inventory_item,
 };
 use crate::errors::AppError;
 use crate::models::recipe::*;
@@ -105,6 +107,9 @@ impl RecipeService {
                     average_rating: r.average_rating,
                     rating_count: r.rating_count,
                     primary_image_url: primary_image,
+                    match_pct: None,
+                    owned_ingredients: None,
+                    total_ingredients: None,
                 }
             })
             .collect();
@@ -246,14 +251,76 @@ impl RecipeService {
         self.get_recipe(recipe.id).await
     }
 
-    /// Create a recipe (no user_id — food-api recipes are managed via API key permissions)
+    /// List recipes with inventory match percentage for authenticated user.
+    /// Adds match_pct, owned_ingredients, total_ingredients to each item.
+    pub async fn list_recipes_with_inventory(
+        &self,
+        user_id: Uuid,
+        query: RecipeQuery,
+    ) -> Result<PaginatedResponse<RecipeListItem>, AppError> {
+        // Load user inventory as a set of ingredient_ids
+        let user_ingredient_ids: std::collections::HashSet<i64> =
+            inventory_item::Entity::find()
+                .filter(inventory_item::Column::UserId.eq(user_id))
+                .all(&self.db)
+                .await?
+                .into_iter()
+                .map(|i| i.ingredient_id)
+                .collect();
+
+        let mut result = self.list_recipes(query).await?;
+
+        // For each recipe in the page, compute match_pct
+        let recipe_ids: Vec<i64> = result.data.iter().map(|r| r.id).collect();
+        let ingredients = recipe_ingredient::Entity::find()
+            .filter(recipe_ingredient::Column::RecipeId.is_in(recipe_ids))
+            .all(&self.db)
+            .await?;
+
+        let mut counts: std::collections::HashMap<i64, (usize, usize)> =
+            std::collections::HashMap::new();
+        for ri in &ingredients {
+            let entry = counts.entry(ri.recipe_id).or_default();
+            entry.1 += 1;
+            if user_ingredient_ids.contains(&ri.ingredient_id) {
+                entry.0 += 1;
+            }
+        }
+
+        for item in &mut result.data {
+            if let Some((owned, total)) = counts.get(&item.id) {
+                let pct = if *total == 0 {
+                    0.0
+                } else {
+                    (*owned as f64 / *total as f64 * 100.0).round()
+                };
+                item.match_pct = Some(pct);
+                item.owned_ingredients = Some(*owned);
+                item.total_ingredients = Some(*total);
+            }
+        }
+
+        // Sort by match_pct descending (best matches first)
+        result.data.sort_by(|a, b| {
+            b.match_pct
+                .unwrap_or(0.0)
+                .partial_cmp(&a.match_pct.unwrap_or(0.0))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        Ok(result)
+    }
+
+    /// Create a recipe (Pro tier users only — enforced in handler)
     pub async fn create_recipe(
         &self,
+        user_id: Uuid,
         req: CreateRecipeRequest,
     ) -> Result<serde_json::Value, AppError> {
         use slug::slugify;
         let now = Utc::now().fixed_offset();
         let base_slug = slugify(&req.name);
+        // Ensure unique slug by appending a short random suffix if needed
         let slug = format!("{}-{}", base_slug, &uuid::Uuid::new_v4().to_string()[..8]);
 
         let model = recipe::ActiveModel {
@@ -272,7 +339,7 @@ impl RecipeService {
             is_gluten_free: Set(req.is_gluten_free.unwrap_or(false)),
             is_dairy_free: Set(req.is_dairy_free.unwrap_or(false)),
             is_nut_free: Set(req.is_nut_free.unwrap_or(false)),
-            author_id: Set(None),
+            author_id: Set(Some(user_id)),
             is_public: Set(req.is_public.unwrap_or(true)),
             rating_count: Set(0),
             created_at: Set(now),
@@ -287,13 +354,15 @@ impl RecipeService {
             "slug": saved.slug,
             "name": saved.name,
             "is_public": saved.is_public,
-            "message": "Recipe created. Use POST /api/v1/recipes/:id/ingredients and /steps to add content."
+            "author_id": saved.author_id,
+            "message": "Recipe created. Use POST /api/recipes/:id/ingredients and /steps to add content."
         }))
     }
 
-    /// Update a recipe by ID (no ownership check — food-api uses API key permissions)
+    /// Update a user's own recipe (author only)
     pub async fn update_recipe(
         &self,
+        user_id: Uuid,
         recipe_id: i64,
         req: UpdateRecipeRequest,
     ) -> Result<serde_json::Value, AppError> {
@@ -301,6 +370,10 @@ impl RecipeService {
             .one(&self.db)
             .await?
             .ok_or(AppError::NotFound("Recipe".into()))?;
+
+        if existing.author_id != Some(user_id) {
+            return Err(AppError::Forbidden);
+        }
 
         let now = Utc::now().fixed_offset();
         let mut model: recipe::ActiveModel = existing.into();
@@ -331,17 +404,84 @@ impl RecipeService {
         }))
     }
 
-    /// Delete a recipe by ID (no ownership check — food-api uses API key permissions)
-    pub async fn delete_recipe(&self, recipe_id: i64) -> Result<(), AppError> {
-        recipe::Entity::find_by_id(recipe_id)
+    /// Delete a user's own recipe (author only)
+    pub async fn delete_recipe(&self, user_id: Uuid, recipe_id: i64) -> Result<(), AppError> {
+        let existing = recipe::Entity::find_by_id(recipe_id)
             .one(&self.db)
             .await?
             .ok_or(AppError::NotFound("Recipe".into()))?;
+
+        if existing.author_id != Some(user_id) {
+            return Err(AppError::Forbidden);
+        }
 
         recipe::Entity::delete_by_id(recipe_id)
             .exec(&self.db)
             .await?;
 
         Ok(())
+    }
+
+    /// List recipes created by this user
+    pub async fn list_my_recipes(
+        &self,
+        user_id: Uuid,
+        page: u64,
+        per_page: u64,
+    ) -> Result<PaginatedResponse<RecipeListItem>, AppError> {
+        let per_page = per_page.min(50);
+        let paginator = recipe::Entity::find()
+            .filter(recipe::Column::AuthorId.eq(user_id))
+            .order_by_desc(recipe::Column::CreatedAt)
+            .paginate(&self.db, per_page);
+
+        let total = paginator.num_items().await?;
+        let recipes = paginator.fetch_page(page.saturating_sub(1)).await?;
+
+        let recipe_ids: Vec<i64> = recipes.iter().map(|r| r.id).collect();
+        let images = recipe_image::Entity::find()
+            .filter(recipe_image::Column::RecipeId.is_in(recipe_ids))
+            .filter(recipe_image::Column::IsPrimary.eq(true))
+            .all(&self.db)
+            .await?;
+
+        let items = recipes
+            .into_iter()
+            .map(|r| {
+                let primary_image = images
+                    .iter()
+                    .find(|img| img.recipe_id == r.id)
+                    .map(|img| img.url.clone());
+
+                RecipeListItem {
+                    id: r.id,
+                    name: r.name,
+                    slug: r.slug,
+                    cuisine: r.cuisine,
+                    category: r.category,
+                    difficulty: r.difficulty,
+                    servings: r.servings,
+                    total_time_min: r.total_time_min,
+                    is_vegetarian: r.is_vegetarian,
+                    is_vegan: r.is_vegan,
+                    is_gluten_free: r.is_gluten_free,
+                    is_dairy_free: r.is_dairy_free,
+                    average_rating: r.average_rating,
+                    rating_count: r.rating_count,
+                    primary_image_url: primary_image,
+                    match_pct: None,
+                    owned_ingredients: None,
+                    total_ingredients: None,
+                }
+            })
+            .collect();
+
+        Ok(PaginatedResponse {
+            data: items,
+            total,
+            page,
+            per_page,
+            total_pages: (total as f64 / per_page as f64).ceil() as u64,
+        })
     }
 }

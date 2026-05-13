@@ -22,6 +22,8 @@ pub struct RecipeQuery {
     pub dairy_free: Option<bool>,
     /// Max total time in minutes
     pub max_time: Option<i32>,
+    /// If true (auth required), adds match_pct field (owned ingredients / total ingredients)
+    pub match_inventory: Option<bool>,
     /// Page number (1-indexed)
     pub page: Option<u64>,
     /// Results per page (max 50)
@@ -46,6 +48,12 @@ pub struct RecipeListItem {
     pub average_rating: Option<rust_decimal::Decimal>,
     pub rating_count: i32,
     pub primary_image_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub match_pct: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owned_ingredients: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_ingredients: Option<usize>,
 }
 
 /// Full recipe detail response
@@ -138,7 +146,7 @@ pub struct ScaleRequest {
     pub servings: i32,
 }
 
-/// Create a recipe
+/// Create or update a user recipe
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateRecipeRequest {
     #[validate(length(min = 1, max = 200))]
@@ -158,6 +166,7 @@ pub struct CreateRecipeRequest {
     pub is_gluten_free: Option<bool>,
     pub is_dairy_free: Option<bool>,
     pub is_nut_free: Option<bool>,
+    /// Whether this recipe is visible to other users
     pub is_public: Option<bool>,
 }
 
@@ -180,7 +189,7 @@ pub struct UpdateRecipeRequest {
     pub is_public: Option<bool>,
 }
 
-/// Simple pagination params
+/// Simple pagination params (used where no recipe-specific filters are needed)
 #[derive(Debug, Deserialize)]
 pub struct PaginationQuery {
     pub page: Option<u64>,
