@@ -1,7 +1,12 @@
-//! Grocery Scan Service — AI-powered grocery detection via Ollama llava
+//! Grocery Scan Service — AI-powered grocery detection via Ollama
 //!
-//! Sends a base64-encoded image to Ollama's multimodal model (llava by default)
+//! Sends a base64-encoded image to Ollama's multimodal model (qwen2.5-vl by default)
 //! and parses the structured JSON response into a list of detected grocery items.
+//!
+//! Environment variables:
+//!   OLLAMA_URL               — Ollama server URL (default: http://localhost:11434)
+//!   OLLAMA_VISION_MODEL      — Vision model to use (default: qwen2.5-vl:7b-instruct-q4_K_M)
+//!   OLLAMA_VISION_TIMEOUT_SECS — HTTP timeout in seconds (default: 120)
 
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use reqwest::Client;
@@ -80,14 +85,18 @@ impl ScanService {
     pub fn new() -> Self {
         let ollama_url = std::env::var("OLLAMA_URL")
             .unwrap_or_else(|_| "http://localhost:11434".to_string());
-        // Prefer a dedicated vision model env var, fall back to OLLAMA_MODEL, then llava
+        // Prefer a dedicated vision model env var, fall back to OLLAMA_MODEL, then qwen2.5-vl
         let model = std::env::var("OLLAMA_VISION_MODEL")
             .or_else(|_| std::env::var("OLLAMA_MODEL"))
-            .unwrap_or_else(|_| "llava".to_string());
+            .unwrap_or_else(|_| "qwen2.5-vl:7b-instruct-q4_K_M".to_string());
+        let timeout_secs: u64 = std::env::var("OLLAMA_VISION_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(120);
 
         Self {
             http: Client::builder()
-                .timeout(std::time::Duration::from_secs(90))
+                .timeout(std::time::Duration::from_secs(timeout_secs))
                 .build()
                 .unwrap_or_default(),
             ollama_url,
