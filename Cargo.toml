@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "crates/shared",
+    "crates/food-api",
+    "crates/app-api",
+    "crates/dataset-importer",
+]
+resolver = "2"
