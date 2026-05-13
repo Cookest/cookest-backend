@@ -10,9 +10,9 @@
 #   (re-run after a RAM upgrade — it will auto-select the better model)
 #
 # Model selection by available RAM:
-#   8  GB  →  qwen2.5-vl:3b            (~2.3 GB, ~8-15s/scan)
-#   16 GB  →  qwen2.5-vl:7b-q4_K_M    (~5.5 GB, ~15-25s/scan)
-#   32 GB  →  qwen2.5-vl:7b + llama3.1 (both resident, no reload)
+#   8  GB  →  qwen2.5vl:3b             (~2.3 GB, ~8-15s/scan)
+#   16 GB  →  qwen2.5vl:7b             (~5.5 GB, ~15-25s/scan)
+#   32 GB  →  qwen2.5vl:7b + llama3.1 (both resident, no reload)
 #
 # EPYC Zen4 notes:
 #   - AVX-512 VNNI is auto-detected by llama.cpp — no extra config needed
@@ -36,20 +36,26 @@ KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:-10m}"
 # ── Detect available RAM and pick the best fitting vision model ───────────────
 TOTAL_RAM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
 echo "==> Detected ${TOTAL_RAM_MB} MB RAM"
+VISION_MODEL=""
+VISION_MODEL_FALLBACK="${OLLAMA_VISION_MODEL_FALLBACK:-qwen2.5vl}"
+VISION_MODEL_CANDIDATES=()
 
 if [ "${TOTAL_RAM_MB}" -ge 28000 ]; then
     # ≥ 28 GB: run vision + chat resident simultaneously
-    VISION_MODEL="${OLLAMA_VISION_MODEL:-qwen2.5-vl:7b-instruct-q4_K_M}"
+    VISION_MODEL="${OLLAMA_VISION_MODEL:-qwen2.5vl:7b}"
+    VISION_MODEL_CANDIDATES=("${VISION_MODEL}")
     PULL_CHAT=true
     echo "    Mode: FULL  — vision + chat both resident in RAM"
 elif [ "${TOTAL_RAM_MB}" -ge 12000 ]; then
     # ≥ 12 GB: 7B vision, chat loads on demand
-    VISION_MODEL="${OLLAMA_VISION_MODEL:-qwen2.5-vl:7b-instruct-q4_K_M}"
+    VISION_MODEL="${OLLAMA_VISION_MODEL:-qwen2.5vl:7b}"
+    VISION_MODEL_CANDIDATES=("${VISION_MODEL}")
     PULL_CHAT=false
     echo "    Mode: VISION-ONLY resident (chat loads on demand)"
 else
-    # < 12 GB (current 8 GB): 3B vision, fits with headroom
-    VISION_MODEL="${OLLAMA_VISION_MODEL:-qwen2.5-vl:3b}"
+    # < 12 GB (current 8 GB): try 3B first, then fall back to the base family tag
+    VISION_MODEL="${OLLAMA_VISION_MODEL:-qwen2.5vl:3b}"
+    VISION_MODEL_CANDIDATES=("${VISION_MODEL}" "${VISION_MODEL_FALLBACK}")
     PULL_CHAT=false
     echo "    Mode: CONSTRAINED (8 GB) — using 3B model (~2.3 GB)"
     echo "    Upgrade to ≥16 GB to unlock 7B for better accuracy"
@@ -101,12 +107,30 @@ echo "    Ready."
 # ── Pull models ───────────────────────────────────────────────────────────────
 echo ""
 echo "==> Pulling vision model: ${VISION_MODEL}"
-if [ "${VISION_MODEL}" = "qwen2.5-vl:3b" ]; then
+if [ "${VISION_MODEL}" = "qwen2.5vl:3b" ]; then
     echo "    (~2.3 GB download)"
 else
     echo "    (~4.7 GB download)"
 fi
-ollama pull "${VISION_MODEL}"
+
+VISION_PULL_OK=false
+for MODEL in "${VISION_MODEL_CANDIDATES[@]}"; do
+    if [ -z "${MODEL}" ]; then
+        continue
+    fi
+    echo "    Trying ${MODEL}..."
+    if ollama pull "${MODEL}"; then
+        VISION_MODEL="${MODEL}"
+        VISION_PULL_OK=true
+        break
+    fi
+    echo "    WARN: failed to pull ${MODEL}"
+done
+
+if [ "${VISION_PULL_OK}" != true ]; then
+    echo "ERROR: unable to pull any Ollama vision model"
+    exit 1
+fi
 
 if [ "${PULL_CHAT}" = true ]; then
     echo "==> Pulling chat model: ${CHAT_MODEL} (~4.7 GB)"
@@ -135,5 +159,5 @@ echo "╚═══════════════════════�
 echo ""
 if [ "${TOTAL_RAM_MB}" -lt 12000 ]; then
     echo "⚠  RAM is under 12 GB. After upgrading:"
-    echo "   sudo OLLAMA_VISION_MODEL=qwen2.5-vl:7b-instruct-q4_K_M ./setup-ollama.sh"
+    echo "   sudo OLLAMA_VISION_MODEL=qwen2.5vl:7b ./setup-ollama.sh"
 fi

@@ -75,7 +75,7 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1}
-      OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL:-qwen2.5-vl:7b-instruct-q4_K_M}
+      OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL:-qwen2.5vl:7b}
       # Timeout in seconds for vision inference — increase for slower CPU servers
       OLLAMA_VISION_TIMEOUT_SECS: ${OLLAMA_VISION_TIMEOUT_SECS:-120}
       PDF_UPLOAD_DIR: /data/pdfs
