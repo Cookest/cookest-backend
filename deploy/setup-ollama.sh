@@ -7,6 +7,7 @@
 # Usage:
 #   chmod +x deploy/setup-ollama.sh
 #   sudo ./deploy/setup-ollama.sh
+#   (re-run after a RAM upgrade — it will auto-select the better model)
 #
 # Model selection by available RAM:
 #   8  GB  →  qwen2.5-vl:3b            (~2.3 GB, ~8-15s/scan)
@@ -22,8 +23,12 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-# ── Config (override via env) ─────────────────────────────────────────────────
-PHYSICAL_CORES="${PHYSICAL_CORES:-24}"          # Zen4 physical cores (not HT threads)
+# ── Auto-detect physical cores (works on any EPYC/Intel, single or dual socket) ──
+# Counts unique (core_id, socket_id) pairs — ignores SMT/HT threads
+PHYSICAL_CORES="${PHYSICAL_CORES:-$(lscpu -p=CORE,SOCKET | grep -v '^#' | sort -u | wc -l)}"
+LOGICAL_THREADS=$(nproc --all)
+echo "==> CPU: ${PHYSICAL_CORES} physical cores / ${LOGICAL_THREADS} logical threads"
+echo "    Using ${PHYSICAL_CORES} threads for Ollama (physical cores only — HT excluded)"
 OLLAMA_HOST="${OLLAMA_HOST:-0.0.0.0:11434}"
 CHAT_MODEL="${OLLAMA_MODEL:-llama3.1}"
 KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:-10m}"
@@ -50,9 +55,13 @@ else
     echo "    Upgrade to ≥16 GB to unlock 7B for better accuracy"
 fi
 
-# ── Install Ollama ────────────────────────────────────────────────────────────
-echo "==> Installing Ollama..."
-curl -fsSL https://ollama.com/install.sh | sh
+# ── Install Ollama (skip if already installed) ────────────────────────────────
+if command -v ollama &>/dev/null; then
+    echo "==> Ollama already installed ($(ollama --version 2>/dev/null || echo 'unknown version')), skipping install"
+else
+    echo "==> Installing Ollama..."
+    curl -fsSL https://ollama.com/install.sh | sh
+fi
 
 # ── Tune systemd service for EPYC Zen4 ───────────────────────────────────────
 echo "==> Writing EPYC-tuned systemd override..."
