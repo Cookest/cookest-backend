@@ -79,6 +79,8 @@ pub struct ChatResponse {
     pub message_id: i64,
     pub reply: String,
     pub tokens_used: Option<i32>,
+    /// Tool names called during this response (e.g. ["search_recipes","update_meal_plan_slot"])
+    pub actions_taken: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -204,6 +206,7 @@ impl ChatService {
         let tools = ToolDispatch::new(self.db.clone());
         let mut reply = String::new();
         let mut tokens: Option<i32> = None;
+        let mut actions_taken: Vec<String> = Vec::new();
 
         for _round in 0..MAX_TOOL_ROUNDS {
             let ollama_req = OllamaRequest {
@@ -247,6 +250,7 @@ impl ChatService {
                         let name = &call.function.name;
                         let args = call.function.arguments.clone();
                         tracing::info!("AI tool call: {} {:?}", name, args);
+                        actions_taken.push(name.clone());
 
                         let result = tools.execute(user_id, name, args).await;
 
@@ -289,6 +293,7 @@ impl ChatService {
             message_id: saved_reply.id,
             reply,
             tokens_used: tokens,
+            actions_taken,
         })
     }
 
