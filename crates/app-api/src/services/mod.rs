@@ -8,6 +8,7 @@ pub mod inventory;
 pub mod profile;
 pub mod interaction;
 pub mod chat;
+pub mod chat_tools;
 pub mod onboarding;
 pub mod shopping_list;
 pub mod subscription;

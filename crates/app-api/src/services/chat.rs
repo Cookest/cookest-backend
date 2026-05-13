@@ -4,6 +4,7 @@
 //! - Context-aware system prompt built from user's inventory, preferences, meal plan
 //! - Persistent sessions and message history
 //! - Full message history sent to Ollama per request (stateless LLM with stateful DB)
+//! - Agentic tool-calling loop (up to MAX_TOOL_ROUNDS) using Ollama's native tools API
 //! - Configurable Ollama model (defaults to "llama3.2")
 
 use chrono::Utc;
@@ -19,7 +20,10 @@ use crate::entity::{
     cooking_history, inventory_item, meal_plan, meal_plan_slot, recipe,
     user, ingredient,
 };
+use crate::services::chat_tools::{tool_definitions, ToolDispatch};
 use cookest_shared::errors::AppError;
+
+const MAX_TOOL_ROUNDS: usize = 6;
 
 // ── Ollama API types ──────────────────────────────────────────────────────────
 
@@ -28,19 +32,34 @@ struct OllamaRequest {
     model: String,
     messages: Vec<OllamaMessage>,
     stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OllamaMessage {
     pub role: String,
     pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<OllamaToolCall>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OllamaToolCall {
+    pub function: OllamaToolCallFunction,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OllamaToolCallFunction {
+    pub name: String,
+    pub arguments: serde_json::Value,
 }
 
 #[derive(Debug, Deserialize)]
 struct OllamaResponse {
     message: OllamaMessage,
     #[serde(default)]
-    eval_count: Option<i32>, // tokens used
+    eval_count: Option<i32>,
 }
 
 // ── Public request/response types ─────────────────────────────────────────────
@@ -102,7 +121,9 @@ impl ChatService {
         }
     }
 
-    /// Send a message — creates or continues a session, returns AI reply
+    /// Send a message — creates or continues a session, returns AI reply.
+    /// Runs a tool-calling loop (up to MAX_TOOL_ROUNDS) so the AI can read
+    /// and modify the user's meal plan, pantry, and recipes via natural language.
     pub async fn chat(
         &self,
         user_id: Uuid,
@@ -120,7 +141,6 @@ impl ChatService {
                     .ok_or(AppError::NotFound("Chat session".into()))?
             }
             None => {
-                // Create a new session
                 let title = self.generate_title(&req.message);
                 let new_session = chat_session::ActiveModel {
                     user_id: Set(user_id),
@@ -144,29 +164,29 @@ impl ChatService {
             .all(&self.db)
             .await?;
 
-        // ── 4. Build Ollama messages array ────────────────────────────────────
+        // ── 4. Build initial Ollama messages array ────────────────────────────
         let mut ollama_messages: Vec<OllamaMessage> = Vec::with_capacity(history.len() + 2);
 
-        // System prompt always first
         ollama_messages.push(OllamaMessage {
             role: "system".to_string(),
             content: system_prompt,
+            tool_calls: None,
         });
 
-        // Add history (skip system messages already in DB)
         for msg in &history {
             if msg.role != "system" {
                 ollama_messages.push(OllamaMessage {
                     role: msg.role.clone(),
                     content: msg.content.clone(),
+                    tool_calls: None,
                 });
             }
         }
 
-        // Add new user message
         ollama_messages.push(OllamaMessage {
             role: "user".to_string(),
             content: req.message.clone(),
+            tool_calls: None,
         });
 
         // ── 5. Save user message to DB ────────────────────────────────────────
@@ -180,37 +200,74 @@ impl ChatService {
         };
         user_msg.insert(&self.db).await?;
 
-        // ── 6. Call Ollama ────────────────────────────────────────────────────
-        let ollama_req = OllamaRequest {
-            model: self.model.clone(),
-            messages: ollama_messages,
-            stream: false,
-        };
+        // ── 6. Tool-calling loop ──────────────────────────────────────────────
+        let tools = ToolDispatch::new(self.db.clone());
+        let mut reply = String::new();
+        let mut tokens: Option<i32> = None;
 
-        let resp = self.http
-            .post(format!("{}/api/chat", self.ollama_url))
-            .json(&ollama_req)
-            .send()
-            .await
-            .map_err(|e| {
-                tracing::error!("Ollama request failed: {}", e);
-                AppError::Internal("AI service unavailable".into())
+        for _round in 0..MAX_TOOL_ROUNDS {
+            let ollama_req = OllamaRequest {
+                model: self.model.clone(),
+                messages: ollama_messages.clone(),
+                stream: false,
+                tools: Some(tool_definitions()),
+            };
+
+            let resp = self
+                .http
+                .post(format!("{}/api/chat", self.ollama_url))
+                .json(&ollama_req)
+                .send()
+                .await
+                .map_err(|e| {
+                    tracing::error!("Ollama request failed: {}", e);
+                    AppError::Internal("AI service unavailable".into())
+                })?;
+
+            if !resp.status().is_success() {
+                let status = resp.status();
+                let body = resp.text().await.unwrap_or_default();
+                tracing::error!("Ollama error {}: {}", status, body);
+                return Err(AppError::Internal("AI service returned an error".into()));
+            }
+
+            let ollama_resp: OllamaResponse = resp.json().await.map_err(|e| {
+                tracing::error!("Failed to parse Ollama response: {}", e);
+                AppError::Internal("Failed to parse AI response".into())
             })?;
 
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            tracing::error!("Ollama error {}: {}", status, body);
-            return Err(AppError::Internal("AI service returned an error".into()));
+            tokens = ollama_resp.eval_count;
+
+            match ollama_resp.message.tool_calls {
+                Some(ref calls) if !calls.is_empty() => {
+                    // Add assistant message (with tool_calls) so Ollama tracks context
+                    ollama_messages.push(ollama_resp.message.clone());
+
+                    for call in calls {
+                        let name = &call.function.name;
+                        let args = call.function.arguments.clone();
+                        tracing::info!("AI tool call: {} {:?}", name, args);
+
+                        let result = tools.execute(user_id, name, args).await;
+
+                        ollama_messages.push(OllamaMessage {
+                            role: "tool".to_string(),
+                            content: result,
+                            tool_calls: None,
+                        });
+                    }
+                }
+                _ => {
+                    // No tool calls — this is the final response
+                    reply = ollama_resp.message.content.clone();
+                    break;
+                }
+            }
         }
 
-        let ollama_resp: OllamaResponse = resp.json().await.map_err(|e| {
-            tracing::error!("Failed to parse Ollama response: {}", e);
-            AppError::Internal("Failed to parse AI response".into())
-        })?;
-
-        let reply = ollama_resp.message.content.clone();
-        let tokens = ollama_resp.eval_count;
+        if reply.is_empty() {
+            reply = "I've completed the requested actions.".to_string();
+        }
 
         // ── 7. Save assistant reply to DB ─────────────────────────────────────
         let reply_msg = chat_message::ActiveModel {
@@ -223,7 +280,6 @@ impl ChatService {
         };
         let saved_reply = reply_msg.insert(&self.db).await?;
 
-        // Update session updated_at
         let mut active_session: chat_session::ActiveModel = session.into();
         active_session.updated_at = Set(Utc::now().fixed_offset());
         active_session.update(&self.db).await?;
@@ -264,7 +320,6 @@ impl ChatService {
         user_id: Uuid,
         session_id: i64,
     ) -> Result<Vec<MessageItem>, AppError> {
-        // Verify ownership
         chat_session::Entity::find_by_id(session_id)
             .one(&self.db)
             .await?
@@ -315,7 +370,7 @@ impl ChatService {
         user_id: Uuid,
         recipe_id: Option<i64>,
     ) -> Result<String, AppError> {
-        let mut ctx = String::with_capacity(2048);
+        let mut ctx = String::with_capacity(4096);
 
         ctx.push_str(
             "You are Cookest AI, a personal cooking assistant. \
@@ -370,7 +425,6 @@ impl ChatService {
                 items.join(", ")
             ));
 
-            // Expiring soon
             let expiry_threshold = Utc::now().date_naive() + chrono::Duration::days(5);
             let expiring: Vec<String> = inventory
                 .iter()
@@ -482,6 +536,44 @@ impl ChatService {
                 ));
             }
         }
+
+        // ── Capabilities and behaviour rules ──────────────────────────────────
+        ctx.push_str(
+            "\n## YOUR CAPABILITIES\n\
+             \n\
+             You have access to tools that let you read and modify the user's data:\n\
+             - search_recipes: Find recipes by cuisine, dietary needs, time, etc.\n\
+             - get_meal_plan: See the full current week meal plan\n\
+             - update_meal_plan_slot: Change a recipe in a specific meal slot\n\
+             - mark_meal_completed: Mark a meal as cooked\n\
+             - get_pantry: See inventory\n\
+             - add_to_pantry / remove_from_pantry: Manage inventory\n\
+             - get_recipe_details: Full recipe info including ingredients and nutrition\n\
+             \n\
+             ## HOW TO HANDLE MEAL PLAN CHANGES\n\
+             \n\
+             When a user asks to change something in their meal plan:\n\
+             1. FIRST call get_meal_plan to see the current state\n\
+             2. THEN call search_recipes with the requested cuisine/type/constraint\n\
+             3. Pick the BEST matching recipe (prefer one that matches their pantry)\n\
+             4. Tell the user EXACTLY what you're going to change: \"I'll replace [current recipe] on [day] [meal_type] with [new recipe]. Shall I go ahead?\"\n\
+             5. ONLY call update_meal_plan_slot after the user confirms (says \"yes\", \"sure\", \"go ahead\", \"do it\", etc.) OR if their original message was clearly an unambiguous direct command (e.g. \"change Wednesday dinner to pasta\")\n\
+             \n\
+             ## DAY AND MEAL MAPPING\n\
+             - Monday = 0, Tuesday = 1, Wednesday = 2, Thursday = 3, Friday = 4, Saturday = 5, Sunday = 6\n\
+             - Meal types: breakfast, lunch, dinner, snack\n\
+             - \"supper\" = dinner, \"brekkie\"/\"breakfast\" = breakfast, \"brunch\" = lunch, \"tea\" = snack\n\
+             \n\
+             ## BEHAVIOUR RULES\n\
+             - Be FLEXIBLE: if the user debates your suggestion, take their feedback seriously and offer alternatives\n\
+             - Never be stuck: always have a plan B and C\n\
+             - If a search returns nothing, broaden the criteria and try again\n\
+             - NEVER make up recipe names — always use IDs returned by search_recipes\n\
+             - For the meal plan, always work with real data from get_meal_plan\n\
+             - If no meal plan exists for the week, tell the user they need to generate one first\n\
+             - Respect user's dietary restrictions and allergies at ALL times (they are in your context)\n\
+             - Keep responses concise but warm — max 3-4 sentences for routine changes, more for complex questions\n"
+        );
 
         Ok(ctx)
     }

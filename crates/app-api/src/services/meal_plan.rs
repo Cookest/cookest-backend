@@ -706,6 +706,149 @@ impl MealPlanService {
         Ok(())
     }
 
+    // ── AI tool helpers ───────────────────────────────────────────────────────
+
+    /// Get this week's meal plan for a user (returns None if no plan exists).
+    pub async fn get_current_week_plan(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Option<crate::models::meal_plan::MealPlanResponse>, AppError> {
+        let today = Utc::now().date_naive();
+        let days_since_monday = today.weekday().num_days_from_monday() as i64;
+        let week_start = today - Duration::days(days_since_monday);
+
+        let plan = meal_plan::Entity::find()
+            .filter(meal_plan::Column::UserId.eq(user_id))
+            .filter(meal_plan::Column::WeekStart.eq(week_start))
+            .one(&self.db)
+            .await?;
+
+        let Some(plan) = plan else {
+            return Ok(None);
+        };
+
+        let slots = meal_plan_slot::Entity::find()
+            .filter(meal_plan_slot::Column::MealPlanId.eq(plan.id))
+            .order_by_asc(meal_plan_slot::Column::DayOfWeek)
+            .all(&self.db)
+            .await?;
+
+        let recipe_ids: Vec<i64> = slots.iter().filter_map(|s| s.recipe_id).collect();
+        let recipes: HashMap<i64, recipe::Model> = if recipe_ids.is_empty() {
+            HashMap::new()
+        } else {
+            recipe::Entity::find()
+                .filter(recipe::Column::Id.is_in(recipe_ids))
+                .all(&self.db)
+                .await?
+                .into_iter()
+                .map(|r| (r.id, r))
+                .collect()
+        };
+
+        let slot_responses = slots
+            .into_iter()
+            .filter_map(|s| {
+                let recipe_id = s.recipe_id?;
+                let r = recipes.get(&recipe_id)?;
+                Some(crate::models::meal_plan::MealPlanSlotResponse {
+                    id: s.id,
+                    day_of_week: s.day_of_week,
+                    meal_type: s.meal_type,
+                    recipe_id,
+                    recipe_name: r.name.clone(),
+                    recipe_image_url: None,
+                    total_time_min: r.total_time_min,
+                    servings: s.servings_override.unwrap_or(r.servings),
+                    is_completed: s.is_completed,
+                })
+            })
+            .collect();
+
+        Ok(Some(crate::models::meal_plan::MealPlanResponse {
+            id: plan.id,
+            week_start: plan.week_start,
+            is_ai_generated: plan.is_ai_generated,
+            slots: slot_responses,
+        }))
+    }
+
+    /// Replace the recipe in a specific meal slot. Returns the new recipe name.
+    /// Security: verifies the meal plan is owned by user_id.
+    pub async fn update_slot_recipe(
+        &self,
+        user_id: Uuid,
+        day_of_week: i16,
+        meal_type: &str,
+        recipe_id: i64,
+    ) -> Result<String, AppError> {
+        let today = Utc::now().date_naive();
+        let days_since_monday = today.weekday().num_days_from_monday() as i64;
+        let week_start = today - Duration::days(days_since_monday);
+
+        let plan = meal_plan::Entity::find()
+            .filter(meal_plan::Column::UserId.eq(user_id))
+            .filter(meal_plan::Column::WeekStart.eq(week_start))
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Meal plan for this week".into()))?;
+
+        let recipe_name = recipe::Entity::find_by_id(recipe_id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Recipe".into()))?
+            .name;
+
+        let slot = meal_plan_slot::Entity::find()
+            .filter(meal_plan_slot::Column::MealPlanId.eq(plan.id))
+            .filter(meal_plan_slot::Column::DayOfWeek.eq(day_of_week))
+            .filter(meal_plan_slot::Column::MealType.eq(meal_type))
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Slot".into()))?;
+
+        let mut active: meal_plan_slot::ActiveModel = slot.into();
+        active.recipe_id = Set(Some(recipe_id));
+        active.is_completed = Set(false);
+        active.update(&self.db).await?;
+
+        Ok(recipe_name)
+    }
+
+    /// Mark a meal slot as completed.
+    /// Security: verifies ownership via plan.user_id.
+    pub async fn mark_slot_completed(
+        &self,
+        user_id: Uuid,
+        day_of_week: i16,
+        meal_type: &str,
+    ) -> Result<(), AppError> {
+        let today = Utc::now().date_naive();
+        let days_since_monday = today.weekday().num_days_from_monday() as i64;
+        let week_start = today - Duration::days(days_since_monday);
+
+        let plan = meal_plan::Entity::find()
+            .filter(meal_plan::Column::UserId.eq(user_id))
+            .filter(meal_plan::Column::WeekStart.eq(week_start))
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Meal plan for this week".into()))?;
+
+        let slot = meal_plan_slot::Entity::find()
+            .filter(meal_plan_slot::Column::MealPlanId.eq(plan.id))
+            .filter(meal_plan_slot::Column::DayOfWeek.eq(day_of_week))
+            .filter(meal_plan_slot::Column::MealType.eq(meal_type))
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Slot".into()))?;
+
+        let mut active: meal_plan_slot::ActiveModel = slot.into();
+        active.is_completed = Set(true);
+        active.update(&self.db).await?;
+
+        Ok(())
+    }
+
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     async fn plan_to_json(&self, plan: &meal_plan::Model) -> Result<serde_json::Value, AppError> {
