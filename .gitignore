@@ -1,0 +1,18 @@
+# Rust build artifacts
+/target/
+
+# Environment variables — never commit secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
