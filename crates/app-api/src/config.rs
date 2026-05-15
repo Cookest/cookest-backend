@@ -19,6 +19,8 @@ pub struct Config {
     pub food_api_key: Option<String>,
     pub resend_api_key: Option<SecretString>,
     pub resend_from_email: String,
+    pub image_gen_url: String,
+    pub image_gen_token: Option<String>,
 }
 
 impl Config {
@@ -82,6 +84,11 @@ impl Config {
         let resend_from_email = env::var("RESEND_FROM_EMAIL")
             .unwrap_or_else(|_| "noreply@m.cookest.app".to_string());
 
+        let image_gen_url = env::var("IMAGE_GEN_URL")
+            .unwrap_or_else(|_| "http://localhost:8082".to_string());
+
+        let image_gen_token = env::var("IMAGE_GEN_TOKEN").ok();
+
         Ok(Self {
             database_url: SecretString::from(database_url),
             jwt_secret: SecretString::from(jwt_secret),
@@ -98,6 +105,8 @@ impl Config {
             food_api_key,
             resend_api_key,
             resend_from_email,
+            image_gen_url,
+            image_gen_token,
         })
     }
 
