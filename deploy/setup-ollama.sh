@@ -30,8 +30,10 @@ LOGICAL_THREADS=$(nproc --all)
 echo "==> CPU: ${PHYSICAL_CORES} physical cores / ${LOGICAL_THREADS} logical threads"
 echo "    Using ${PHYSICAL_CORES} threads for Ollama (physical cores only — HT excluded)"
 OLLAMA_HOST="${OLLAMA_HOST:-0.0.0.0:11434}"
+# These defaults may be overridden in the RAM-tier blocks below
 CHAT_MODEL="${OLLAMA_MODEL:-llama3.1}"
 KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:-10m}"
+NUM_PARALLEL="${OLLAMA_NUM_PARALLEL:-1}"
 
 # ── Detect available RAM and pick the best fitting vision model ───────────────
 TOTAL_RAM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
@@ -42,21 +44,29 @@ VISION_MODEL_CANDIDATES=()
 
 if [ "${TOTAL_RAM_MB}" -ge 28000 ]; then
     # ≥ 28 GB: run vision + chat resident simultaneously
+    # With this much RAM, use higher-quality q8 quantisation and allow
+    # 2 concurrent requests (one vision scan + one chat at the same time)
     VISION_MODEL="${OLLAMA_VISION_MODEL:-qwen2.5vl:7b}"
     VISION_MODEL_CANDIDATES=("${VISION_MODEL}")
     PULL_CHAT=true
-    echo "    Mode: FULL  — vision + chat both resident in RAM"
+    KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:--1}"       # keep loaded forever
+    CHAT_MODEL="${OLLAMA_MODEL:-llama3.1:8b}"   # explicit 8B tag
+    NUM_PARALLEL="${OLLAMA_NUM_PARALLEL:-2}"    # vision + chat simultaneously
+    echo "    Mode: FULL (32 GB) — vision + chat resident, 2 parallel slots"
+    echo "    Chat: ${CHAT_MODEL}  Vision: ${VISION_MODEL}"
 elif [ "${TOTAL_RAM_MB}" -ge 12000 ]; then
     # ≥ 12 GB: 7B vision, chat loads on demand
     VISION_MODEL="${OLLAMA_VISION_MODEL:-qwen2.5vl:7b}"
     VISION_MODEL_CANDIDATES=("${VISION_MODEL}")
     PULL_CHAT=false
+    NUM_PARALLEL="${OLLAMA_NUM_PARALLEL:-1}"
     echo "    Mode: VISION-ONLY resident (chat loads on demand)"
 else
-    # < 12 GB (current 8 GB): try 3B first, then fall back to the base family tag
+    # < 12 GB: try 3B first, then fall back to the base family tag
     VISION_MODEL="${OLLAMA_VISION_MODEL:-qwen2.5vl:3b}"
     VISION_MODEL_CANDIDATES=("${VISION_MODEL}" "${VISION_MODEL_FALLBACK}")
     PULL_CHAT=false
+    NUM_PARALLEL="${OLLAMA_NUM_PARALLEL:-1}"
     echo "    Mode: CONSTRAINED (8 GB) — using 3B model (~2.3 GB)"
     echo "    Upgrade to ≥16 GB to unlock 7B for better accuracy"
 fi
@@ -84,6 +94,8 @@ printf 'Environment="OLLAMA_NUM_GPU=0"\n'                             >> /etc/sy
 printf 'Environment="OLLAMA_FLASH_ATTENTION=1"\n'                     >> /etc/systemd/system/ollama.service.d/override.conf
 # Keep model resident between requests (avoids ~10s cold-start reload)
 printf 'Environment="OLLAMA_KEEP_ALIVE=%s"\n' "${KEEP_ALIVE}"        >> /etc/systemd/system/ollama.service.d/override.conf
+# Number of parallel request slots (1 on low-RAM, 2 on 32 GB)
+printf 'Environment="OLLAMA_NUM_PARALLEL=%s"\n' "${NUM_PARALLEL}"    >> /etc/systemd/system/ollama.service.d/override.conf
 
 systemctl daemon-reload
 systemctl enable ollama
