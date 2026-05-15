@@ -7,6 +7,7 @@ pub mod onboarding;
 pub mod shopping_list;
 pub mod subscription;
 pub mod store;
+pub mod browse;
 
 pub use auth::configure as configure_auth;
 pub use recipe::configure as configure_recipes;
@@ -19,3 +20,5 @@ pub use shopping_list::configure_shopping_list;
 pub use subscription::configure_subscription;
 pub use subscription::configure_subscription_protected;
 pub use store::configure_stores;
+pub use browse::configure_browse;
+pub use browse::FoodApiClient;

@@ -28,6 +28,7 @@ use crate::handlers::{
     configure_auth, configure_recipes, configure_ingredients, configure_user, configure_chat,
     configure_onboarding, configure_shopping_list, configure_subscription, configure_stores,
     configure_recipes_protected, configure_subscription_protected,
+    configure_browse, FoodApiClient,
 };
 use crate::middleware::{JwtAuth, SecurityHeaders};
 use crate::services::{
@@ -602,6 +603,7 @@ async fn main() -> std::io::Result<()> {
 
     let push_token_service = Arc::new(PushTokenService::new(db.clone()));
     let scan_service = Arc::new(ScanService::new());
+    let food_api_client = FoodApiClient::new(config.food_api_url.clone(), config.food_api_key.clone());
 
     // Initialize email service if Resend API key is available
     let email_service = if let Some(api_key) = &config.resend_api_key {
@@ -670,6 +672,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(push_token_service.clone()))
             .app_data(web::Data::new(email_service.clone()))
             .app_data(web::Data::new(scan_service.clone()))
+            .app_data(web::Data::new(food_api_client.clone()))
             .app_data(web::Data::new(db.clone()))
             // ── Public routes (no JWT required) ──────────────────────────────
             .configure(configure_auth)        // /api/auth/*
@@ -697,6 +700,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(configure_stores)
                     .configure(configure_recipes_protected)
                     .configure(configure_subscription_protected)
+                    .configure(configure_browse)
             )
     })
     .bind(&bind_address)?
