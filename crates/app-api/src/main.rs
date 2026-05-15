@@ -30,10 +30,12 @@ use crate::handlers::{
     configure_recipes_protected, configure_subscription_protected,
     configure_browse, FoodApiClient,
     configure_image_gen, ImageGenClient,
+    configure_recipe_gen,
 };
 use crate::middleware::{JwtAuth, SecurityHeaders};
 use crate::services::{
     AuthService, TokenService, RecipeService, IngredientService,
+    RecipeGenService,
     MealPlanService, InventoryService, ProfileService, InteractionService, ChatService,
     OnboardingService, ShoppingListService, SubscriptionService, StoreService, PushTokenService,
     PreferenceService, EmailService, ScanService,
@@ -604,6 +606,7 @@ async fn main() -> std::io::Result<()> {
 
     let push_token_service = Arc::new(PushTokenService::new(db.clone()));
     let scan_service = Arc::new(ScanService::new());
+    let recipe_gen_service = Arc::new(RecipeGenService::new(db.clone()));
     let food_api_client = FoodApiClient::new(config.food_api_url.clone(), config.food_api_key.clone());
     let image_gen_client = ImageGenClient::new(config.image_gen_url.clone(), config.image_gen_token.clone());
 
@@ -674,6 +677,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(push_token_service.clone()))
             .app_data(web::Data::new(email_service.clone()))
             .app_data(web::Data::new(scan_service.clone()))
+            .app_data(web::Data::new(recipe_gen_service.clone()))
             .app_data(web::Data::new(food_api_client.clone()))
             .app_data(web::Data::new(image_gen_client.clone()))
             .app_data(web::Data::new(db.clone()))
@@ -705,6 +709,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(configure_subscription_protected)
                     .configure(configure_browse)
                     .configure(configure_image_gen)
+                    .configure(configure_recipe_gen)
             )
     })
     .bind(&bind_address)?
