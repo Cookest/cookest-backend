@@ -1,0 +1,455 @@
+{
+  "version": "1.0",
+  "note": "Keep this in sync with api/src/handlers/. Used by the MCP server list_endpoints tool.",
+  "public": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "description": "Health check",
+      "auth": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "description": "Register new user",
+      "auth": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "description": "Login \u2014 returns JWT + sets httpOnly refresh cookie",
+      "auth": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "description": "Refresh access token via httpOnly cookie",
+      "auth": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "description": "Logout \u2014 clears refresh cookie",
+      "auth": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/recipes",
+      "description": "List/search recipes (paginated, filterable)",
+      "auth": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/recipes",
+      "description": "Create recipe",
+      "auth": false,
+      "note": "public route but requires auth in practice"
+    },
+    {
+      "method": "GET",
+      "path": "/api/recipes/mine",
+      "description": "List current user's recipes",
+      "auth": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/recipes/slug/{slug}",
+      "description": "Get recipe by slug",
+      "auth": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/recipes/{id}",
+      "description": "Get recipe by ID",
+      "auth": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/recipes/{id}",
+      "description": "Update recipe",
+      "auth": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/recipes/{id}",
+      "description": "Delete recipe",
+      "auth": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/ingredients",
+      "description": "Search ingredients (trgm fuzzy)",
+      "auth": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/ingredients/{id}",
+      "description": "Get ingredient with nutrients",
+      "auth": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/stores",
+      "description": "List stores",
+      "auth": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/webhooks/stripe",
+      "description": "Stripe webhook (raw body)",
+      "auth": false
+    }
+  ],
+  "protected": [
+    {
+      "method": "POST",
+      "path": "/api/auth/onboarding",
+      "description": "Complete onboarding flow",
+      "tier": "free"
+    },
+    {
+      "method": "GET",
+      "path": "/api/me",
+      "description": "Get user profile",
+      "tier": "free"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/me",
+      "description": "Update user profile",
+      "tier": "free"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/me",
+      "description": "Delete account",
+      "tier": "free"
+    },
+    {
+      "method": "POST",
+      "path": "/api/me/change-password",
+      "description": "Change password",
+      "tier": "free"
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/history",
+      "description": "Get cooking history",
+      "tier": "free"
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/favourites",
+      "description": "Get favourite recipes",
+      "tier": "free"
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/push-tokens",
+      "description": "List push notification tokens",
+      "tier": "free"
+    },
+    {
+      "method": "POST",
+      "path": "/api/me/push-tokens",
+      "description": "Register push token",
+      "tier": "free"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/me/push-tokens/{id}",
+      "description": "Delete push token",
+      "tier": "free"
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/preferences",
+      "description": "Get user preferences",
+      "tier": "free"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/me/preferences",
+      "description": "Reset preferences",
+      "tier": "free"
+    },
+    {
+      "method": "POST",
+      "path": "/api/recipes/{id}/rate",
+      "description": "Rate a recipe",
+      "tier": "free"
+    },
+    {
+      "method": "POST",
+      "path": "/api/recipes/{id}/favourite",
+      "description": "Toggle recipe favourite",
+      "tier": "free"
+    },
+    {
+      "method": "POST",
+      "path": "/api/recipes/{id}/cook",
+      "description": "Mark recipe as cooked",
+      "tier": "free"
+    },
+    {
+      "method": "GET",
+      "path": "/api/inventory",
+      "description": "List pantry inventory",
+      "tier": "free"
+    },
+    {
+      "method": "POST",
+      "path": "/api/inventory",
+      "description": "Add inventory item",
+      "tier": "free"
+    },
+    {
+      "method": "GET",
+      "path": "/api/inventory/expiring",
+      "description": "Get soon-expiring items",
+      "tier": "free"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/inventory/{id}",
+      "description": "Update inventory item",
+      "tier": "free"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/inventory/{id}",
+      "description": "Delete inventory item",
+      "tier": "free"
+    },
+    {
+      "method": "GET",
+      "path": "/api/meal-plans",
+      "description": "List user meal plans",
+      "tier": "pro"
+    },
+    {
+      "method": "POST",
+      "path": "/api/meal-plans/generate",
+      "description": "AI-generate meal plan",
+      "tier": "pro"
+    },
+    {
+      "method": "GET",
+      "path": "/api/meal-plans/current",
+      "description": "Get current week meal plan",
+      "tier": "pro"
+    },
+    {
+      "method": "GET",
+      "path": "/api/meal-plans/current/shopping-list",
+      "description": "Get shopping list from current plan",
+      "tier": "pro"
+    },
+    {
+      "method": "GET",
+      "path": "/api/meal-plans/{id}",
+      "description": "Get specific meal plan",
+      "tier": "pro"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/meal-plans/{id}",
+      "description": "Delete meal plan",
+      "tier": "pro"
+    },
+    {
+      "method": "GET",
+      "path": "/api/meal-plans/{id}/nutrition",
+      "description": "Get nutrition summary for plan",
+      "tier": "pro"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/meal-plans/{plan_id}/slots/{slot_id}",
+      "description": "Swap a meal slot",
+      "tier": "pro"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/meal-plans/{plan_id}/slots/{slot_id}/complete",
+      "description": "Mark slot as completed",
+      "tier": "pro"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/meal-plans/{plan_id}/slots/{slot_id}/flex",
+      "description": "Mark slot as flexible",
+      "tier": "pro"
+    },
+    {
+      "method": "GET",
+      "path": "/api/shopping-list",
+      "description": "Get shopping list",
+      "tier": "free"
+    },
+    {
+      "method": "POST",
+      "path": "/api/shopping-list/items",
+      "description": "Add shopping list item",
+      "tier": "free"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/shopping-list/items/{id}/check",
+      "description": "Toggle item checked",
+      "tier": "free"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/shopping-list/items/{id}",
+      "description": "Delete shopping list item",
+      "tier": "free"
+    },
+    {
+      "method": "POST",
+      "path": "/api/shopping-list/sync",
+      "description": "Sync list from meal plan",
+      "tier": "pro"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/shopping-list/clear-checked",
+      "description": "Clear checked items",
+      "tier": "free"
+    },
+    {
+      "method": "GET",
+      "path": "/api/shopping-list/prices/{ingredient_id}",
+      "description": "Get prices for ingredient across stores",
+      "tier": "pro"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chat",
+      "description": "Send AI chat message (streams response)",
+      "tier": "pro"
+    },
+    {
+      "method": "GET",
+      "path": "/api/chat/sessions",
+      "description": "List chat sessions",
+      "tier": "pro"
+    },
+    {
+      "method": "GET",
+      "path": "/api/chat/sessions/{id}/messages",
+      "description": "Get messages in session",
+      "tier": "pro"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/chat/sessions/{id}",
+      "description": "Delete chat session",
+      "tier": "pro"
+    },
+    {
+      "method": "GET",
+      "path": "/api/subscription",
+      "description": "Get current subscription",
+      "tier": "free"
+    },
+    {
+      "method": "POST",
+      "path": "/api/subscription/checkout",
+      "description": "Create Stripe checkout session",
+      "tier": "free"
+    },
+    {
+      "method": "POST",
+      "path": "/api/recipes/generate",
+      "description": "AI generate a recipe (generate\u2192score\u2192refine loop)",
+      "tier": "pro"
+    },
+    {
+      "method": "POST",
+      "path": "/api/image-gen/recipes/{id}/steps/batch",
+      "description": "Batch-generate images for all recipe steps",
+      "tier": "pro"
+    },
+    {
+      "method": "POST",
+      "path": "/api/image-gen/recipes/{id}/steps/{n}",
+      "description": "Generate image for a single recipe step",
+      "tier": "pro"
+    },
+    {
+      "method": "POST",
+      "path": "/api/image-gen/recipes/{id}/hero",
+      "description": "Generate hero image for a recipe",
+      "tier": "pro"
+    },
+    {
+      "method": "GET",
+      "path": "/api/image-gen/jobs/{job_id}",
+      "description": "Poll image generation job status",
+      "tier": "pro"
+    },
+    {
+      "method": "GET",
+      "path": "/api/browse/recipes",
+      "description": "Browse recipe catalog (Food API proxy)",
+      "tier": "free"
+    },
+    {
+      "method": "GET",
+      "path": "/api/browse/recipes/{id}",
+      "description": "Get a browse recipe by ID (Food API proxy)",
+      "tier": "free"
+    },
+    {
+      "method": "GET",
+      "path": "/api/browse/ingredients",
+      "description": "Browse ingredient catalog (Food API proxy)",
+      "tier": "free"
+    },
+    {
+      "method": "GET",
+      "path": "/api/browse/ingredients/{id}",
+      "description": "Get ingredient details (Food API proxy)",
+      "tier": "free"
+    }
+  ],
+  "admin": [
+    {
+      "method": "POST",
+      "path": "/api/admin/stores",
+      "description": "Create store",
+      "auth": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/stores/{store_id}/promotions/upload",
+      "description": "Upload promotion PDF",
+      "auth": "admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/stores/{store_id}/jobs",
+      "description": "List PDF processing jobs",
+      "auth": "admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/stores/{store_id}/candidates",
+      "description": "List promotion candidates",
+      "auth": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/candidates/{id}/approve",
+      "description": "Approve promotion candidate",
+      "auth": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/candidates/{id}/reject",
+      "description": "Reject promotion candidate",
+      "auth": "admin"
+    }
+  ]
+}
