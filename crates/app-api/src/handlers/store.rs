@@ -16,6 +16,18 @@ use crate::middleware::auth::AuthenticatedUser;
 use crate::services::store::{CreateStoreRequest, StoreService};
 use crate::services::token::SubscriptionTier;
 
+/// Register all store-related routes onto `cfg`.
+///
+/// Public routes:
+/// - `GET  /api/stores` — list all stores (no auth)
+///
+/// Admin routes (all require `is_admin = true` in DB):
+/// - `POST /api/admin/stores`
+/// - `POST /api/admin/stores/{store_id}/promotions/upload`
+/// - `GET  /api/admin/stores/{store_id}/jobs`
+/// - `GET  /api/admin/stores/{store_id}/candidates`
+/// - `POST /api/admin/candidates/{id}/approve`
+/// - `POST /api/admin/candidates/{id}/reject`
 pub fn configure_stores(cfg: &mut web::ServiceConfig) {
     // Public list
     cfg.route("/api/stores", web::get().to(list_stores));
@@ -35,6 +47,9 @@ pub fn configure_stores(cfg: &mut web::ServiceConfig) {
 
 }
 
+/// `GET /api/stores` — list all stores.
+///
+/// Public endpoint; no authentication required.
 async fn list_stores(
     service: web::Data<Arc<StoreService>>,
 ) -> Result<HttpResponse, AppError> {
@@ -54,6 +69,9 @@ async fn verify_admin(user_id: Uuid, db: &DatabaseConnection) -> Result<(), AppE
     Ok(())
 }
 
+/// `POST /api/admin/stores` — create a new store.
+///
+/// Requires admin privileges (verified against DB, not just JWT claims).
 async fn create_store(
     user: AuthenticatedUser,
     db: web::Data<DatabaseConnection>,
@@ -65,6 +83,11 @@ async fn create_store(
     Ok(HttpResponse::Created().json(store))
 }
 
+/// `POST /api/admin/stores/{store_id}/promotions/upload` — upload a promotions PDF.
+///
+/// Requires admin privileges.  The PDF is saved and a background
+/// `pdf_processing_job` is spawned immediately; the handler returns 202
+/// Accepted with the job record so the caller can poll job status.
 async fn upload_pdf(
     user: AuthenticatedUser,
     db: web::Data<DatabaseConnection>,
@@ -116,6 +139,10 @@ async fn upload_pdf(
     })))
 }
 
+/// `GET /api/admin/stores/{store_id}/jobs` — list PDF-processing jobs for a store.
+///
+/// Requires admin privileges.  Returns jobs of type `pdf_import` for the
+/// given store so admins can monitor extraction progress.
 async fn list_jobs(
     user: AuthenticatedUser,
     db: web::Data<DatabaseConnection>,
@@ -127,6 +154,11 @@ async fn list_jobs(
     Ok(HttpResponse::Ok().json(serde_json::json!({ "jobs": jobs })))
 }
 
+/// `GET /api/admin/stores/{store_id}/candidates` — list promotion candidates.
+///
+/// Requires admin privileges.  Candidates are price/promotion records
+/// extracted from a PDF that are awaiting human review before being
+/// published as live store promotions.
 async fn list_candidates(
     user: AuthenticatedUser,
     db: web::Data<DatabaseConnection>,
@@ -138,6 +170,10 @@ async fn list_candidates(
     Ok(HttpResponse::Ok().json(serde_json::json!({ "candidates": candidates })))
 }
 
+/// `POST /api/admin/candidates/{id}/approve` — approve a promotion candidate.
+///
+/// Requires admin privileges.  Promotes the candidate record into a live
+/// `store_promotion` row and records the approving admin’s ID.
 async fn approve_candidate(
     user: AuthenticatedUser,
     db: web::Data<DatabaseConnection>,
@@ -149,6 +185,10 @@ async fn approve_candidate(
     Ok(HttpResponse::Created().json(promotion))
 }
 
+/// `POST /api/admin/candidates/{id}/reject` — reject a promotion candidate.
+///
+/// Requires admin privileges.  Marks the candidate as rejected so it is
+/// excluded from future review queues without deleting the audit trail.
 async fn reject_candidate(
     user: AuthenticatedUser,
     db: web::Data<DatabaseConnection>,

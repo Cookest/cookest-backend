@@ -18,6 +18,10 @@ use crate::handlers::onboarding::{complete_onboarding, change_password, delete_a
 
 // ── Inventory ────────────────────────────────────────────────────────────────
 
+/// `GET /api/inventory` — list the authenticated user’s pantry items.
+///
+/// JWT required.  Returns only items that belong to the requesting user;
+/// other users’ inventories are never exposed.
 pub async fn list_inventory(
     inv: web::Data<Arc<InventoryService>>,
     claims: web::ReqData<Claims>,
@@ -27,6 +31,10 @@ pub async fn list_inventory(
     Ok(HttpResponse::Ok().json(items))
 }
 
+/// `POST /api/inventory` — add a new item to the user’s pantry.
+///
+/// JWT required.  The item is created under the authenticated user’s ID;
+/// it cannot be added to another user’s pantry.
 pub async fn add_inventory_item(
     inv: web::Data<Arc<InventoryService>>,
     claims: web::ReqData<Claims>,
@@ -37,6 +45,11 @@ pub async fn add_inventory_item(
     Ok(HttpResponse::Created().json(item))
 }
 
+/// `PATCH /api/inventory/{id}` — update an existing pantry item.
+///
+/// JWT required.  The service enforces ownership: attempting to update an
+/// item that belongs to a different user returns 404 (not 403, to avoid
+/// leaking existence information).
 pub async fn update_inventory_item(
     inv: web::Data<Arc<InventoryService>>,
     claims: web::ReqData<Claims>,
@@ -48,6 +61,9 @@ pub async fn update_inventory_item(
     Ok(HttpResponse::Ok().json(item))
 }
 
+/// `DELETE /api/inventory/{id}` — remove a pantry item.
+///
+/// JWT required.  Same ownership enforcement as `update_inventory_item`.
 pub async fn delete_inventory_item(
     inv: web::Data<Arc<InventoryService>>,
     claims: web::ReqData<Claims>,
@@ -58,6 +74,11 @@ pub async fn delete_inventory_item(
     Ok(HttpResponse::NoContent().finish())
 }
 
+/// `GET /api/inventory/expiring` — items expiring within the next N days.
+///
+/// JWT required.  Currently hardcoded to a 5-day window; items without
+/// an expiry date are excluded.  Intended for the app’s notification system
+/// to prompt the user to use them before they go off.
 pub async fn expiring_soon(
     inv: web::Data<Arc<InventoryService>>,
     claims: web::ReqData<Claims>,

@@ -1,3 +1,4 @@
+//! Actix-Web route handlers; each module owns one resource group.
 pub mod auth;
 pub mod recipe;
 pub mod ingredient;

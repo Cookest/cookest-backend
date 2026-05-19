@@ -128,19 +128,20 @@ async fn stripe_webhook(
             });
 
             if matches!(status, "active" | "trialing") && !customer_id.is_empty() {
+                // Propagate errors so Stripe receives a 5xx and retries the webhook.
+                // Swallowing the error here would silently leave the user on the wrong tier.
                 sub_service
                     .update_user_subscription(customer_id, tier, valid_until)
-                    .await
-                    .unwrap_or_else(|e| tracing::warn!("Sub update failed: {:?}", e));
+                    .await?;
             }
         }
         "customer.subscription.deleted" => {
             let customer_id = event["data"]["object"]["customer"].as_str().unwrap_or("");
             if !customer_id.is_empty() {
+                // Propagate errors so Stripe receives a 5xx and retries the webhook.
                 sub_service
                     .update_user_subscription(customer_id, SubscriptionTier::Free, None)
-                    .await
-                    .unwrap_or_else(|e| tracing::warn!("Sub cancel failed: {:?}", e));
+                    .await?;
             }
         }
         _ => tracing::debug!("Unhandled Stripe event: {}", event_type),
