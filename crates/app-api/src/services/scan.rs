@@ -97,8 +97,9 @@ impl ScanService {
         Self {
             http: Client::builder()
                 .timeout(std::time::Duration::from_secs(timeout_secs))
+                // Panic at startup rather than silently losing the configured timeout
                 .build()
-                .unwrap_or_default(),
+                .expect("reqwest client with timeout"),
             ollama_url,
             model,
         }

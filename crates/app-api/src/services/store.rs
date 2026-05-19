@@ -522,11 +522,13 @@ async fn insert_candidate(
 
     let valid_from = item["valid_from"].as_str()
         .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
-        .map(|d| d.and_hms_opt(0, 0, 0).unwrap().and_utc().fixed_offset());
+        // 0,0,0 is always a valid time — expect() is safe here
+        .map(|d| d.and_hms_opt(0, 0, 0).expect("midnight (0,0,0) is always valid").and_utc().fixed_offset());
 
     let valid_until = item["valid_until"].as_str()
         .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
-        .map(|d| d.and_hms_opt(23, 59, 59).unwrap().and_utc().fixed_offset());
+        // 23,59,59 is always a valid time — expect() is safe here
+        .map(|d| d.and_hms_opt(23, 59, 59).expect("end-of-day (23,59,59) is always valid").and_utc().fixed_offset());
 
     let candidate = CandidateActiveModel {
         id: Set(Uuid::new_v4()),
