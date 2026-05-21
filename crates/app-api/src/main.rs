@@ -31,6 +31,7 @@ use crate::handlers::{
     configure_browse, FoodApiClient,
     configure_image_gen, ImageGenClient,
     configure_recipe_gen,
+    configure_taste_profile,
 };
 use crate::middleware::{JwtAuth, SecurityHeaders};
 use crate::services::{
@@ -40,6 +41,7 @@ use crate::services::{
     OnboardingService, ShoppingListService, SubscriptionService, StoreService, PushTokenService,
     PreferenceService, EmailService, ScanService,
 };
+use crate::services::taste_profile::TasteProfileService;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -409,6 +411,8 @@ async fn main() -> std::io::Result<()> {
         r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE;"#,
         r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;"#,
         r#"CREATE INDEX IF NOT EXISTS idx_users_stripe ON users(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;"#,
+        r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS meal_frequency INTEGER DEFAULT 3;"#,
+        r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS taste_profile JSONB NOT NULL DEFAULT '{}';"#,
 
         // ── Schema v2: Flex / energy fields on meal_plan_slots ──────────────
         r#"ALTER TABLE meal_plan_slots ALTER COLUMN recipe_id DROP NOT NULL;"#,
@@ -587,6 +591,7 @@ async fn main() -> std::io::Result<()> {
     let preference_service = Arc::new(PreferenceService::new(db.clone()));
     let chat_service = Arc::new(ChatService::new(db.clone()));
     let onboarding_service = Arc::new(OnboardingService::new(db.clone()));
+    let taste_profile_service = Arc::new(TasteProfileService::new(db.clone()));
     let shopping_list_service = Arc::new(ShoppingListService::new(db.clone()));
     let subscription_service = Arc::new(SubscriptionService::new(
         db.clone(),
@@ -671,6 +676,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(preference_service.clone()))
             .app_data(web::Data::new(chat_service.clone()))
             .app_data(web::Data::new(onboarding_service.clone()))
+            .app_data(web::Data::new(taste_profile_service.clone()))
             .app_data(web::Data::new(shopping_list_service.clone()))
             .app_data(web::Data::new(subscription_service.clone()))
             .app_data(web::Data::new(store_service.clone()))
@@ -703,6 +709,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(configure_user)
                     .configure(configure_chat)
                     .configure(configure_onboarding)
+                    .configure(configure_taste_profile)
                     .configure(configure_shopping_list)
                     .configure(configure_stores)
                     .configure(configure_recipes_protected)

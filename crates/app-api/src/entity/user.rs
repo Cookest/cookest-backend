@@ -85,6 +85,13 @@ pub struct Model {
     /// Maximum preferred cooking time per meal in minutes
     pub preferred_time_per_meal_min: Option<i32>,
 
+    /// How many home-cooked meals per week the user targets
+    pub meal_frequency: Option<i32>,
+
+    /// Accumulated taste profile from recipe swipes — JSON object
+    #[sea_orm(column_type = "Json")]
+    pub taste_profile: serde_json::Value,
+
     /// Whether the user has completed the onboarding flow
     pub onboarding_completed: bool,
 
@@ -190,6 +197,8 @@ pub struct UserResponse {
     pub health_goals: Option<Vec<String>>,
     pub weekly_budget: Option<Decimal>,
     pub preferred_time_per_meal_min: Option<i32>,
+    pub meal_frequency: Option<i32>,
+    pub taste_profile: serde_json::Value,
     pub onboarding_completed: bool,
     // Subscription (tier only — no stripe IDs)
     pub subscription_tier: String,
@@ -214,6 +223,8 @@ impl From<Model> for UserResponse {
             health_goals: user.health_goals,
             weekly_budget: user.weekly_budget,
             preferred_time_per_meal_min: user.preferred_time_per_meal_min,
+            meal_frequency: user.meal_frequency,
+            taste_profile: user.taste_profile,
             onboarding_completed: user.onboarding_completed,
             subscription_tier: user.subscription_tier,
             subscription_valid_until: user.subscription_valid_until,
