@@ -21,6 +21,7 @@ pub struct OnboardingRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub weekly_budget: Option<f64>,
     pub preferred_time_per_meal_min: Option<i32>,
+    pub meal_frequency: Option<i32>,
 }
 
 pub struct OnboardingService {
@@ -71,6 +72,9 @@ impl OnboardingService {
         }
         if let Some(time) = req.preferred_time_per_meal_min {
             active.preferred_time_per_meal_min = Set(Some(time));
+        }
+        if let Some(freq) = req.meal_frequency {
+            active.meal_frequency = Set(Some(freq.max(1).min(21)));
         }
 
         active.onboarding_completed = Set(true);
