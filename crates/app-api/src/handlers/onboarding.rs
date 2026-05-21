@@ -16,9 +16,14 @@ use crate::services::onboarding::{OnboardingRequest, OnboardingService};
 /// Register onboarding routes onto `cfg`.
 ///
 /// - `POST /api/auth/onboarding` — complete user onboarding (JWT required)
+/// - `POST /api/me/onboarding`   — alias used by the Flutter app
 pub fn configure_onboarding(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api/auth")
+            .route("/onboarding", web::post().to(complete_onboarding)),
+    );
+    cfg.service(
+        web::scope("/api/me")
             .route("/onboarding", web::post().to(complete_onboarding)),
     );
 }
