@@ -97,6 +97,8 @@ impl AuthService {
             health_goals: Set(None),
             weekly_budget: Set(None),
             preferred_time_per_meal_min: Set(None),
+            meal_frequency: Set(None),
+            taste_profile: Set(serde_json::json!({})),
             onboarding_completed: Set(false),
             is_admin: Set(false),
             created_at: Set(now),

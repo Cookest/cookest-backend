@@ -18,6 +18,7 @@ pub mod push_token;
 pub mod email;
 pub mod scan;
 pub mod recipe_gen;
+pub mod taste_profile;
 
 pub use auth::AuthService;
 pub use token::TokenService;
