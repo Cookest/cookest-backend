@@ -24,6 +24,7 @@ pub struct Config {
     pub cors_origin: String,
     pub ollama_url: String,
     pub ollama_model: String,
+    pub ollama_embed_model: String,
     pub pdf_upload_dir: String,
     pub stripe_webhook_secret: Option<String>,
     pub food_api_url: String,
@@ -32,6 +33,8 @@ pub struct Config {
     pub resend_from_email: String,
     pub image_gen_url: String,
     pub image_gen_token: Option<String>,
+    pub overpass_url: String,
+    pub rag_top_k: u64,
 }
 
 impl Config {
@@ -50,6 +53,9 @@ impl Config {
     /// - `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
     /// - `IMAGE_GEN_URL`, `IMAGE_GEN_TOKEN`
     /// - `STRIPE_WEBHOOK_SECRET`
+    /// - `OLLAMA_EMBED_MODEL` (nomic-embed-text) — RAG embeddings model
+    /// - `OVERPASS_URL` — OpenStreetMap Overpass endpoint for nearby stores
+    /// - `RAG_TOP_K` (5) — number of knowledge chunks retrieved per query
     pub fn from_env() -> Result<Self, ConfigError> {
         dotenvy::dotenv().ok();
 
@@ -93,6 +99,9 @@ impl Config {
         let ollama_model = env::var("OLLAMA_MODEL")
             .unwrap_or_else(|_| "llava".to_string());
 
+        let ollama_embed_model = env::var("OLLAMA_EMBED_MODEL")
+            .unwrap_or_else(|_| "nomic-embed-text".to_string());
+
         let pdf_upload_dir = env::var("PDF_UPLOAD_DIR")
             .unwrap_or_else(|_| "./cookest_pdfs".to_string());
 
@@ -115,6 +124,14 @@ impl Config {
 
         let image_gen_token = env::var("IMAGE_GEN_TOKEN").ok();
 
+        let overpass_url = env::var("OVERPASS_URL")
+            .unwrap_or_else(|_| "https://overpass-api.de/api/interpreter".to_string());
+
+        let rag_top_k: u64 = env::var("RAG_TOP_K")
+            .unwrap_or_else(|_| "5".to_string())
+            .parse()
+            .map_err(|_| ConfigError::InvalidValue("RAG_TOP_K must be a number"))?;
+
         Ok(Self {
             database_url: SecretString::from(database_url),
             jwt_secret: SecretString::from(jwt_secret),
@@ -125,6 +142,7 @@ impl Config {
             cors_origin,
             ollama_url,
             ollama_model,
+            ollama_embed_model,
             pdf_upload_dir,
             stripe_webhook_secret,
             food_api_url,
@@ -133,6 +151,8 @@ impl Config {
             resend_from_email,
             image_gen_url,
             image_gen_token,
+            overpass_url,
+            rag_top_k,
         })
     }
 
