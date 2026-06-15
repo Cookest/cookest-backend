@@ -20,6 +20,7 @@ pub mod cooking_history;
 
 // Inventory
 pub mod inventory_item;
+pub mod inventory_deduction;
 
 // Meal planning
 pub mod meal_plan;
@@ -43,6 +44,10 @@ pub mod store;
 pub mod store_promotion;
 pub mod store_promotion_candidate;
 pub mod pdf_processing_job;
+pub mod osm_store_poi;
+
+// Nutrition knowledge base (RAG)
+pub mod knowledge_chunk;
 
 // Stripe idempotency
 pub mod stripe_processed_event;

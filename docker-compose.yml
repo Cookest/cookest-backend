@@ -22,7 +22,7 @@ services:
 
   # ── App API Database ─────────────────────────────────────────────────────
   app-db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: cookest_app_db
     restart: unless-stopped
     environment:

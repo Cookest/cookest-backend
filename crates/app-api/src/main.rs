@@ -74,6 +74,7 @@ async fn main() -> std::io::Result<()> {
         // ── Extensions ──────────────────────────────────────────────────────────
         r#"CREATE EXTENSION IF NOT EXISTS "uuid-ossp";"#,
         r#"CREATE EXTENSION IF NOT EXISTS pg_trgm;"#,
+        r#"CREATE EXTENSION IF NOT EXISTS vector;"#,
 
         // ── Users (extended with profile fields) ────────────────────────────────
         r#"
@@ -566,6 +567,60 @@ async fn main() -> std::io::Result<()> {
         ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS fs_food_id BIGINT;
         CREATE UNIQUE INDEX IF NOT EXISTS idx_ingredients_fs_food_id
             ON ingredients(fs_food_id) WHERE fs_food_id IS NOT NULL;
+        "#,
+
+        // ── Inventory deduction audit (cook/consume, enables undo) ────────────
+        r#"
+        CREATE TABLE IF NOT EXISTS inventory_deductions (
+            id                  BIGSERIAL PRIMARY KEY,
+            user_id             UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            inventory_item_id   BIGINT,
+            ingredient_id       BIGINT NOT NULL REFERENCES ingredients(id) ON DELETE RESTRICT,
+            recipe_id           BIGINT REFERENCES recipes(id) ON DELETE SET NULL,
+            cooking_history_id  BIGINT REFERENCES cooking_history(id) ON DELETE CASCADE,
+            qty_before          NUMERIC(10,3) NOT NULL,
+            qty_deducted        NUMERIC(10,3) NOT NULL,
+            unit                TEXT NOT NULL,
+            was_deleted         BOOLEAN NOT NULL DEFAULT FALSE,
+            reason              TEXT NOT NULL DEFAULT 'cook',
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_inv_deduct_user    ON inventory_deductions(user_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_inv_deduct_history ON inventory_deductions(cooking_history_id);
+        "#,
+
+        // ── OpenStreetMap supermarket POI cache (nearby stores) ───────────────
+        r#"
+        CREATE TABLE IF NOT EXISTS osm_store_pois (
+            id               BIGSERIAL PRIMARY KEY,
+            osm_id           BIGINT NOT NULL,
+            osm_type         TEXT NOT NULL,
+            name             TEXT,
+            brand            TEXT,
+            lat              DOUBLE PRECISION NOT NULL,
+            lng              DOUBLE PRECISION NOT NULL,
+            matched_store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
+            raw_tags         JSONB,
+            fetched_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(osm_type, osm_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_osm_pois_geo ON osm_store_pois(lat, lng);
+        "#,
+
+        // ── Nutrition knowledge base (RAG, pgvector) ──────────────────────────
+        r#"
+        CREATE TABLE IF NOT EXISTS knowledge_chunks (
+            id           BIGSERIAL PRIMARY KEY,
+            source       TEXT NOT NULL,
+            title        TEXT,
+            chunk_index  INTEGER NOT NULL,
+            content      TEXT NOT NULL,
+            embedding    vector(768),
+            created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(source, chunk_index)
+        );
+        CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_embedding
+            ON knowledge_chunks USING hnsw (embedding vector_cosine_ops);
         "#,
     ];
 
