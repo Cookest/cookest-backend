@@ -66,6 +66,9 @@ pub struct Model {
     /// Whether this recipe is publicly visible
     pub is_public: bool,
 
+    /// FatSecret recipe id — primary key into the FatSecret catalog cache
+    pub fs_recipe_id: Option<i64>,
+
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }

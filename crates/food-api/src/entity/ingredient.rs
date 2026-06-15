@@ -24,6 +24,9 @@ pub struct Model {
     #[sea_orm(column_type = "Text", nullable)]
     pub off_id: Option<String>,
 
+    /// FatSecret food id — primary key into the FatSecret catalog cache
+    pub fs_food_id: Option<i64>,
+
     pub created_at: DateTimeWithTimeZone,
 }
 

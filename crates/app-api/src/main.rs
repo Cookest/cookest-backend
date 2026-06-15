@@ -560,6 +560,13 @@ async fn main() -> std::io::Result<()> {
             processed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         "#,
+
+        // ── FatSecret linkage ─────────────────────────────────────────────────
+        r#"
+        ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS fs_food_id BIGINT;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_ingredients_fs_food_id
+            ON ingredients(fs_food_id) WHERE fs_food_id IS NOT NULL;
+        "#,
     ];
 
     for sql in migrations {

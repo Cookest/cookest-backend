@@ -247,6 +247,12 @@ async fn main() -> std::io::Result<()> {
         )
         "#,
         r#"CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)"#,
+
+        // ── FatSecret linkage (catalog cache keys) ────────────────────────────
+        r#"ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS fs_food_id BIGINT"#,
+        r#"CREATE UNIQUE INDEX IF NOT EXISTS idx_ingredients_fs_food_id ON ingredients(fs_food_id) WHERE fs_food_id IS NOT NULL"#,
+        r#"ALTER TABLE recipes ADD COLUMN IF NOT EXISTS fs_recipe_id BIGINT"#,
+        r#"CREATE UNIQUE INDEX IF NOT EXISTS idx_recipes_fs_recipe_id ON recipes(fs_recipe_id) WHERE fs_recipe_id IS NOT NULL"#,
     ];
 
     for sql in migrations {
