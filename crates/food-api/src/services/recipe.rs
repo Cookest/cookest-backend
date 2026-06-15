@@ -1,27 +1,24 @@
-//! Recipe service — queries recipes with filtering, pagination, and full detail loads
+//! Recipe service — queries recipes using the FatSecret API
 
-use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
-    PaginatorTrait, Condition, ActiveModelTrait, Set,
-};
-use chrono::Utc;
+use std::sync::Arc;
+use std::str::FromStr;
+use rust_decimal::Decimal;
 
-use crate::entity::{
-    recipe, recipe_ingredient, recipe_step, recipe_image, recipe_nutrition, ingredient,
-};
 use crate::errors::AppError;
 use crate::models::recipe::*;
+use crate::services::FatSecretClient;
 
 pub struct RecipeService {
-    db: DatabaseConnection,
+    db: sea_orm::DatabaseConnection,
+    fs_client: Arc<FatSecretClient>,
 }
 
 impl RecipeService {
-    pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+    pub fn new(db: sea_orm::DatabaseConnection, fs_client: Arc<FatSecretClient>) -> Self {
+        Self { db, fs_client }
     }
 
-    /// List recipes with filters and pagination
+    /// List recipes with filters and pagination via FatSecret
     pub async fn list_recipes(
         &self,
         query: RecipeQuery,
@@ -29,85 +26,46 @@ impl RecipeService {
         let page = query.page.unwrap_or(1).max(1);
         let per_page = query.per_page.unwrap_or(20).min(50);
 
-        let mut condition = Condition::all();
+        let fs_res = self.fs_client
+            .search_recipes(query.q.as_deref(), page - 1, per_page)
+            .await
+            .map_err(|e| AppError::Internal(format!("FatSecret search error: {}", e)))?;
 
-        // Dietary filters
-        if query.vegetarian == Some(true) {
-            condition = condition.add(recipe::Column::IsVegetarian.eq(true));
-        }
-        if query.vegan == Some(true) {
-            condition = condition.add(recipe::Column::IsVegan.eq(true));
-        }
-        if query.gluten_free == Some(true) {
-            condition = condition.add(recipe::Column::IsGlutenFree.eq(true));
-        }
-        if query.dairy_free == Some(true) {
-            condition = condition.add(recipe::Column::IsDairyFree.eq(true));
-        }
+        let mut items = Vec::new();
+        let mut total = 0;
 
-        // Text filters
-        if let Some(cuisine) = &query.cuisine {
-            condition = condition.add(recipe::Column::Cuisine.eq(cuisine));
-        }
-        if let Some(category) = &query.category {
-            condition = condition.add(recipe::Column::Category.eq(category));
-        }
-        if let Some(difficulty) = &query.difficulty {
-            condition = condition.add(recipe::Column::Difficulty.eq(difficulty));
-        }
-        if let Some(max_time) = query.max_time {
-            condition = condition.add(recipe::Column::TotalTimeMin.lte(max_time));
-        }
+        if let Some(body) = fs_res.recipes {
+            if let Some(recipe_list) = body.recipe {
+                for r in recipe_list {
+                    let id = r.recipe_id.parse::<i64>().unwrap_or(0);
+                    let slug = format!("{}-{}", slug::slugify(&r.recipe_name), id);
+                    
+                    // Nutrition fields parsed but unused for RecipeListItem
 
-        // Full-text search on name using ILIKE (pg_trgm handles performance)
-        if let Some(ref q) = query.q {
-            let pattern = format!("%{}%", q);
-            condition = condition.add(recipe::Column::Name.like(pattern));
-        }
 
-        let paginator = recipe::Entity::find()
-            .filter(condition)
-            .order_by_asc(recipe::Column::Name)
-            .paginate(&self.db, per_page);
-
-        let total = paginator.num_items().await?;
-        let recipes = paginator.fetch_page(page - 1).await?;
-
-        // Fetch primary images for each recipe
-        let recipe_ids: Vec<i64> = recipes.iter().map(|r| r.id).collect();
-        let images = recipe_image::Entity::find()
-            .filter(recipe_image::Column::RecipeId.is_in(recipe_ids))
-            .filter(recipe_image::Column::IsPrimary.eq(true))
-            .all(&self.db)
-            .await?;
-
-        let items = recipes
-            .into_iter()
-            .map(|r| {
-                let primary_image = images
-                    .iter()
-                    .find(|img| img.recipe_id == r.id)
-                    .map(|img| img.url.clone());
-
-                RecipeListItem {
-                    id: r.id,
-                    name: r.name,
-                    slug: r.slug,
-                    cuisine: r.cuisine,
-                    category: r.category,
-                    difficulty: r.difficulty,
-                    servings: r.servings,
-                    total_time_min: r.total_time_min,
-                    is_vegetarian: r.is_vegetarian,
-                    is_vegan: r.is_vegan,
-                    is_gluten_free: r.is_gluten_free,
-                    is_dairy_free: r.is_dairy_free,
-                    average_rating: r.average_rating,
-                    rating_count: r.rating_count,
-                    primary_image_url: primary_image,
+                    items.push(RecipeListItem {
+                        id,
+                        name: r.recipe_name,
+                        slug,
+                        cuisine: None,
+                        category: None,
+                        difficulty: None,
+                        servings: 2,
+                        total_time_min: None,
+                        is_vegetarian: false,
+                        is_vegan: false,
+                        is_gluten_free: false,
+                        is_dairy_free: false,
+                        average_rating: None,
+                        rating_count: 0,
+                        primary_image_url: r.recipe_image,
+                    });
                 }
-            })
-            .collect();
+            }
+            total = body.total_results
+                .and_then(|t| t.parse::<u64>().ok())
+                .unwrap_or(items.len() as u64);
+        }
 
         Ok(PaginatedResponse {
             data: items,
@@ -118,116 +76,110 @@ impl RecipeService {
         })
     }
 
-    /// Get full recipe detail by ID
+    /// Get full recipe detail by ID via FatSecret
     pub async fn get_recipe(&self, id: i64) -> Result<RecipeDetail, AppError> {
-        let recipe = recipe::Entity::find_by_id(id)
-            .one(&self.db)
-            .await?
-            .ok_or(AppError::NotFound("Recipe".into()))?;
+        let fs_res = self.fs_client
+            .get_recipe(id)
+            .await
+            .map_err(|e| AppError::NotFound(format!("Recipe ID {} not found in FatSecret: {}", id, e)))?;
 
-        // Load ingredients with ingredient names
-        let raw_ingredients = recipe_ingredient::Entity::find()
-            .filter(recipe_ingredient::Column::RecipeId.eq(id))
-            .order_by_asc(recipe_ingredient::Column::DisplayOrder)
-            .all(&self.db)
-            .await?;
+        let r = fs_res.recipe;
+        let recipe_id = r.recipe_id.parse::<i64>().unwrap_or(id);
+        let slug = format!("{}-{}", slug::slugify(&r.recipe_name), recipe_id);
+        let servings = r.servings.as_deref().and_then(|s| s.parse::<i32>().ok()).unwrap_or(2);
+        
+        let prep_time_min = r.prep_time_min.as_deref().and_then(|s| s.parse::<i32>().ok());
+        let cook_time_min = r.cook_time_min.as_deref().and_then(|s| s.parse::<i32>().ok());
+        let total_time_min = prep_time_min.zip(cook_time_min).map(|(p, c)| p + c);
 
-        let ingredient_ids: Vec<i64> = raw_ingredients.iter().map(|i| i.ingredient_id).collect();
-        let ingredients_map = ingredient::Entity::find()
-            .filter(ingredient::Column::Id.is_in(ingredient_ids))
-            .all(&self.db)
-            .await?
-            .into_iter()
-            .map(|ing| (ing.id, ing.name))
-            .collect::<std::collections::HashMap<_, _>>();
+        // Map ingredients
+        let mut ingredients = Vec::new();
+        if let Some(ings_wrapper) = r.ingredients {
+            if let Some(ing_list) = ings_wrapper.ingredient {
+                for (idx, ing) in ing_list.into_iter().enumerate() {
+                    let food_id = ing.food_id.parse::<i64>().unwrap_or(0);
+                    let quantity = ing.number_of_units.as_deref().and_then(|s| Decimal::from_str(s).ok());
+                    ingredients.push(RecipeIngredientDetail {
+                        id: (idx as i64) + 1,
+                        ingredient_id: food_id,
+                        ingredient_name: ing.food_name,
+                        quantity,
+                        unit: ing.measurement_description,
+                        quantity_grams: None,
+                        notes: Some(ing.ingredient_description),
+                        display_order: idx as i32,
+                    });
+                }
+            }
+        }
 
-        let ingredients = raw_ingredients
-            .into_iter()
-            .map(|ri| RecipeIngredientDetail {
-                id: ri.id,
-                ingredient_id: ri.ingredient_id,
-                ingredient_name: ingredients_map
-                    .get(&ri.ingredient_id)
-                    .cloned()
-                    .unwrap_or_default(),
-                quantity: ri.quantity,
-                unit: ri.unit,
-                quantity_grams: ri.quantity_grams,
-                notes: ri.notes,
-                display_order: ri.display_order,
-            })
-            .collect();
+        // Map steps
+        let mut steps = Vec::new();
+        if let Some(dirs_wrapper) = r.directions {
+            if let Some(dir_list) = dirs_wrapper.direction {
+                for dir in dir_list {
+                    let step_number = dir.direction_number.parse::<i32>().unwrap_or(0);
+                    steps.push(RecipeStepDetail {
+                        id: step_number as i64,
+                        step_number,
+                        instruction: dir.direction_description,
+                        duration_min: None,
+                        image_url: None,
+                        tip: None,
+                    });
+                }
+            }
+        }
 
-        // Load steps
-        let steps = recipe_step::Entity::find()
-            .filter(recipe_step::Column::RecipeId.eq(id))
-            .order_by_asc(recipe_step::Column::StepNumber)
-            .all(&self.db)
-            .await?
-            .into_iter()
-            .map(|s| RecipeStepDetail {
-                id: s.id,
-                step_number: s.step_number,
-                instruction: s.instruction,
-                duration_min: s.duration_min,
-                image_url: s.image_url,
-                tip: s.tip,
-            })
-            .collect();
-
-        // Load images
-        let images = recipe_image::Entity::find()
-            .filter(recipe_image::Column::RecipeId.eq(id))
-            .all(&self.db)
-            .await?
-            .into_iter()
-            .map(|img| RecipeImageDetail {
-                id: img.id,
-                url: img.url,
-                image_type: img.image_type,
-                is_primary: img.is_primary,
-                width: img.width,
-                height: img.height,
-            })
-            .collect();
-
-        // Load nutrition
-        let nutrition = recipe_nutrition::Entity::find()
-            .filter(recipe_nutrition::Column::RecipeId.eq(id))
-            .one(&self.db)
-            .await?
-            .map(|n| RecipeNutritionDetail {
-                calories: n.calories,
-                protein_g: n.protein_g,
-                carbs_g: n.carbs_g,
-                fat_g: n.fat_g,
-                fiber_g: n.fiber_g,
-                sugar_g: n.sugar_g,
-                sodium_mg: n.sodium_mg,
-                saturated_fat_g: n.saturated_fat_g,
-                per_serving: n.per_serving,
+        // Map primary image if available
+        let mut images = Vec::new();
+        if let Some(img_url) = r.recipe_image {
+            images.push(RecipeImageDetail {
+                id: 1,
+                url: img_url,
+                image_type: Some("primary".to_string()),
+                is_primary: true,
+                width: None,
+                height: None,
             });
+        }
+
+        // Map nutrition
+        let mut nutrition = None;
+        if let Some(nut) = r.recipe_nutrition {
+            nutrition = Some(RecipeNutritionDetail {
+                calories: nut.calories.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                protein_g: nut.protein.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                carbs_g: nut.carbohydrate.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                fat_g: nut.fat.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                fiber_g: nut.fiber.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                sugar_g: nut.sugar.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                sodium_mg: nut.sodium.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                saturated_fat_g: nut.saturated_fat.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                per_serving: true,
+            });
+        }
 
         Ok(RecipeDetail {
-            id: recipe.id,
-            name: recipe.name,
-            slug: recipe.slug,
-            description: recipe.description,
-            cuisine: recipe.cuisine,
-            category: recipe.category,
-            difficulty: recipe.difficulty,
-            servings: recipe.servings,
-            prep_time_min: recipe.prep_time_min,
-            cook_time_min: recipe.cook_time_min,
-            total_time_min: recipe.total_time_min,
-            is_vegetarian: recipe.is_vegetarian,
-            is_vegan: recipe.is_vegan,
-            is_gluten_free: recipe.is_gluten_free,
-            is_dairy_free: recipe.is_dairy_free,
-            is_nut_free: recipe.is_nut_free,
-            source_url: recipe.source_url,
-            average_rating: recipe.average_rating,
-            rating_count: recipe.rating_count,
+            id: recipe_id,
+            name: r.recipe_name,
+            slug,
+            description: r.recipe_description,
+            cuisine: None,
+            category: None,
+            difficulty: None,
+            servings,
+            prep_time_min,
+            cook_time_min,
+            total_time_min,
+            is_vegetarian: false,
+            is_vegan: false,
+            is_gluten_free: false,
+            is_dairy_free: false,
+            is_nut_free: false,
+            source_url: r.recipe_url,
+            average_rating: None,
+            rating_count: 0,
             ingredients,
             steps,
             images,
@@ -237,111 +189,30 @@ impl RecipeService {
 
     /// Get recipe by slug
     pub async fn get_recipe_by_slug(&self, slug: &str) -> Result<RecipeDetail, AppError> {
-        let recipe = recipe::Entity::find()
-            .filter(recipe::Column::Slug.eq(slug))
-            .one(&self.db)
-            .await?
-            .ok_or(AppError::NotFound("Recipe".into()))?;
-
-        self.get_recipe(recipe.id).await
+        let id_str = slug.split('-').last().ok_or(AppError::NotFound("Recipe".into()))?;
+        let id = id_str.parse::<i64>().map_err(|_| AppError::NotFound("Recipe".into()))?;
+        self.get_recipe(id).await
     }
 
-    /// Create a recipe (no user_id — food-api recipes are managed via API key permissions)
+    /// Create a recipe (stub - not supported in FatSecret)
     pub async fn create_recipe(
         &self,
-        req: CreateRecipeRequest,
+        _req: CreateRecipeRequest,
     ) -> Result<serde_json::Value, AppError> {
-        use slug::slugify;
-        let now = Utc::now().fixed_offset();
-        let base_slug = slugify(&req.name);
-        let slug = format!("{}-{}", base_slug, &uuid::Uuid::new_v4().to_string()[..8]);
-
-        let model = recipe::ActiveModel {
-            name: Set(req.name.clone()),
-            slug: Set(slug.clone()),
-            description: Set(req.description),
-            cuisine: Set(req.cuisine),
-            category: Set(req.category),
-            difficulty: Set(req.difficulty),
-            servings: Set(req.servings.unwrap_or(2)),
-            prep_time_min: Set(req.prep_time_min),
-            cook_time_min: Set(req.cook_time_min),
-            total_time_min: Set(req.prep_time_min.zip(req.cook_time_min).map(|(p, c)| p + c)),
-            is_vegetarian: Set(req.is_vegetarian.unwrap_or(false)),
-            is_vegan: Set(req.is_vegan.unwrap_or(false)),
-            is_gluten_free: Set(req.is_gluten_free.unwrap_or(false)),
-            is_dairy_free: Set(req.is_dairy_free.unwrap_or(false)),
-            is_nut_free: Set(req.is_nut_free.unwrap_or(false)),
-            author_id: Set(None),
-            is_public: Set(req.is_public.unwrap_or(true)),
-            rating_count: Set(0),
-            created_at: Set(now),
-            updated_at: Set(now),
-            ..Default::default()
-        };
-
-        let saved = model.insert(&self.db).await?;
-
-        Ok(serde_json::json!({
-            "id": saved.id,
-            "slug": saved.slug,
-            "name": saved.name,
-            "is_public": saved.is_public,
-            "message": "Recipe created. Use POST /api/v1/recipes/:id/ingredients and /steps to add content."
-        }))
+        Err(AppError::Internal("Not supported in FatSecret catalog".into()))
     }
 
-    /// Update a recipe by ID (no ownership check — food-api uses API key permissions)
+    /// Update a recipe by ID (stub - not supported in FatSecret)
     pub async fn update_recipe(
         &self,
-        recipe_id: i64,
-        req: UpdateRecipeRequest,
+        _recipe_id: i64,
+        _req: UpdateRecipeRequest,
     ) -> Result<serde_json::Value, AppError> {
-        let existing = recipe::Entity::find_by_id(recipe_id)
-            .one(&self.db)
-            .await?
-            .ok_or(AppError::NotFound("Recipe".into()))?;
-
-        let now = Utc::now().fixed_offset();
-        let mut model: recipe::ActiveModel = existing.into();
-
-        if let Some(name) = req.name { model.name = Set(name); }
-        if let Some(desc) = req.description { model.description = Set(Some(desc)); }
-        if let Some(c) = req.cuisine { model.cuisine = Set(Some(c)); }
-        if let Some(c) = req.category { model.category = Set(Some(c)); }
-        if let Some(d) = req.difficulty { model.difficulty = Set(Some(d)); }
-        if let Some(s) = req.servings { model.servings = Set(s); }
-        if let Some(p) = req.prep_time_min { model.prep_time_min = Set(Some(p)); }
-        if let Some(c) = req.cook_time_min { model.cook_time_min = Set(Some(c)); }
-        if let Some(v) = req.is_vegetarian { model.is_vegetarian = Set(v); }
-        if let Some(v) = req.is_vegan { model.is_vegan = Set(v); }
-        if let Some(v) = req.is_gluten_free { model.is_gluten_free = Set(v); }
-        if let Some(v) = req.is_dairy_free { model.is_dairy_free = Set(v); }
-        if let Some(v) = req.is_nut_free { model.is_nut_free = Set(v); }
-        if let Some(p) = req.is_public { model.is_public = Set(p); }
-        model.updated_at = Set(now);
-
-        let saved = model.update(&self.db).await?;
-
-        Ok(serde_json::json!({
-            "id": saved.id,
-            "slug": saved.slug,
-            "name": saved.name,
-            "is_public": saved.is_public,
-        }))
+        Err(AppError::Internal("Not supported in FatSecret catalog".into()))
     }
 
-    /// Delete a recipe by ID (no ownership check — food-api uses API key permissions)
-    pub async fn delete_recipe(&self, recipe_id: i64) -> Result<(), AppError> {
-        recipe::Entity::find_by_id(recipe_id)
-            .one(&self.db)
-            .await?
-            .ok_or(AppError::NotFound("Recipe".into()))?;
-
-        recipe::Entity::delete_by_id(recipe_id)
-            .exec(&self.db)
-            .await?;
-
-        Ok(())
+    /// Delete a recipe by ID (stub - not supported in FatSecret)
+    pub async fn delete_recipe(&self, _recipe_id: i64) -> Result<(), AppError> {
+        Err(AppError::Internal("Not supported in FatSecret catalog".into()))
     }
 }

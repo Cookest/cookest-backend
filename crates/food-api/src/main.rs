@@ -22,7 +22,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
 use crate::handlers::{configure_ingredients, configure_recipes};
-use crate::services::{IngredientService, RecipeService};
+use crate::services::{IngredientService, RecipeService, FatSecretClient};
 use crate::middleware::security_headers::SecurityHeaders;
 
 #[actix_web::main]
@@ -261,8 +261,9 @@ async fn main() -> std::io::Result<()> {
     tracing::info!("All food migrations complete");
 
     // Initialize services
-    let recipe_service = Arc::new(RecipeService::new(db.clone()));
-    let ingredient_service = Arc::new(IngredientService::new(db.clone()));
+    let fatsecret_client = Arc::new(FatSecretClient::new(config.fs_client_id.clone(), config.fs_client_secret.clone()));
+    let recipe_service = Arc::new(RecipeService::new(db.clone(), fatsecret_client.clone()));
+    let ingredient_service = Arc::new(IngredientService::new(db.clone(), fatsecret_client));
 
     tracing::info!("Food API starting on {}", bind_address);
 

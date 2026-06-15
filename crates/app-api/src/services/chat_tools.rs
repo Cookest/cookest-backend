@@ -9,7 +9,8 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::entity::{ingredient, recipe, recipe_ingredient, recipe_nutrition, recipe_step};
-use crate::services::{InventoryService, MealPlanService};
+use crate::services::{InventoryService, MealPlanService, RecipeService};
+use crate::handlers::browse::FoodApiClient;
 use cookest_shared::errors::AppError;
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
@@ -146,11 +147,12 @@ pub fn tool_definitions() -> Vec<Value> {
 
 pub struct ToolDispatch {
     db: DatabaseConnection,
+    food_api_client: FoodApiClient,
 }
 
 impl ToolDispatch {
-    pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+    pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
+        Self { db, food_api_client }
     }
 
     pub async fn execute(&self, user_id: Uuid, name: &str, args: Value) -> String {
@@ -205,39 +207,52 @@ impl ToolDispatch {
         }
 
         let limit = args["limit"].as_u64().unwrap_or(5).min(8) as usize;
+        let mut results: Vec<Value> = Vec::new();
 
-        let recipes = match recipe::Entity::find()
+        // 1. Search local DB for custom/saved recipes
+        if let Ok(local_recipes) = recipe::Entity::find()
             .filter(condition)
             .order_by_asc(recipe::Column::Name)
             .all(&self.db)
             .await
         {
-            Ok(r) => r,
-            Err(e) => {
-                tracing::error!("search_recipes DB error: {}", e);
-                return json!({"error": "Failed to search recipes"}).to_string();
-            }
-        };
-
-        let results: Vec<Value> = recipes
-            .into_iter()
-            .take(limit)
-            .map(|r| {
-                json!({
+            for r in local_recipes.into_iter().take(limit) {
+                results.push(json!({
                     "id": r.id,
                     "name": r.name,
                     "cuisine": r.cuisine,
                     "total_time_min": r.total_time_min,
                     "difficulty": r.difficulty,
-                })
-            })
-            .collect();
+                }));
+            }
+        }
+
+        // 2. Search food-api (FatSecret)
+        if let Some(q) = args["query"].as_str() {
+            let path = format!("/api/v1/recipes?q={}&per_page={}", q, limit);
+            let req = self.food_api_client.get(&path);
+            if let Ok(resp) = req.send().await {
+                if let Ok(paginated) = resp.json::<crate::models::recipe::PaginatedResponse<crate::models::recipe::RecipeListItem>>().await {
+                    for r in paginated.data {
+                        if !results.iter().any(|existing| existing["id"] == r.id) {
+                            results.push(json!({
+                                "id": r.id,
+                                "name": r.name,
+                                "cuisine": r.cuisine,
+                                "total_time_min": r.total_time_min,
+                                "difficulty": r.difficulty,
+                            }));
+                        }
+                    }
+                }
+            }
+        }
 
         serde_json::to_string(&results).unwrap_or_else(|_| "[]".to_string())
     }
 
     async fn get_meal_plan(&self, user_id: Uuid) -> String {
-        let svc = MealPlanService::new(self.db.clone());
+        let svc = MealPlanService::new(self.db.clone(), self.food_api_client.clone());
         match svc.get_current_week_plan(user_id).await {
             Ok(None) => json!({
                 "status": "no_plan",
@@ -287,7 +302,7 @@ impl ToolDispatch {
         const DAY_NAMES: [&str; 7] =
             ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-        let svc = MealPlanService::new(self.db.clone());
+        let svc = MealPlanService::new(self.db.clone(), self.food_api_client.clone());
         match svc.update_slot_recipe(user_id, day_of_week, &meal_type, recipe_id).await {
             Ok(recipe_name) => json!({
                 "status": "success",
@@ -322,7 +337,7 @@ impl ToolDispatch {
             None => return json!({"status": "error", "message": "Missing meal_type"}).to_string(),
         };
 
-        let svc = MealPlanService::new(self.db.clone());
+        let svc = MealPlanService::new(self.db.clone(), self.food_api_client.clone());
         match svc.mark_slot_completed(user_id, day_of_week, &meal_type).await {
             Ok(()) => json!({"status": "success", "message": "Meal marked as completed"}).to_string(),
             Err(AppError::NotFound(ref msg)) if msg.contains("week") => json!({
@@ -435,12 +450,12 @@ impl ToolDispatch {
             None => return json!({"error": "Missing recipe_id"}).to_string(),
         };
 
-        let r = match recipe::Entity::find_by_id(recipe_id).one(&self.db).await {
-            Ok(Some(r)) => r,
-            Ok(None) => return json!({"error": "Recipe not found"}).to_string(),
+        let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
+        let r = match recipe_service.get_recipe_or_import(recipe_id).await {
+            Ok(r) => r,
             Err(e) => {
-                tracing::error!("get_recipe_details DB error: {}", e);
-                return json!({"error": "Failed to get recipe"}).to_string();
+                tracing::error!("get_recipe_details error: {}", e);
+                return json!({"error": format!("Failed to get recipe: {}", e)}).to_string();
             }
         };
 

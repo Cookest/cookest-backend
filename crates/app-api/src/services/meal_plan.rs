@@ -20,7 +20,8 @@ use crate::entity::{
     user_favorite, meal_plan, meal_plan_slot,
 };
 use cookest_shared::errors::AppError;
-use crate::services::PreferenceService;
+use crate::services::{PreferenceService, RecipeService};
+use crate::handlers::browse::FoodApiClient;
 
 /// Ideal daily nutrition targets (per person)
 const DAILY_CALORIES: f64 = 2000.0;
@@ -42,14 +43,16 @@ struct RecipeScore {
 pub struct MealPlanService {
     db: DatabaseConnection,
     preference_service: PreferenceService,
+    food_api_client: FoodApiClient,
 }
 
 impl MealPlanService {
-    pub fn new(db: DatabaseConnection) -> Self {
+    pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
         let pref_db = db.clone();
         Self {
             db,
             preference_service: PreferenceService::new(pref_db),
+            food_api_client,
         }
     }
 
@@ -395,7 +398,7 @@ impl MealPlanService {
         Ok(())
     }
 
-    pub async fn add_slot(
+    pub async fn add_recipe_to_slot(
         &self,
         user_id: Uuid,
         plan_id: i64,
@@ -404,6 +407,9 @@ impl MealPlanService {
         meal_type: String,
         servings: Option<i32>,
     ) -> Result<serde_json::Value, AppError> {
+        let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
+        let _ = recipe_service.get_recipe_or_import(recipe_id).await?;
+
         // Ensure plan belongs to user
         meal_plan::Entity::find_by_id(plan_id)
             .one(&self.db)
@@ -467,6 +473,11 @@ impl MealPlanService {
         flex_type: Option<String>,
         energy_level: Option<String>,
     ) -> Result<serde_json::Value, AppError> {
+        if let Some(r_id) = recipe_id {
+            let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
+            let _ = recipe_service.get_recipe_or_import(r_id).await?;
+        }
+
         meal_plan::Entity::find_by_id(plan_id)
             .one(&self.db)
             .await?
@@ -796,11 +807,9 @@ impl MealPlanService {
             .await?
             .ok_or_else(|| AppError::NotFound("Meal plan for this week".into()))?;
 
-        let recipe_name = recipe::Entity::find_by_id(recipe_id)
-            .one(&self.db)
-            .await?
-            .ok_or_else(|| AppError::NotFound("Recipe".into()))?
-            .name;
+        let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
+        let recipe_model = recipe_service.get_recipe_or_import(recipe_id).await?;
+        let recipe_name = recipe_model.name;
 
         let slot = meal_plan_slot::Entity::find()
             .filter(meal_plan_slot::Column::MealPlanId.eq(plan.id))

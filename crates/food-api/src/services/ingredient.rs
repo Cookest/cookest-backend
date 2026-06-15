@@ -1,25 +1,25 @@
-//! Ingredient service — search and detail with nutrients
+//! Ingredient service — queries ingredients using the FatSecret API
 
-use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
-    PaginatorTrait, Condition,
-};
+use std::sync::Arc;
+use std::str::FromStr;
+use rust_decimal::Decimal;
 
-use crate::entity::{ingredient, ingredient_nutrient, portion_size};
 use crate::errors::AppError;
 use crate::models::ingredient::*;
 use crate::models::recipe::PaginatedResponse;
+use crate::services::FatSecretClient;
 
 pub struct IngredientService {
-    db: DatabaseConnection,
+    db: sea_orm::DatabaseConnection,
+    fs_client: Arc<FatSecretClient>,
 }
 
 impl IngredientService {
-    pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+    pub fn new(db: sea_orm::DatabaseConnection, fs_client: Arc<FatSecretClient>) -> Self {
+        Self { db, fs_client }
     }
 
-    /// Search ingredients
+    /// Search ingredients via FatSecret
     pub async fn search(
         &self,
         query: IngredientQuery,
@@ -27,32 +27,30 @@ impl IngredientService {
         let page = query.page.unwrap_or(1).max(1);
         let per_page = query.per_page.unwrap_or(20).min(100);
 
-        let mut condition = Condition::all();
+        let fs_res = self.fs_client
+            .search_ingredients(query.q.as_deref(), page - 1, per_page)
+            .await
+            .map_err(|e| AppError::Internal(format!("FatSecret search ingredients error: {}", e)))?;
 
-        if let Some(ref q) = query.q {
-            let pattern = format!("%{}%", q);
-            condition = condition.add(ingredient::Column::Name.like(pattern));
+        let mut items = Vec::new();
+        let mut total = 0;
+
+        if let Some(body) = fs_res.foods {
+            if let Some(food_list) = body.food {
+                for r in food_list {
+                    let id = r.food_id.parse::<i64>().unwrap_or(0);
+                    let category = r.brand_name.clone().or(Some(r.food_type.clone()));
+                    items.push(IngredientListItem {
+                        id,
+                        name: r.food_name,
+                        category,
+                    });
+                }
+            }
+            total = body.total_results
+                .and_then(|t| t.parse::<u64>().ok())
+                .unwrap_or(items.len() as u64);
         }
-        if let Some(ref category) = query.category {
-            condition = condition.add(ingredient::Column::Category.eq(category));
-        }
-
-        let paginator = ingredient::Entity::find()
-            .filter(condition)
-            .order_by_asc(ingredient::Column::Name)
-            .paginate(&self.db, per_page);
-
-        let total = paginator.num_items().await?;
-        let items = paginator
-            .fetch_page(page - 1)
-            .await?
-            .into_iter()
-            .map(|ing| IngredientListItem {
-                id: ing.id,
-                name: ing.name,
-                category: ing.category,
-            })
-            .collect();
 
         Ok(PaginatedResponse {
             data: items,
@@ -63,45 +61,57 @@ impl IngredientService {
         })
     }
 
-    /// Get full ingredient detail with nutrients and portions
+    /// Get full ingredient detail with nutrients and portions via FatSecret
     pub async fn get_ingredient(&self, id: i64) -> Result<IngredientDetail, AppError> {
-        let ing = ingredient::Entity::find_by_id(id)
-            .one(&self.db)
-            .await?
-            .ok_or(AppError::NotFound("Ingredient".into()))?;
+        let fs_res = self.fs_client
+            .get_ingredient(id)
+            .await
+            .map_err(|e| AppError::NotFound(format!("Ingredient ID {} not found in FatSecret: {}", id, e)))?;
 
-        let nutrients = ingredient_nutrient::Entity::find()
-            .filter(ingredient_nutrient::Column::IngredientId.eq(id))
-            .one(&self.db)
-            .await?
-            .map(|n| IngredientNutrientDetail {
-                calories: n.calories,
-                protein_g: n.protein_g,
-                carbs_g: n.carbs_g,
-                fat_g: n.fat_g,
-                fiber_g: n.fiber_g,
-                sugar_g: n.sugar_g,
-                sodium_mg: n.sodium_mg,
-                saturated_fat_g: n.saturated_fat_g,
-                cholesterol_mg: n.cholesterol_mg,
-            });
+        let food = fs_res.food;
+        let food_id = food.food_id.parse::<i64>().unwrap_or(id);
+        let category = food.brand_name.clone().or(Some(food.food_type.clone()));
 
-        let portions = portion_size::Entity::find()
-            .filter(portion_size::Column::IngredientId.eq(id))
-            .all(&self.db)
-            .await?
-            .into_iter()
-            .map(|p| PortionDetail {
-                description: p.description,
-                weight_grams: p.weight_grams,
-                unit: p.unit,
-            })
-            .collect();
+        let mut nutrients = None;
+        let mut portions = Vec::new();
+
+        if let Some(servings_wrapper) = food.servings {
+            if let Some(servings_list) = servings_wrapper.serving {
+                // Map the first serving as the primary nutrition profile
+                if let Some(first_serving) = servings_list.first() {
+                    nutrients = Some(IngredientNutrientDetail {
+                        calories: first_serving.calories.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                        protein_g: first_serving.protein.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                        carbs_g: first_serving.carbohydrate.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                        fat_g: first_serving.fat.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                        fiber_g: first_serving.fiber.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                        sugar_g: first_serving.sugar.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                        sodium_mg: first_serving.sodium.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                        saturated_fat_g: first_serving.saturated_fat.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                        cholesterol_mg: first_serving.cholesterol.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                    });
+                }
+
+                // Map all servings to portions
+                for serving in servings_list {
+                    let weight_grams = serving.metric_serving_amount
+                        .as_deref()
+                        .and_then(|s| Decimal::from_str(s).ok())
+                        .unwrap_or(Decimal::from(100)); // Default fallback
+
+                    portions.push(PortionDetail {
+                        description: serving.serving_description,
+                        weight_grams,
+                        unit: serving.metric_serving_unit,
+                    });
+                }
+            }
+        }
 
         Ok(IngredientDetail {
-            id: ing.id,
-            name: ing.name,
-            category: ing.category,
+            id: food_id,
+            name: food.food_name,
+            category,
             nutrients,
             portions,
         })

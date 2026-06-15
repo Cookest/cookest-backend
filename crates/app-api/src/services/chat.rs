@@ -21,6 +21,7 @@ use crate::entity::{
     user, ingredient,
 };
 use crate::services::chat_tools::{tool_definitions, ToolDispatch};
+use crate::handlers::browse::FoodApiClient;
 use cookest_shared::errors::AppError;
 
 const MAX_TOOL_ROUNDS: usize = 6;
@@ -106,10 +107,11 @@ pub struct ChatService {
     http: Client,
     ollama_url: String,
     model: String,
+    food_api_client: FoodApiClient,
 }
 
 impl ChatService {
-    pub fn new(db: DatabaseConnection) -> Self {
+    pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
         let ollama_url = std::env::var("OLLAMA_URL")
             .unwrap_or_else(|_| "http://localhost:11434".to_string());
         let model = std::env::var("OLLAMA_MODEL")
@@ -120,6 +122,7 @@ impl ChatService {
             http: Client::new(),
             ollama_url,
             model,
+            food_api_client,
         }
     }
 
@@ -203,7 +206,7 @@ impl ChatService {
         user_msg.insert(&self.db).await?;
 
         // ── 6. Tool-calling loop ──────────────────────────────────────────────
-        let tools = ToolDispatch::new(self.db.clone());
+        let tools = ToolDispatch::new(self.db.clone(), self.food_api_client.clone());
         let mut reply = String::new();
         let mut tokens: Option<i32> = None;
         let mut actions_taken: Vec<String> = Vec::new();

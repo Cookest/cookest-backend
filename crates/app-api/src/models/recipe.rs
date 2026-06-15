@@ -31,7 +31,7 @@ pub struct RecipeQuery {
 }
 
 /// Lightweight recipe list item
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RecipeListItem {
     pub id: i64,
     pub name: String,
@@ -57,7 +57,7 @@ pub struct RecipeListItem {
 }
 
 /// Full recipe detail response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RecipeDetail {
     pub id: i64,
     pub name: String,
@@ -84,7 +84,7 @@ pub struct RecipeDetail {
     pub nutrition: Option<RecipeNutritionDetail>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RecipeIngredientDetail {
     pub id: i64,
     pub ingredient_id: i64,
@@ -96,7 +96,7 @@ pub struct RecipeIngredientDetail {
     pub display_order: i32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RecipeStepDetail {
     pub id: i64,
     pub step_number: i32,
@@ -106,7 +106,7 @@ pub struct RecipeStepDetail {
     pub tip: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RecipeImageDetail {
     pub id: i64,
     pub url: String,
@@ -116,7 +116,7 @@ pub struct RecipeImageDetail {
     pub height: Option<i32>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RecipeNutritionDetail {
     pub calories: Option<rust_decimal::Decimal>,
     pub protein_g: Option<rust_decimal::Decimal>,
@@ -133,7 +133,7 @@ pub struct RecipeNutritionDetail {
 ///
 /// `total_pages` is pre-computed server-side so clients don’t need to
 /// derive it.  `page` is 1-indexed to match query param conventions.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PaginatedResponse<T> {
     pub data: Vec<T>,
     pub total: u64,

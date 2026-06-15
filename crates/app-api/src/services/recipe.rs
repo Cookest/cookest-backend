@@ -2,7 +2,7 @@
 
 use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
-    PaginatorTrait, Condition, ActiveModelTrait, Set,
+    PaginatorTrait, Condition, ActiveModelTrait, Set, TransactionTrait,
 };
 use uuid::Uuid;
 use chrono::Utc;
@@ -11,16 +11,19 @@ use crate::entity::{
     recipe, recipe_ingredient, recipe_step, recipe_image, recipe_nutrition, ingredient,
     inventory_item,
 };
+use crate::handlers::browse::FoodApiClient;
+use crate::services::IngredientService;
 use cookest_shared::errors::AppError;
 use crate::models::recipe::*;
 
 pub struct RecipeService {
     db: DatabaseConnection,
+    food_api_client: FoodApiClient,
 }
 
 impl RecipeService {
-    pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+    pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
+        Self { db, food_api_client }
     }
 
     /// List recipes with filters and pagination
@@ -125,6 +128,11 @@ impl RecipeService {
 
     /// Get full recipe detail by ID
     pub async fn get_recipe(&self, id: i64) -> Result<RecipeDetail, AppError> {
+        let local_exists = recipe::Entity::find_by_id(id).one(&self.db).await?.is_some();
+        if !local_exists {
+            let _ = self.get_recipe_or_import(id).await?;
+        }
+
         let recipe = recipe::Entity::find_by_id(id)
             .one(&self.db)
             .await?
@@ -483,5 +491,144 @@ impl RecipeService {
             per_page,
             total_pages: (total as f64 / per_page as f64).ceil() as u64,
         })
+    }
+
+    /// Get full recipe detail by ID, caching/importing it locally from food-api if missing
+    pub async fn get_recipe_or_import(&self, recipe_id: i64) -> Result<recipe::Model, AppError> {
+        // 1. Try local lookup first
+        let existing = recipe::Entity::find_by_id(recipe_id)
+            .one(&self.db)
+            .await?;
+
+        if let Some(r) = existing {
+            return Ok(r);
+        }
+
+        // 2. Fetch from food-api
+        let path = format!("/api/v1/recipes/{}", recipe_id);
+        let req = self.food_api_client.get(&path);
+        let resp = req.send().await
+            .map_err(|e| AppError::Internal(format!("Failed to reach food-api: {}", e)))?;
+
+        let fs_recipe = resp.json::<RecipeDetail>().await
+            .map_err(|e| AppError::Internal(format!("Failed to parse recipe from food-api: {}", e)))?;
+
+        // 3. Ensure all recipe ingredients are imported/cached locally in app-db first
+        let ing_service = IngredientService::new(self.db.clone(), self.food_api_client.clone());
+        for ri in &fs_recipe.ingredients {
+            let _ = ing_service.get_ingredient(ri.ingredient_id).await?;
+        }
+
+        // 4. Save recipe, steps, nutrition, and images locally in a transaction
+        let txn_db = self.db.clone();
+        let fs_recipe_clone = fs_recipe.clone();
+        let now = Utc::now().fixed_offset();
+        txn_db.transaction::<_, (), AppError>(move |txn| {
+            Box::pin(async move {
+                if recipe::Entity::find_by_id(fs_recipe_clone.id).one(txn).await?.is_none() {
+                    let rec_model = recipe::ActiveModel {
+                        id: Set(fs_recipe_clone.id),
+                        name: Set(fs_recipe_clone.name.clone()),
+                        slug: Set(fs_recipe_clone.slug.clone()),
+                        description: Set(fs_recipe_clone.description.clone()),
+                        cuisine: Set(fs_recipe_clone.cuisine.clone()),
+                        category: Set(fs_recipe_clone.category.clone()),
+                        difficulty: Set(fs_recipe_clone.difficulty.clone()),
+                        servings: Set(fs_recipe_clone.servings),
+                        prep_time_min: Set(fs_recipe_clone.prep_time_min),
+                        cook_time_min: Set(fs_recipe_clone.cook_time_min),
+                        total_time_min: Set(fs_recipe_clone.total_time_min),
+                        is_vegetarian: Set(fs_recipe_clone.is_vegetarian),
+                        is_vegan: Set(fs_recipe_clone.is_vegan),
+                        is_gluten_free: Set(fs_recipe_clone.is_gluten_free),
+                        is_dairy_free: Set(fs_recipe_clone.is_dairy_free),
+                        is_nut_free: Set(fs_recipe_clone.is_nut_free),
+                        source_url: Set(fs_recipe_clone.source_url.clone()),
+                        average_rating: Set(fs_recipe_clone.average_rating),
+                        rating_count: Set(fs_recipe_clone.rating_count),
+                        author_id: Set(None),
+                        is_public: Set(true),
+                        created_at: Set(now),
+                        updated_at: Set(now),
+                        ..Default::default()
+                    };
+                    rec_model.insert(txn).await?;
+
+                    // Save ingredients
+                    for ri in &fs_recipe_clone.ingredients {
+                        let ri_model = recipe_ingredient::ActiveModel {
+                            recipe_id: Set(fs_recipe_clone.id),
+                            ingredient_id: Set(ri.ingredient_id),
+                            quantity: Set(ri.quantity),
+                            unit: Set(ri.unit.clone()),
+                            quantity_grams: Set(ri.quantity_grams),
+                            notes: Set(ri.notes.clone()),
+                            display_order: Set(ri.display_order),
+                            ..Default::default()
+                        };
+                        ri_model.insert(txn).await?;
+                    }
+
+                    // Save steps
+                    for step in &fs_recipe_clone.steps {
+                        let step_model = recipe_step::ActiveModel {
+                            recipe_id: Set(fs_recipe_clone.id),
+                            step_number: Set(step.step_number),
+                            instruction: Set(step.instruction.clone()),
+                            duration_min: Set(step.duration_min),
+                            image_url: Set(step.image_url.clone()),
+                            tip: Set(step.tip.clone()),
+                            ..Default::default()
+                        };
+                        step_model.insert(txn).await?;
+                    }
+
+                    // Save images
+                    for img in &fs_recipe_clone.images {
+                        let img_model = recipe_image::ActiveModel {
+                            recipe_id: Set(fs_recipe_clone.id),
+                            url: Set(img.url.clone()),
+                            image_type: Set(img.image_type.clone()),
+                            is_primary: Set(img.is_primary),
+                            width: Set(img.width),
+                            height: Set(img.height),
+                            ..Default::default()
+                        };
+                        img_model.insert(txn).await?;
+                    }
+
+                    // Save nutrition
+                    if let Some(nut) = &fs_recipe_clone.nutrition {
+                        let nut_model = recipe_nutrition::ActiveModel {
+                            recipe_id: Set(fs_recipe_clone.id),
+                            per_serving: Set(nut.per_serving),
+                            calories: Set(nut.calories),
+                            protein_g: Set(nut.protein_g),
+                            carbs_g: Set(nut.carbs_g),
+                            fat_g: Set(nut.fat_g),
+                            fiber_g: Set(nut.fiber_g),
+                            sugar_g: Set(nut.sugar_g),
+                            sodium_mg: Set(nut.sodium_mg),
+                            saturated_fat_g: Set(nut.saturated_fat_g),
+                            calculated_at: Set(now),
+                            ..Default::default()
+                        };
+                        nut_model.insert(txn).await?;
+                    }
+                }
+                Ok(())
+            })
+        }).await.map_err(|e| match e {
+            sea_orm::TransactionError::Connection(de) => AppError::from(de),
+            sea_orm::TransactionError::Transaction(ae) => ae,
+        })?;
+
+        // Reload from local DB
+        let r = recipe::Entity::find_by_id(recipe_id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::Internal("Failed to load cached recipe model".into()))?;
+
+        Ok(r)
     }
 }

@@ -7,6 +7,8 @@ pub struct Config {
     pub host: String,
     pub port: u16,
     pub cors_origin: String,
+    pub fs_client_id: String,
+    pub fs_client_secret: SecretString,
 }
 
 impl Config {
@@ -25,11 +27,18 @@ impl Config {
         let cors_origin = env::var("FOOD_CORS_ORIGIN")
             .unwrap_or_else(|_| "*".to_string());
 
+        let fs_client_id = env::var("FS_CLIENT_ID")
+            .map_err(|_| ConfigError::Missing("FS_CLIENT_ID"))?;
+        let fs_client_secret = env::var("FS_CLIENT_SECRET")
+            .map_err(|_| ConfigError::Missing("FS_CLIENT_SECRET"))?;
+
         Ok(Self {
             database_url: SecretString::from(database_url),
             host,
             port,
             cors_origin,
+            fs_client_id,
+            fs_client_secret: SecretString::from(fs_client_secret),
         })
     }
 

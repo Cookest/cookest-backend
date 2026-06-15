@@ -10,7 +10,7 @@ pub struct IngredientQuery {
 }
 
 /// Lightweight ingredient list item
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct IngredientListItem {
     pub id: i64,
     pub name: String,
@@ -18,7 +18,7 @@ pub struct IngredientListItem {
 }
 
 /// Full ingredient detail with nutrients
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct IngredientDetail {
     pub id: i64,
     pub name: String,
@@ -27,7 +27,7 @@ pub struct IngredientDetail {
     pub portions: Vec<PortionDetail>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct IngredientNutrientDetail {
     pub calories: Option<rust_decimal::Decimal>,
     pub protein_g: Option<rust_decimal::Decimal>,
@@ -40,7 +40,7 @@ pub struct IngredientNutrientDetail {
     pub cholesterol_mg: Option<rust_decimal::Decimal>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PortionDetail {
     pub description: String,
     pub weight_grams: rust_decimal::Decimal,

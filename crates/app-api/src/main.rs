@@ -580,16 +580,18 @@ async fn main() -> std::io::Result<()> {
     tracing::info!("All {} migrations complete", migrations.len());
 
     // Initialize services
+    let food_api_client = FoodApiClient::new(config.food_api_url.clone(), config.food_api_key.clone());
+
     let token_service = Arc::new(TokenService::new(&config));
     let auth_service = Arc::new(AuthService::new(db.clone(), TokenService::new(&config)));
-    let recipe_service = Arc::new(RecipeService::new(db.clone()));
-    let ingredient_service = Arc::new(IngredientService::new(db.clone()));
-    let meal_plan_service = Arc::new(MealPlanService::new(db.clone()));
+    let recipe_service = Arc::new(RecipeService::new(db.clone(), food_api_client.clone()));
+    let ingredient_service = Arc::new(IngredientService::new(db.clone(), food_api_client.clone()));
+    let meal_plan_service = Arc::new(MealPlanService::new(db.clone(), food_api_client.clone()));
     let inventory_service = Arc::new(InventoryService::new(db.clone()));
     let profile_service = Arc::new(ProfileService::new(db.clone()));
     let interaction_service = Arc::new(InteractionService::new(db.clone()));
     let preference_service = Arc::new(PreferenceService::new(db.clone()));
-    let chat_service = Arc::new(ChatService::new(db.clone()));
+    let chat_service = Arc::new(ChatService::new(db.clone(), food_api_client.clone()));
     let onboarding_service = Arc::new(OnboardingService::new(db.clone()));
     let taste_profile_service = Arc::new(TasteProfileService::new(db.clone()));
     let shopping_list_service = Arc::new(ShoppingListService::new(db.clone()));
@@ -612,7 +614,6 @@ async fn main() -> std::io::Result<()> {
     let push_token_service = Arc::new(PushTokenService::new(db.clone()));
     let scan_service = Arc::new(ScanService::new());
     let recipe_gen_service = Arc::new(RecipeGenService::new(db.clone()));
-    let food_api_client = FoodApiClient::new(config.food_api_url.clone(), config.food_api_key.clone());
     let image_gen_client = ImageGenClient::new(config.image_gen_url.clone(), config.image_gen_token.clone());
 
     // Initialize email service if Resend API key is available

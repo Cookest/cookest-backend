@@ -407,7 +407,7 @@ pub async fn add_slot(
     let plan_id = path.into_inner();
     let body = body.into_inner();
     let result = meal_svc
-        .add_slot(user_id, plan_id, body.recipe_id, body.day_of_week, body.meal_type, body.servings)
+        .add_recipe_to_slot(user_id, plan_id, body.recipe_id, body.day_of_week, body.meal_type.clone(), body.servings)
         .await?;
     Ok(HttpResponse::Created().json(result))
 }
