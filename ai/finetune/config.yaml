@@ -1,0 +1,10 @@
+# QLoRA hyperparameters tuned for an RTX 2060 (6 GB VRAM) and a small
+# nutrition instruction dataset. Bump epochs/r if you have a bigger card.
+base_model: unsloth/Qwen2.5-7B-Instruct-bnb-4bit
+max_seq_length: 1024
+lora_r: 16
+lora_alpha: 16
+batch_size: 1
+grad_accum: 8
+epochs: 2
+learning_rate: 0.0002
