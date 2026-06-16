@@ -17,9 +17,12 @@ use sea_orm::{
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::time::Duration;
+use std::collections::HashSet;
 use uuid::Uuid;
 
 use crate::entity::{
+    osm_store_poi,
     pdf_processing_job::{self, ActiveModel as JobActiveModel, Entity as PdfJob},
     store::{self, ActiveModel as StoreActiveModel, Entity as Store},
     store_promotion::{self, ActiveModel as PromotionActiveModel, Entity as StorePromotion},
@@ -126,11 +129,39 @@ impl From<store_promotion::Model> for PromotionResponse {
     }
 }
 
+/// Query params for the nearby-stores endpoint.
+#[derive(Debug, Deserialize)]
+pub struct NearbyQuery {
+    pub lat: f64,
+    pub lng: f64,
+    pub radius_km: Option<f64>,
+}
+
+/// A supermarket near the user — either a curated store or an OSM POI.
+#[derive(Debug, Serialize)]
+pub struct NearbyStore {
+    /// Curated store id (null for OSM-only results)
+    pub id: Option<Uuid>,
+    /// OpenStreetMap element id (null for curated stores)
+    pub osm_id: Option<i64>,
+    pub name: String,
+    pub brand: Option<String>,
+    pub lat: f64,
+    pub lng: f64,
+    pub distance_km: f64,
+    /// "curated" or "osm"
+    pub source: String,
+    pub logo_url: Option<String>,
+    /// True when the store has active flyer promotions
+    pub has_promotions: bool,
+}
+
 pub struct StoreService {
     db: DatabaseConnection,
     pdf_upload_dir: PathBuf,
     ollama_url: String,
     ollama_model: String,
+    overpass_url: String,
 }
 
 impl StoreService {
@@ -139,8 +170,9 @@ impl StoreService {
         pdf_upload_dir: PathBuf,
         ollama_url: String,
         ollama_model: String,
+        overpass_url: String,
     ) -> Self {
-        Self { db, pdf_upload_dir, ollama_url, ollama_model }
+        Self { db, pdf_upload_dir, ollama_url, ollama_model, overpass_url }
     }
 
     // ── Stores ──────────────────────────────────────────────────────────────
@@ -297,6 +329,13 @@ impl StoreService {
             updated_at: Set(now),
         };
         let inserted = promotion.insert(&self.db).await?;
+        // Best-effort: link this promotion to catalog ingredients via pg_trgm.
+        if let Err(e) = self
+            .match_promotion_to_ingredients(inserted.id, &inserted.product_name)
+            .await
+        {
+            tracing::warn!("promotion→ingredient match failed: {:?}", e);
+        }
         Ok(PromotionResponse::from(inserted))
     }
 
@@ -361,6 +400,251 @@ impl StoreService {
         }
         Ok(result)
     }
+
+    // ── Nearby stores (curated + OpenStreetMap) ────────────────────────────
+
+    /// Supermarkets near a point: curated stores (with flyer prices) merged
+    /// with OpenStreetMap POIs for coverage. Warms the OSM cache on a miss.
+    pub async fn nearby(
+        &self,
+        lat: f64,
+        lng: f64,
+        radius_km: f64,
+    ) -> Result<Vec<NearbyStore>, AppError> {
+        let radius_km = radius_km.clamp(0.5, 50.0);
+        let dlat = radius_km / 111.0;
+        let dlng = radius_km / (111.0 * lat.to_radians().cos().abs().max(0.01));
+        let (min_lat, max_lat) = (lat - dlat, lat + dlat);
+        let (min_lng, max_lng) = (lng - dlng, lng + dlng);
+
+        // Warm the OSM cache for this area if it's empty or stale (7-day TTL).
+        let cutoff = Utc::now().fixed_offset() - chrono::Duration::days(7);
+        let mut pois = osm_store_poi::Entity::find()
+            .filter(osm_store_poi::Column::Lat.between(min_lat, max_lat))
+            .filter(osm_store_poi::Column::Lng.between(min_lng, max_lng))
+            .all(&self.db)
+            .await?;
+        let fresh = pois.iter().map(|p| p.fetched_at).max().map(|f| f > cutoff).unwrap_or(false);
+        if !fresh {
+            if let Err(e) = self.refresh_osm_pois(lat, lng, (radius_km * 1000.0) as i64).await {
+                tracing::warn!("Overpass refresh failed (serving cached/curated): {:?}", e);
+            }
+            pois = osm_store_poi::Entity::find()
+                .filter(osm_store_poi::Column::Lat.between(min_lat, max_lat))
+                .filter(osm_store_poi::Column::Lng.between(min_lng, max_lng))
+                .all(&self.db)
+                .await?;
+        }
+
+        let curated = Store::find()
+            .filter(store::Column::Lat.between(min_lat, max_lat))
+            .filter(store::Column::Lng.between(min_lng, max_lng))
+            .all(&self.db)
+            .await?;
+        let promo_store_ids = self.stores_with_promotions().await?;
+
+        let mut result: Vec<NearbyStore> = Vec::new();
+        let mut curated_names: Vec<String> = Vec::new();
+
+        for s in curated {
+            let (slat, slng) = match (s.lat, s.lng) {
+                (Some(a), Some(b)) => (a, b),
+                _ => continue,
+            };
+            let dist = haversine_km(lat, lng, slat, slng);
+            if dist > radius_km {
+                continue;
+            }
+            curated_names.push(s.name.to_lowercase());
+            result.push(NearbyStore {
+                id: Some(s.id),
+                osm_id: None,
+                name: s.name,
+                brand: None,
+                lat: slat,
+                lng: slng,
+                distance_km: dist,
+                source: "curated".to_string(),
+                logo_url: s.logo_url,
+                has_promotions: promo_store_ids.contains(&s.id),
+            });
+        }
+
+        for p in pois {
+            let dist = haversine_km(lat, lng, p.lat, p.lng);
+            if dist > radius_km {
+                continue;
+            }
+            let pname = p.name.clone().unwrap_or_default();
+            // Skip OSM POIs that duplicate a curated store by name.
+            if !pname.is_empty() && curated_names.iter().any(|c| c == &pname.to_lowercase()) {
+                continue;
+            }
+            result.push(NearbyStore {
+                id: None,
+                osm_id: Some(p.osm_id),
+                name: if pname.is_empty() { "Supermarket".to_string() } else { pname },
+                brand: p.brand,
+                lat: p.lat,
+                lng: p.lng,
+                distance_km: dist,
+                source: "osm".to_string(),
+                logo_url: None,
+                has_promotions: false,
+            });
+        }
+
+        result.sort_by(|a, b| {
+            a.distance_km.partial_cmp(&b.distance_km).unwrap_or(std::cmp::Ordering::Equal)
+        });
+        Ok(result)
+    }
+
+    /// Fetch supermarket POIs around a point from the Overpass API and upsert
+    /// them into the cache. Best-effort; callers tolerate failure.
+    pub async fn refresh_osm_pois(&self, lat: f64, lng: f64, radius_m: i64) -> Result<(), AppError> {
+        let radius_m = radius_m.clamp(500, 50_000);
+        let query = format!(
+            "[out:json][timeout:25];(node[\"shop\"=\"supermarket\"](around:{r},{lat},{lng});way[\"shop\"=\"supermarket\"](around:{r},{lat},{lng}););out center tags;",
+            r = radius_m, lat = lat, lng = lng
+        );
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(25))
+            .build()
+            .map_err(|e| AppError::Internal(format!("http client: {}", e)))?;
+        let resp = client
+            .post(&self.overpass_url)
+            .header("Content-Type", "text/plain")
+            .body(query)
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("Overpass request failed: {}", e)))?;
+        if !resp.status().is_success() {
+            return Err(AppError::Internal(format!("Overpass status {}", resp.status())));
+        }
+        let data: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| AppError::Internal(format!("Overpass JSON: {}", e)))?;
+
+        let now = Utc::now().fixed_offset();
+        if let Some(elements) = data["elements"].as_array() {
+            for el in elements {
+                let osm_id = el["id"].as_i64().unwrap_or(0);
+                if osm_id == 0 {
+                    continue;
+                }
+                let osm_type = el["type"].as_str().unwrap_or("node").to_string();
+                let (plat, plng) = if let (Some(la), Some(lo)) = (el["lat"].as_f64(), el["lon"].as_f64()) {
+                    (la, lo)
+                } else if let (Some(la), Some(lo)) = (el["center"]["lat"].as_f64(), el["center"]["lon"].as_f64()) {
+                    (la, lo)
+                } else {
+                    continue;
+                };
+                let tags = &el["tags"];
+                let model = osm_store_poi::ActiveModel {
+                    osm_id: Set(osm_id),
+                    osm_type: Set(osm_type),
+                    name: Set(tags["name"].as_str().map(|s| s.to_string())),
+                    brand: Set(tags["brand"].as_str().map(|s| s.to_string())),
+                    lat: Set(plat),
+                    lng: Set(plng),
+                    matched_store_id: Set(None),
+                    raw_tags: Set(if tags.is_object() { Some(tags.clone()) } else { None }),
+                    fetched_at: Set(now),
+                    ..Default::default()
+                };
+                let _ = osm_store_poi::Entity::insert(model)
+                    .on_conflict(
+                        sea_orm::sea_query::OnConflict::columns([
+                            osm_store_poi::Column::OsmType,
+                            osm_store_poi::Column::OsmId,
+                        ])
+                        .update_columns([
+                            osm_store_poi::Column::Name,
+                            osm_store_poi::Column::Brand,
+                            osm_store_poi::Column::Lat,
+                            osm_store_poi::Column::Lng,
+                            osm_store_poi::Column::RawTags,
+                            osm_store_poi::Column::FetchedAt,
+                        ])
+                        .to_owned(),
+                    )
+                    .exec(&self.db)
+                    .await;
+            }
+        }
+        Ok(())
+    }
+
+    /// Set of curated store ids that currently have active promotions.
+    async fn stores_with_promotions(&self) -> Result<HashSet<Uuid>, AppError> {
+        use sea_orm::Statement;
+        let rows = self.db.query_all(Statement::from_string(
+            sea_orm::DatabaseBackend::Postgres,
+            "SELECT DISTINCT store_id FROM store_promotions WHERE is_active = TRUE AND (valid_until IS NULL OR valid_until > NOW())".to_string(),
+        )).await?;
+        let mut set = HashSet::new();
+        for row in rows {
+            if let Ok(id) = row.try_get::<Uuid>("", "store_id") {
+                set.insert(id);
+            }
+        }
+        Ok(set)
+    }
+
+    /// Active promotions for a store (public).
+    pub async fn list_store_promotions(&self, store_id: Uuid) -> Result<Vec<PromotionResponse>, AppError> {
+        let now = Utc::now().fixed_offset();
+        let promos = StorePromotion::find()
+            .filter(store_promotion::Column::StoreId.eq(store_id))
+            .filter(store_promotion::Column::IsActive.eq(true))
+            .all(&self.db)
+            .await?;
+        Ok(promos
+            .into_iter()
+            .filter(|p| p.valid_until.map(|v| v > now).unwrap_or(true))
+            .map(PromotionResponse::from)
+            .collect())
+    }
+
+    /// Link a promotion to catalog ingredients by trigram name similarity.
+    async fn match_promotion_to_ingredients(
+        &self,
+        promotion_id: Uuid,
+        product_name: &str,
+    ) -> Result<(), AppError> {
+        use sea_orm::Statement;
+        let sql = r#"
+            INSERT INTO store_promotion_ingredients (promotion_id, ingredient_id, similarity_score)
+            SELECT $1, i.id, similarity(i.name, $2)
+            FROM ingredients i
+            WHERE i.name % $2
+            ORDER BY similarity(i.name, $2) DESC
+            LIMIT 5
+            ON CONFLICT (promotion_id, ingredient_id) DO NOTHING
+        "#;
+        self.db
+            .execute(Statement::from_sql_and_values(
+                sea_orm::DatabaseBackend::Postgres,
+                sql,
+                [promotion_id.into(), product_name.to_string().into()],
+            ))
+            .await?;
+        Ok(())
+    }
+}
+
+/// Great-circle distance between two lat/lng points in kilometres.
+fn haversine_km(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
+    let r = 6371.0;
+    let dlat = (lat2 - lat1).to_radians();
+    let dlng = (lng2 - lng1).to_radians();
+    let a = (dlat / 2.0).sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * (dlng / 2.0).sin().powi(2);
+    2.0 * r * a.sqrt().asin()
 }
 
 /// Background task: process a PDF job using pdftoppm + Ollama llava

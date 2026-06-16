@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::entity::user::Entity as User;
 use cookest_shared::errors::AppError;
 use crate::middleware::auth::AuthenticatedUser;
-use crate::services::store::{CreateStoreRequest, StoreService};
+use crate::services::store::{CreateStoreRequest, NearbyQuery, StoreService};
 use crate::services::token::SubscriptionTier;
 
 /// Register all store-related routes onto `cfg`.
@@ -29,8 +29,10 @@ use crate::services::token::SubscriptionTier;
 /// - `POST /api/admin/candidates/{id}/approve`
 /// - `POST /api/admin/candidates/{id}/reject`
 pub fn configure_stores(cfg: &mut web::ServiceConfig) {
-    // Public list
+    // Public list + nearby discovery + per-store promotions
     cfg.route("/api/stores", web::get().to(list_stores));
+    cfg.route("/api/stores/nearby", web::get().to(nearby_stores));
+    cfg.route("/api/stores/{id}/promotions", web::get().to(store_promotions));
 
     // Admin routes — require is_admin from DB
     cfg.service(
@@ -44,7 +46,7 @@ pub fn configure_stores(cfg: &mut web::ServiceConfig) {
     );
 
     // Pro-gated price routes
-
+    cfg.route("/api/ingredients/{id}/prices", web::get().to(get_prices_for_ingredient));
 }
 
 /// `GET /api/stores` — list all stores.
@@ -55,6 +57,27 @@ async fn list_stores(
 ) -> Result<HttpResponse, AppError> {
     let stores = service.list_stores().await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "stores": stores })))
+}
+
+/// `GET /api/stores/nearby?lat=&lng=&radius_km=` — supermarkets near a point.
+///
+/// Merges curated stores (with flyer prices) and OpenStreetMap POIs.
+async fn nearby_stores(
+    service: web::Data<Arc<StoreService>>,
+    query: web::Query<NearbyQuery>,
+) -> Result<HttpResponse, AppError> {
+    let q = query.into_inner();
+    let stores = service.nearby(q.lat, q.lng, q.radius_km.unwrap_or(5.0)).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({ "stores": stores })))
+}
+
+/// `GET /api/stores/{id}/promotions` — active promotions for a store.
+async fn store_promotions(
+    service: web::Data<Arc<StoreService>>,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let promotions = service.list_store_promotions(path.into_inner()).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({ "promotions": promotions })))
 }
 
 /// Verify the authenticated user is an admin by checking the DB

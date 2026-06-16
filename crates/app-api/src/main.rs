@@ -671,6 +671,7 @@ async fn main() -> std::io::Result<()> {
         std::path::PathBuf::from(&config.pdf_upload_dir),
         config.ollama_url.clone(),
         config.ollama_model.clone(),
+        config.overpass_url.clone(),
     ));
 
     let push_token_service = Arc::new(PushTokenService::new(db.clone()));
