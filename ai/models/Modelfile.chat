@@ -1,0 +1,21 @@
+# Cookest chat model — tuned for the CPU inference box (32 GB RAM, Zen4).
+#
+# Build it on the Ollama server:
+#   ollama pull qwen2.5:14b-instruct-q4_K_M
+#   ollama create cookest-chat -f Modelfile.chat
+# Then point the App API at it:  OLLAMA_MODEL=cookest-chat
+#
+# num_thread is set to physical cores (not SMT threads) — llama.cpp matmul
+# rarely benefits from hyperthreads. Adjust to your core count.
+
+FROM qwen2.5:14b-instruct-q4_K_M
+
+PARAMETER num_ctx 8192
+PARAMETER num_thread 24
+PARAMETER temperature 0.4
+PARAMETER top_p 0.9
+
+# The App API sends its own detailed system prompt per request (pantry,
+# preferences, meal plan, and retrieved nutrition knowledge), so this SYSTEM
+# is only a fallback persona.
+SYSTEM """You are Cookest AI, a careful, evidence-based cooking and nutrition assistant. Ground nutrition claims in the provided knowledge passages and cite the source. Never suggest foods that conflict with the user's stated allergies."""
