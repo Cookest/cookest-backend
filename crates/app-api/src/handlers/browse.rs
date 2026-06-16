@@ -89,6 +89,14 @@ pub async fn get_browse_ingredient(
     proxy_get(&food, &format!("/api/v1/ingredients/{}", path.into_inner())).await
 }
 
+/// GET /api/browse/ingredients/barcode/{code}
+pub async fn get_browse_ingredient_by_barcode(
+    food: web::Data<FoodApiClient>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, AppError> {
+    proxy_get(&food, &format!("/api/v1/ingredients/barcode/{}", path.into_inner())).await
+}
+
 // ── Route config ────────────────────────────────────────────────────────────
 
 pub fn configure_browse(cfg: &mut web::ServiceConfig) {
@@ -97,6 +105,7 @@ pub fn configure_browse(cfg: &mut web::ServiceConfig) {
             .route("/recipes", web::get().to(list_browse_recipes))
             .route("/recipes/{id}", web::get().to(get_browse_recipe))
             .route("/ingredients", web::get().to(list_browse_ingredients))
+            .route("/ingredients/barcode/{code}", web::get().to(get_browse_ingredient_by_barcode))
             .route("/ingredients/{id}", web::get().to(get_browse_ingredient)),
     );
 }

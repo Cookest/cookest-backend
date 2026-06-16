@@ -7,12 +7,13 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use cookest_shared::errors::AppError;
-use crate::models::inventory::{AddInventoryItem, UpdateInventoryItem, QuickAddItem};
+use crate::models::inventory::{AddInventoryItem, UpdateInventoryItem, QuickAddItem, BarcodeAddItem, FoodApiIngredientDetail};
 use crate::models::profile::UpdateProfileRequest;
 use crate::models::interaction::RateRecipeRequest;
 use crate::models::meal_plan::GenerateMealPlanRequest;
 use crate::services::{InventoryService, ProfileService, InteractionService, MealPlanService, PushTokenService, PreferenceService, ScanService};
 use crate::services::scan::BulkAddItem;
+use crate::handlers::browse::FoodApiClient;
 use crate::middleware::Claims;
 use crate::handlers::onboarding::{complete_onboarding, change_password, delete_account};
 
@@ -99,6 +100,42 @@ pub async fn quick_add_item(
     let expiry = b.expiry_date.as_deref()
         .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
     let item = inv.quick_add(user_id, b.name, b.quantity, b.unit, b.storage_location, expiry).await?;
+    Ok(HttpResponse::Created().json(item))
+}
+
+/// POST /api/inventory/barcode — resolve a scanned barcode via FatSecret and add to pantry
+pub async fn add_by_barcode(
+    inv: web::Data<Arc<InventoryService>>,
+    food: web::Data<FoodApiClient>,
+    claims: web::ReqData<Claims>,
+    body: web::Json<BarcodeAddItem>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let b = body.into_inner();
+
+    // Resolve the barcode via the FatSecret-backed food-api.
+    let resp = food
+        .get(&format!("/api/v1/ingredients/barcode/{}", b.barcode))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("food-api unreachable: {}", e)))?;
+    if !resp.status().is_success() {
+        return Err(AppError::NotFound(format!("No food found for barcode {}", b.barcode)));
+    }
+    let detail: FoodApiIngredientDetail = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("food-api decode error: {}", e)))?;
+
+    let expiry = b.expiry_date.as_deref()
+        .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+
+    let item = inv
+        .add_from_fatsecret(
+            user_id, detail.id, detail.name, detail.category,
+            b.quantity, b.unit, b.storage_location, expiry,
+        )
+        .await?;
     Ok(HttpResponse::Created().json(item))
 }
 
@@ -534,6 +571,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .route("", web::post().to(add_inventory_item))
                 .route("/expiring", web::get().to(expiring_soon))
                 .route("/quick", web::post().to(quick_add_item))
+                .route("/barcode", web::post().to(add_by_barcode))
                 .route("/bulk", web::post().to(bulk_add_items))
                 .route("/suggestions", web::get().to(recipe_suggestions))
                 .route("/scan", web::post().to(scan_groceries))

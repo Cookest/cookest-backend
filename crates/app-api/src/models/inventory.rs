@@ -23,6 +23,24 @@ pub struct QuickAddItem {
     pub expiry_date: Option<String>,
 }
 
+/// Barcode-add: resolve a scanned barcode via FatSecret, then add to pantry
+#[derive(Debug, Deserialize)]
+pub struct BarcodeAddItem {
+    pub barcode: String,
+    pub quantity: f64,
+    pub unit: String,
+    pub storage_location: Option<String>,
+    pub expiry_date: Option<String>,
+}
+
+/// Subset of the food-api ingredient detail parsed when resolving a barcode
+#[derive(Debug, Deserialize)]
+pub struct FoodApiIngredientDetail {
+    pub id: i64,
+    pub name: String,
+    pub category: Option<String>,
+}
+
 /// Request to update an existing inventory item
 #[derive(Debug, Deserialize)]
 pub struct UpdateInventoryItem {

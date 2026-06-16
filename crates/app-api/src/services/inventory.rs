@@ -118,6 +118,72 @@ impl InventoryService {
         })
     }
 
+    /// Resolve-or-create an app-db ingredient from a FatSecret food id, then add to inventory.
+    /// Backs the barcode add-to-pantry flow so inventory references a stable local ingredient.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn add_from_fatsecret(
+        &self,
+        user_id: Uuid,
+        fs_food_id: i64,
+        name: String,
+        category: Option<String>,
+        quantity: f64,
+        unit: String,
+        storage_location: Option<String>,
+        expiry_date: Option<chrono::NaiveDate>,
+    ) -> Result<InventoryItemResponse, AppError> {
+        // 1. Find by FatSecret id, else by exact name (backfilling fs_food_id), else create.
+        let by_fs = ingredient::Entity::find()
+            .filter(ingredient::Column::FsFoodId.eq(fs_food_id))
+            .one(&self.db)
+            .await?;
+
+        let ing = match by_fs {
+            Some(i) => i,
+            None => {
+                let by_name = ingredient::Entity::find()
+                    .filter(ingredient::Column::Name.eq(name.trim()))
+                    .one(&self.db)
+                    .await?;
+                match by_name {
+                    Some(i) => {
+                        let mut active: ingredient::ActiveModel = i.into();
+                        active.fs_food_id = Set(Some(fs_food_id));
+                        active.update(&self.db).await?
+                    }
+                    None => {
+                        let now = Utc::now().fixed_offset();
+                        let new_ing = ingredient::ActiveModel {
+                            name: Set(name.trim().to_string()),
+                            category: Set(category),
+                            fdc_id: Set(None),
+                            off_id: Set(None),
+                            fs_food_id: Set(Some(fs_food_id)),
+                            created_at: Set(now),
+                            ..Default::default()
+                        };
+                        new_ing.insert(&self.db).await?
+                    }
+                }
+            }
+        };
+
+        // 2. Add the inventory item referencing the resolved ingredient.
+        let dec_qty = Decimal::from_str(&quantity.to_string()).unwrap_or(Decimal::ONE);
+        self.add(
+            user_id,
+            AddInventoryItem {
+                ingredient_id: ing.id,
+                custom_name: None,
+                quantity: dec_qty,
+                unit,
+                expiry_date,
+                storage_location,
+            },
+        )
+        .await
+    }
+
     /// Update an existing inventory item (quantity, expiry, etc.)
     pub async fn update(
         &self,
