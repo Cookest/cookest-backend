@@ -102,12 +102,15 @@ pub struct MessageItem {
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
+use crate::services::embeddings::EmbeddingService;
+
 pub struct ChatService {
     db: DatabaseConnection,
     http: Client,
     ollama_url: String,
     model: String,
     food_api_client: FoodApiClient,
+    embeddings: EmbeddingService,
 }
 
 impl ChatService {
@@ -116,8 +119,11 @@ impl ChatService {
             .unwrap_or_else(|_| "http://localhost:11434".to_string());
         let model = std::env::var("OLLAMA_MODEL")
             .unwrap_or_else(|_| "llama3.2".to_string());
+        let embed_model = std::env::var("OLLAMA_EMBED_MODEL")
+            .unwrap_or_else(|_| "nomic-embed-text".to_string());
 
         Self {
+            embeddings: EmbeddingService::new(db.clone(), ollama_url.clone(), embed_model),
             db,
             http: Client::new(),
             ollama_url,
@@ -160,7 +166,22 @@ impl ChatService {
         };
 
         // ── 2. Build system prompt from user context ──────────────────────────
-        let system_prompt = self.build_system_prompt(user_id, session.current_recipe_id).await?;
+        let mut system_prompt = self.build_system_prompt(user_id, session.current_recipe_id).await?;
+
+        // Ground the assistant in nutrition knowledge (RAG) based on the query.
+        let top_k: u64 = std::env::var("RAG_TOP_K")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(5);
+        let knowledge = self.embeddings.search(&req.message, top_k).await;
+        if !knowledge.is_empty() {
+            system_prompt.push_str("\n\n## NUTRITION KNOWLEDGE (cite when relevant)\n");
+            system_prompt.push_str("Use these passages from nutrition references to inform your advice; cite the source in parentheses when you rely on a fact.\n");
+            for k in &knowledge {
+                let src = k.title.clone().unwrap_or_else(|| k.source.clone());
+                system_prompt.push_str(&format!("\n[{}] {}\n", src, k.content.trim()));
+            }
+        }
 
         // ── 3. Load message history for this session ──────────────────────────
         let history = chat_message::Entity::find()
