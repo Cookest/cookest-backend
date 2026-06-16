@@ -46,6 +46,11 @@ pub mod store_promotion_candidate;
 pub mod pdf_processing_job;
 pub mod osm_store_poi;
 
+// Households (family groups)
+pub mod household;
+pub mod household_member;
+pub mod household_invite;
+
 // Nutrition knowledge base (RAG)
 pub mod knowledge_chunk;
 

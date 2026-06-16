@@ -13,6 +13,7 @@ pub mod image_gen;
 pub mod recipe_gen;
 pub mod nutrition;
 pub mod taste_profile;
+pub mod household;
 
 pub use auth::configure as configure_auth;
 pub use recipe::configure as configure_recipes;
@@ -32,3 +33,4 @@ pub use image_gen::ImageGenClient;
 pub use recipe_gen::configure_recipe_gen;
 pub use nutrition::configure_nutrition;
 pub use taste_profile::configure_taste_profile;
+pub use household::configure_households;

@@ -33,6 +33,7 @@ use crate::handlers::{
     configure_recipe_gen,
     configure_nutrition,
     configure_taste_profile,
+    configure_households,
 };
 use crate::middleware::{JwtAuth, SecurityHeaders};
 use crate::services::{
@@ -42,6 +43,7 @@ use crate::services::{
     MealPlanService, InventoryService, ProfileService, InteractionService, ChatService,
     OnboardingService, ShoppingListService, SubscriptionService, StoreService, PushTokenService,
     PreferenceService, EmailService, ScanService,
+    HouseholdService,
 };
 use crate::services::taste_profile::TasteProfileService;
 
@@ -655,6 +657,32 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_embedding
             ON knowledge_chunks USING hnsw (embedding vector_cosine_ops);
         "#,
+
+        // ── Households (family groups) ────────────────────────────────────────
+        r#"
+        CREATE TABLE IF NOT EXISTS households (
+            id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            owner_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name        TEXT NOT NULL,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS household_members (
+            id            BIGSERIAL PRIMARY KEY,
+            household_id  UUID NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+            user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            role          TEXT NOT NULL DEFAULT 'member',
+            joined_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(household_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_household_members_user ON household_members(user_id);
+        CREATE TABLE IF NOT EXISTS household_invites (
+            id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            household_id  UUID NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+            token         TEXT NOT NULL UNIQUE,
+            expires_at    TIMESTAMPTZ,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        "#,
     ];
 
     for sql in migrations {
@@ -711,6 +739,7 @@ async fn main() -> std::io::Result<()> {
     let scan_service = Arc::new(ScanService::new());
     let recipe_gen_service = Arc::new(RecipeGenService::new(db.clone()));
     let nutrition_service = Arc::new(NutritionService::new(db.clone()));
+    let household_service = Arc::new(HouseholdService::new(db.clone()));
     let image_gen_client = ImageGenClient::new(config.image_gen_url.clone(), config.image_gen_token.clone());
 
     // Initialize email service if Resend API key is available
@@ -783,6 +812,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(scan_service.clone()))
             .app_data(web::Data::new(recipe_gen_service.clone()))
             .app_data(web::Data::new(nutrition_service.clone()))
+            .app_data(web::Data::new(household_service.clone()))
             .app_data(web::Data::new(food_api_client.clone()))
             .app_data(web::Data::new(image_gen_client.clone()))
             .app_data(web::Data::new(db.clone()))
@@ -817,6 +847,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(configure_image_gen)
                     .configure(configure_recipe_gen)
                     .configure(configure_nutrition)
+                    .configure(configure_households)
             )
     })
     .bind(&bind_address)?
