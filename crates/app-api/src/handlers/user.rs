@@ -7,7 +7,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use cookest_shared::errors::AppError;
-use crate::models::inventory::{AddInventoryItem, UpdateInventoryItem, QuickAddItem, BarcodeAddItem, FoodApiIngredientDetail};
+use crate::models::inventory::{AddInventoryItem, UpdateInventoryItem, QuickAddItem, BarcodeAddItem, FoodApiIngredientDetail, ConsumeRequest};
 use crate::models::profile::UpdateProfileRequest;
 use crate::models::interaction::RateRecipeRequest;
 use crate::models::meal_plan::GenerateMealPlanRequest;
@@ -158,6 +158,39 @@ pub async fn recipe_suggestions(
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
     let suggestions = inv.recipe_suggestions(user_id, 0.3, 10).await?;
     Ok(HttpResponse::Ok().json(suggestions))
+}
+
+/// POST /api/inventory/{id}/consume — manually use up part of a pantry item
+pub async fn consume_inventory_item(
+    inv: web::Data<Arc<InventoryService>>,
+    claims: web::ReqData<Claims>,
+    path: web::Path<i64>,
+    body: web::Json<ConsumeRequest>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let res = inv.consume(user_id, path.into_inner(), body.into_inner().quantity).await?;
+    Ok(HttpResponse::Ok().json(res))
+}
+
+/// GET /api/inventory/deductions — recent pantry deduction history
+pub async fn list_deductions(
+    inv: web::Data<Arc<InventoryService>>,
+    claims: web::ReqData<Claims>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let rows = inv.get_deductions(user_id, 100).await?;
+    Ok(HttpResponse::Ok().json(rows))
+}
+
+/// POST /api/cooking-history/{id}/undo — undo a cook and restore inventory
+pub async fn undo_cook(
+    interaction: web::Data<Arc<InteractionService>>,
+    claims: web::ReqData<Claims>,
+    path: web::Path<i64>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let res = interaction.undo_cook(user_id, path.into_inner()).await?;
+    Ok(HttpResponse::Ok().json(res))
 }
 
 /// POST /api/inventory/scan — upload an image, detect groceries with AI
@@ -575,8 +608,15 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .route("/bulk", web::post().to(bulk_add_items))
                 .route("/suggestions", web::get().to(recipe_suggestions))
                 .route("/scan", web::post().to(scan_groceries))
+                .route("/deductions", web::get().to(list_deductions))
+                .route("/{id}/consume", web::post().to(consume_inventory_item))
                 .route("/{id}", web::put().to(update_inventory_item))
                 .route("/{id}", web::delete().to(delete_inventory_item)),
+        )
+        // Cooking history — undo a cook and restore inventory
+        .service(
+            web::scope("/api/cooking-history")
+                .route("/{id}/undo", web::post().to(undo_cook)),
         )
         // Profile + history + favourites + push tokens + preferences
         .service(
