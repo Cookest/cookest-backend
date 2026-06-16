@@ -69,6 +69,10 @@ pub struct Claims {
     /// Whether the user is an admin — ONLY present in access tokens
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_admin: Option<bool>,
+    /// Whether the user has finished onboarding — ONLY present in access tokens.
+    /// Used by the client to gate the onboarding flow without an extra round-trip.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub onboarding_completed: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -112,6 +116,7 @@ impl TokenService {
         email: &str,
         tier: SubscriptionTier,
         is_admin: bool,
+        onboarding_completed: bool,
     ) -> Result<String, AppError> {
         let now = Utc::now();
         let exp = now + Duration::seconds(self.access_expiry_seconds);
@@ -125,6 +130,7 @@ impl TokenService {
             jti: generate_jti(),
             tier: Some(tier),
             is_admin: Some(is_admin),
+            onboarding_completed: Some(onboarding_completed),
         };
 
         encode(&Header::default(), &claims, &self.encoding_key)
@@ -145,6 +151,7 @@ impl TokenService {
             jti: generate_jti(),
             tier: None,
             is_admin: None,
+            onboarding_completed: None,
         };
 
         encode(&Header::default(), &claims, &self.encoding_key)

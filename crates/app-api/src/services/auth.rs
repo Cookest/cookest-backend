@@ -143,7 +143,7 @@ impl AuthService {
         let is_admin = user.is_admin;
 
         // Generate tokens — tier embedded in access token only
-        let access_token = self.token_service.generate_access_token(user.id, &user.email, tier, is_admin)?;
+        let access_token = self.token_service.generate_access_token(user.id, &user.email, tier, is_admin, user.onboarding_completed)?;
         let refresh_token = self.token_service.generate_refresh_token(user.id, &user.email)?;
 
         // Hash and store refresh token for rotation tracking (SHA-256)
@@ -201,7 +201,7 @@ impl AuthService {
         let is_admin = user.is_admin;
 
         // Generate new token pair (token rotation)
-        let new_access_token = self.token_service.generate_access_token(user.id, &user.email, tier, is_admin)?;
+        let new_access_token = self.token_service.generate_access_token(user.id, &user.email, tier, is_admin, user.onboarding_completed)?;
         let new_refresh_token = self.token_service.generate_refresh_token(user.id, &user.email)?;
 
         // Store new refresh token hash
