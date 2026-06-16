@@ -51,6 +51,11 @@ pub mod household;
 pub mod household_member;
 pub mod household_invite;
 
+// Meal polls (shareable voting, incl. non-app users)
+pub mod meal_poll;
+pub mod meal_poll_option;
+pub mod meal_poll_vote;
+
 // Nutrition knowledge base (RAG)
 pub mod knowledge_chunk;
 

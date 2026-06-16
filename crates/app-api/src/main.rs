@@ -34,6 +34,7 @@ use crate::handlers::{
     configure_nutrition,
     configure_taste_profile,
     configure_households,
+    configure_polls_public, configure_polls_protected,
 };
 use crate::middleware::{JwtAuth, SecurityHeaders};
 use crate::services::{
@@ -43,7 +44,7 @@ use crate::services::{
     MealPlanService, InventoryService, ProfileService, InteractionService, ChatService,
     OnboardingService, ShoppingListService, SubscriptionService, StoreService, PushTokenService,
     PreferenceService, EmailService, ScanService,
-    HouseholdService,
+    HouseholdService, MealPollService,
 };
 use crate::services::taste_profile::TasteProfileService;
 
@@ -683,6 +684,38 @@ async fn main() -> std::io::Result<()> {
             created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         "#,
+
+        // ── Meal polls (vote on what to cook — incl. non-app users) ───────────
+        r#"
+        CREATE TABLE IF NOT EXISTS meal_polls (
+            id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            owner_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            slot_id     BIGINT REFERENCES meal_plan_slots(id) ON DELETE SET NULL,
+            token       TEXT NOT NULL UNIQUE,
+            title       TEXT NOT NULL,
+            status      TEXT NOT NULL DEFAULT 'open',
+            closes_at   TIMESTAMPTZ,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS meal_poll_options (
+            id          BIGSERIAL PRIMARY KEY,
+            poll_id     UUID NOT NULL REFERENCES meal_polls(id) ON DELETE CASCADE,
+            recipe_id   BIGINT REFERENCES recipes(id) ON DELETE SET NULL,
+            label       TEXT NOT NULL,
+            image_url   TEXT
+        );
+        CREATE TABLE IF NOT EXISTS meal_poll_votes (
+            id          BIGSERIAL PRIMARY KEY,
+            poll_id     UUID NOT NULL REFERENCES meal_polls(id) ON DELETE CASCADE,
+            option_id   BIGINT NOT NULL REFERENCES meal_poll_options(id) ON DELETE CASCADE,
+            voter_key   TEXT NOT NULL,
+            voter_name  TEXT,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(poll_id, voter_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_meal_poll_options_poll ON meal_poll_options(poll_id);
+        CREATE INDEX IF NOT EXISTS idx_meal_poll_votes_poll   ON meal_poll_votes(poll_id);
+        "#,
     ];
 
     for sql in migrations {
@@ -740,6 +773,7 @@ async fn main() -> std::io::Result<()> {
     let recipe_gen_service = Arc::new(RecipeGenService::new(db.clone()));
     let nutrition_service = Arc::new(NutritionService::new(db.clone()));
     let household_service = Arc::new(HouseholdService::new(db.clone()));
+    let meal_poll_service = Arc::new(MealPollService::new(db.clone()));
     let image_gen_client = ImageGenClient::new(config.image_gen_url.clone(), config.image_gen_token.clone());
 
     // Initialize email service if Resend API key is available
@@ -813,6 +847,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(recipe_gen_service.clone()))
             .app_data(web::Data::new(nutrition_service.clone()))
             .app_data(web::Data::new(household_service.clone()))
+            .app_data(web::Data::new(meal_poll_service.clone()))
             .app_data(web::Data::new(food_api_client.clone()))
             .app_data(web::Data::new(image_gen_client.clone()))
             .app_data(web::Data::new(db.clone()))
@@ -821,6 +856,7 @@ async fn main() -> std::io::Result<()> {
             .configure(configure_recipes)     // /api/recipes/* (read-only browsing)
             .configure(configure_ingredients) // /api/ingredients/* (search)
             .configure(configure_subscription) // /api/webhooks/stripe (raw body, no JWT)
+            .configure(configure_polls_public) // /api/polls/* (public voting, no JWT)
             // Health check (public, no auth)
             .service(
                 web::resource("/health")
@@ -848,6 +884,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(configure_recipe_gen)
                     .configure(configure_nutrition)
                     .configure(configure_households)
+                    .configure(configure_polls_protected)
             )
     })
     .bind(&bind_address)?
