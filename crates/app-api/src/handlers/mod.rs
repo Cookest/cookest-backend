@@ -11,6 +11,7 @@ pub mod store;
 pub mod browse;
 pub mod image_gen;
 pub mod recipe_gen;
+pub mod nutrition;
 pub mod taste_profile;
 
 pub use auth::configure as configure_auth;
@@ -29,4 +30,5 @@ pub use browse::FoodApiClient;
 pub use image_gen::configure_image_gen;
 pub use image_gen::ImageGenClient;
 pub use recipe_gen::configure_recipe_gen;
+pub use nutrition::configure_nutrition;
 pub use taste_profile::configure_taste_profile;
