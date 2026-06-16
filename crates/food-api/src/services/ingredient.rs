@@ -116,4 +116,14 @@ impl IngredientService {
             portions,
         })
     }
+
+    /// Resolve a barcode to a food id via FatSecret, then return full detail.
+    pub async fn get_by_barcode(&self, barcode: &str) -> Result<IngredientDetail, AppError> {
+        let food_id = self.fs_client
+            .find_food_id_by_barcode(barcode)
+            .await
+            .map_err(|e| AppError::Internal(format!("FatSecret barcode lookup error: {}", e)))?
+            .ok_or_else(|| AppError::NotFound(format!("No food found for barcode {}", barcode)))?;
+        self.get_ingredient(food_id).await
+    }
 }

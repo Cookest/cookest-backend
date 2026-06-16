@@ -30,11 +30,22 @@ pub async fn get_ingredient(
     Ok(HttpResponse::Ok().json(ingredient))
 }
 
+/// GET /api/v1/ingredients/barcode/:code
+pub async fn get_ingredient_by_barcode(
+    ingredient_service: web::Data<Arc<IngredientService>>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, AppError> {
+    let code = path.into_inner();
+    let ingredient = ingredient_service.get_by_barcode(&code).await?;
+    Ok(HttpResponse::Ok().json(ingredient))
+}
+
 /// Configure ingredient routes
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api/v1/ingredients")
             .route("", web::get().to(search_ingredients))
+            .route("/barcode/{code}", web::get().to(get_ingredient_by_barcode))
             .route("/{id}", web::get().to(get_ingredient)),
     );
 }

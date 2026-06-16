@@ -138,6 +138,25 @@ impl FatSecretClient {
             .json()
             .await
     }
+
+    /// Resolve a product barcode (GTIN-13) to a FatSecret food id.
+    /// Returns `None` when FatSecret reports no match (value "0").
+    pub async fn find_food_id_by_barcode(&self, barcode: &str) -> Result<Option<i64>, reqwest::Error> {
+        let token = self.get_token().await?;
+        let wrapper: FSBarcodeWrapper = self.client.get("https://platform.fatsecret.com/rest/server.api")
+            .bearer_auth(token)
+            .query(&[
+                ("method", "food.find_id_for_barcode"),
+                ("format", "json"),
+                ("barcode", barcode),
+            ])
+            .send()
+            .await?
+            .json()
+            .await?;
+        let id = wrapper.food_id.value.parse::<i64>().unwrap_or(0);
+        Ok(if id > 0 { Some(id) } else { None })
+    }
 }
 
 // ── Helper for inconsistent array representation in FatSecret JSON ──────────
@@ -284,6 +303,16 @@ pub struct FSFoodListItem {
 #[derive(Debug, Deserialize)]
 pub struct FSFoodDetailWrapper {
     pub food: FSFoodDetail,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FSBarcodeWrapper {
+    pub food_id: FSBarcodeId,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FSBarcodeId {
+    pub value: String,
 }
 
 #[derive(Debug, Deserialize)]
