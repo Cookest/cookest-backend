@@ -571,6 +571,37 @@ async fn main() -> std::io::Result<()> {
             ON ingredients(fs_food_id) WHERE fs_food_id IS NOT NULL;
         "#,
 
+        // ── Ingredient base price (for budget-aware meal planning) ────────────
+        // Seeded by the ETL pipeline (USDA/OFF + category defaults); used by
+        // PricingService as the base price, overridden by active store promotions.
+        r#"ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS base_price_per_kg NUMERIC(10,2);"#,
+
+        // Seed a sensible base price by category for any ingredient that has none
+        // yet (idempotent — only fills NULLs; the ETL can refine these later).
+        r#"
+        UPDATE ingredients SET base_price_per_kg = CASE lower(category)
+            WHEN 'protein'   THEN 9.00
+            WHEN 'meat'      THEN 9.00
+            WHEN 'fish'      THEN 14.00
+            WHEN 'seafood'   THEN 14.00
+            WHEN 'dairy'     THEN 4.00
+            WHEN 'vegetable' THEN 2.50
+            WHEN 'fruit'     THEN 3.00
+            WHEN 'grain'     THEN 2.00
+            WHEN 'cereal'    THEN 2.00
+            WHEN 'legume'    THEN 3.00
+            WHEN 'legumes'   THEN 3.00
+            WHEN 'fat'       THEN 6.00
+            WHEN 'oil'       THEN 6.00
+            WHEN 'spice'     THEN 30.00
+            WHEN 'herb'      THEN 30.00
+            WHEN 'condiment' THEN 7.00
+            WHEN 'sauce'     THEN 7.00
+            ELSE 5.00
+        END
+        WHERE base_price_per_kg IS NULL;
+        "#,
+
         // ── Inventory deduction audit (cook/consume, enables undo) ────────────
         r#"
         CREATE TABLE IF NOT EXISTS inventory_deductions (

@@ -253,31 +253,16 @@ impl ToolDispatch {
 
     async fn get_meal_plan(&self, user_id: Uuid) -> String {
         let svc = MealPlanService::new(self.db.clone(), self.food_api_client.clone());
-        match svc.get_current_week_plan(user_id).await {
+        // Use the JSON view: it carries per-slot and weekly estimated_cost plus the
+        // user's weekly_budget and a within_budget flag, so the assistant can
+        // reason about the cost of the plan and keep suggestions within budget.
+        match svc.get_current_plan(user_id).await {
             Ok(None) => json!({
                 "status": "no_plan",
                 "message": "No meal plan for this week. The user can generate one."
             })
             .to_string(),
-            Ok(Some(plan)) => {
-                const DAY_NAMES: [&str; 7] =
-                    ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-                let slots: Vec<Value> = plan
-                    .slots
-                    .iter()
-                    .map(|s| {
-                        json!({
-                            "day": DAY_NAMES[s.day_of_week as usize % 7],
-                            "day_of_week": s.day_of_week,
-                            "meal_type": s.meal_type,
-                            "recipe_id": s.recipe_id,
-                            "recipe_name": s.recipe_name,
-                            "is_completed": s.is_completed,
-                        })
-                    })
-                    .collect();
-                serde_json::to_string(&slots).unwrap_or_else(|_| "[]".to_string())
-            }
+            Ok(Some(plan)) => plan.to_string(),
             Err(e) => {
                 tracing::error!("get_meal_plan tool error: {}", e);
                 json!({"error": "Failed to get meal plan"}).to_string()

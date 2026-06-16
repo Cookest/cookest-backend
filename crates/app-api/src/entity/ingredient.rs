@@ -27,6 +27,12 @@ pub struct Model {
     /// FatSecret food id — set when this ingredient was resolved/cached from FatSecret
     pub fs_food_id: Option<i64>,
 
+    /// Estimated base retail price per kilogram (user's currency). Seeded by the
+    /// ETL pipeline; used by `PricingService` for budget-aware meal planning and
+    /// overridden by active store promotions when available.
+    #[sea_orm(column_type = "Decimal(Some((10, 2)))", nullable)]
+    pub base_price_per_kg: Option<Decimal>,
+
     pub created_at: DateTimeWithTimeZone,
 }
 

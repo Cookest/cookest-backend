@@ -511,6 +511,15 @@ impl ChatService {
                 }
             }
             ctx.push_str(&format!("Household size: {} people.\n", user.household_size));
+            if let Some(budget) = user.weekly_budget.and_then(|b| f64::try_from(b).ok()) {
+                if budget > 0.0 {
+                    ctx.push_str(&format!(
+                        "Weekly grocery budget: {:.2}. Keep meal suggestions and plans within this budget — \
+                         aim slightly under it. Use the estimated_cost/weekly_budget fields from get_meal_plan to stay on track.\n",
+                        budget
+                    ));
+                }
+            }
         }
 
         // Current inventory

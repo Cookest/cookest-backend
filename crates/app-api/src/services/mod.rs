@@ -21,6 +21,7 @@ pub mod scan;
 pub mod recipe_gen;
 pub mod nutrition;
 pub mod taste_profile;
+pub mod pricing;
 
 pub use auth::AuthService;
 pub use token::TokenService;
@@ -42,3 +43,4 @@ pub use email::EmailService;
 pub use scan::ScanService;
 pub use recipe_gen::RecipeGenService;
 pub use nutrition::NutritionService;
+pub use pricing::PricingService;

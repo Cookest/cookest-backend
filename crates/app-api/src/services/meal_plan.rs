@@ -17,10 +17,10 @@ use uuid::Uuid;
 
 use crate::entity::{
     recipe, recipe_ingredient, recipe_nutrition, inventory_item, cooking_history,
-    user_favorite, meal_plan, meal_plan_slot,
+    user_favorite, meal_plan, meal_plan_slot, user,
 };
 use cookest_shared::errors::AppError;
-use crate::services::{PreferenceService, RecipeService};
+use crate::services::{PreferenceService, RecipeService, PricingService};
 use crate::handlers::browse::FoodApiClient;
 
 /// Ideal daily nutrition targets (per person)
@@ -38,20 +38,23 @@ struct RecipeScore {
     cuisine: Option<String>,
     category: Option<String>,
     total_time_min: Option<i32>,
+    /// Estimated cost to cook one serving of this recipe (user currency).
+    cost_per_serving: f64,
 }
 
 pub struct MealPlanService {
     db: DatabaseConnection,
     preference_service: PreferenceService,
+    pricing_service: PricingService,
     food_api_client: FoodApiClient,
 }
 
 impl MealPlanService {
     pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
-        let pref_db = db.clone();
         Self {
+            preference_service: PreferenceService::new(db.clone()),
+            pricing_service: PricingService::new(db.clone()),
             db,
-            preference_service: PreferenceService::new(pref_db),
             food_api_client,
         }
     }
@@ -119,12 +122,26 @@ impl MealPlanService {
         }
 
         let nutrition_by_recipe: HashMap<i64, _> = recipe_nutrition::Entity::find()
-            .filter(recipe_nutrition::Column::RecipeId.is_in(all_recipe_ids))
+            .filter(recipe_nutrition::Column::RecipeId.is_in(all_recipe_ids.clone()))
             .all(&self.db)
             .await?
             .into_iter()
             .map(|n| (n.recipe_id, n))
             .collect();
+
+        // Estimated cost per recipe (for the recipe's own serving count).
+        let cost_by_recipe = self
+            .pricing_service
+            .estimate_recipe_costs(&all_recipe_ids)
+            .await?;
+
+        // The user's weekly grocery budget (None = no budget constraint).
+        let weekly_budget: Option<f64> = user::Entity::find_by_id(user_id)
+            .one(&self.db)
+            .await?
+            .and_then(|u| u.weekly_budget)
+            .and_then(|b| f64::try_from(b).ok())
+            .filter(|b| *b > 0.0);
 
         // ── 2. Score every recipe ─────────────────────────────────────────────
 
@@ -191,12 +208,16 @@ impl MealPlanService {
                 + (nutrition_balance * 0.12)
                 + (variety_bonus * 0.08);
 
+            let recipe_cost = cost_by_recipe.get(&recipe.id).copied().unwrap_or(0.0);
+            let cost_per_serving = recipe_cost / recipe.servings.max(1) as f64;
+
             scored.push(RecipeScore {
                 recipe_id: recipe.id,
                 total_score,
                 cuisine: recipe.cuisine.clone(),
                 category: recipe.category.clone(),
                 total_time_min: recipe.total_time_min,
+                cost_per_serving,
             });
         }
 
@@ -219,19 +240,62 @@ impl MealPlanService {
             ("snack",     |cat, mt| Self::fits_meal_type_static(cat, mt)),
         ];
 
+        // Budget bookkeeping. We aim to land a little *under* the weekly budget,
+        // so target ~95% of it; never knowingly exceed the hard budget.
+        let portions = household_size.max(1) as f64;
+        let target_budget = weekly_budget.map(|b| b * 0.95);
+        let mut running_cost = 0.0_f64;
+
         for day in 0u8..7 {
             for (meal_type, fits) in meal_slots {
                 // Avoid same cuisine for lunch and dinner on same day
                 let avoid_cuisine = used_cuisines_today.get(&day).cloned();
 
-                if let Some(recipe) = scored.iter().find(|r| {
+                let eligible = |r: &&RecipeScore| -> bool {
                     !used_recipe_ids.contains(&r.recipe_id)
                         && fits(&r.category, meal_type)
                         && !(meal_type == &"dinner"
                             && avoid_cuisine.as_ref() == r.cuisine.as_ref())
-                }) {
+                };
+
+                // `scored` is sorted by descending preference, so the first match
+                // in each pass is the best-scored recipe satisfying the predicate.
+                let slot_cost = |r: &RecipeScore| r.cost_per_serving * portions;
+
+                let chosen = match weekly_budget {
+                    None => scored.iter().find(eligible),
+                    Some(budget) => {
+                        // 1. Best-scored that keeps us under the soft target.
+                        scored
+                            .iter()
+                            .find(|r| {
+                                eligible(r)
+                                    && running_cost + slot_cost(r)
+                                        <= target_budget.unwrap_or(budget)
+                            })
+                            // 2. Best-scored that still fits the hard budget.
+                            .or_else(|| {
+                                scored.iter().find(|r| {
+                                    eligible(r) && running_cost + slot_cost(r) <= budget
+                                })
+                            })
+                            // 3. Budget exhausted — pick the cheapest eligible
+                            //    recipe to minimise the overspend.
+                            .or_else(|| {
+                                scored
+                                    .iter()
+                                    .filter(eligible)
+                                    .min_by(|a, b| {
+                                        slot_cost(a).total_cmp(&slot_cost(b))
+                                    })
+                            })
+                    }
+                };
+
+                if let Some(recipe) = chosen {
                     selected.push((recipe.recipe_id, day, meal_type));
                     used_recipe_ids.insert(recipe.recipe_id);
+                    running_cost += slot_cost(recipe);
                     if meal_type == &"lunch" {
                         if let Some(cuisine) = &recipe.cuisine {
                             used_cuisines_today.insert(day, cuisine.clone());
@@ -872,15 +936,43 @@ impl MealPlanService {
 
         let recipe_ids: Vec<i64> = slots.iter().filter_map(|s| s.recipe_id).collect();
         let recipes: HashMap<i64, recipe::Model> = recipe::Entity::find()
-            .filter(recipe::Column::Id.is_in(recipe_ids))
+            .filter(recipe::Column::Id.is_in(recipe_ids.clone()))
             .all(&self.db)
             .await?
             .into_iter()
             .map(|r| (r.id, r))
             .collect();
 
+        // Estimated cost per recipe (for the recipe's own serving count).
+        let cost_by_recipe = self
+            .pricing_service
+            .estimate_recipe_costs(&recipe_ids)
+            .await?;
+
+        let weekly_budget: Option<f64> = user::Entity::find_by_id(plan.user_id)
+            .one(&self.db)
+            .await?
+            .and_then(|u| u.weekly_budget)
+            .and_then(|b| f64::try_from(b).ok());
+
+        // Compute per-slot estimated cost, scaled to the slot's serving count.
+        let slot_cost = |s: &meal_plan_slot::Model| -> Option<f64> {
+            let rid = s.recipe_id?;
+            let r = recipes.get(&rid)?;
+            let base = cost_by_recipe.get(&rid).copied().unwrap_or(0.0);
+            let per_serving = base / r.servings.max(1) as f64;
+            let servings = s.servings_override.unwrap_or(r.servings).max(1) as f64;
+            Some(per_serving * servings)
+        };
+
+        let estimated_cost: f64 = slots
+            .iter()
+            .filter(|s| !s.is_flex)
+            .filter_map(slot_cost)
+            .sum();
+
         let slot_json: Vec<serde_json::Value> = slots
-            .into_iter()
+            .iter()
             .map(|s| {
                 let r = s.recipe_id.and_then(|rid| recipes.get(&rid));
                 serde_json::json!({
@@ -892,6 +984,7 @@ impl MealPlanService {
                     "flex_type": s.flex_type,
                     "energy_level": s.energy_level,
                     "servings": s.servings_override,
+                    "estimated_cost": slot_cost(s),
                     "recipe": r.map(|r| serde_json::json!({
                         "id": r.id,
                         "name": r.name,
@@ -909,6 +1002,9 @@ impl MealPlanService {
             "id": plan.id,
             "week_start": plan.week_start,
             "is_ai_generated": plan.is_ai_generated,
+            "estimated_cost": (estimated_cost * 100.0).round() / 100.0,
+            "weekly_budget": weekly_budget,
+            "within_budget": weekly_budget.map(|b| estimated_cost <= b),
             "slots": slot_json,
         }))
     }
