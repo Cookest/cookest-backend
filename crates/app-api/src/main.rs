@@ -35,6 +35,7 @@ use crate::handlers::{
     configure_taste_profile,
     configure_households,
     configure_polls_public, configure_polls_protected,
+    configure_eat_out,
 };
 use crate::middleware::{JwtAuth, SecurityHeaders};
 use crate::services::{
@@ -885,6 +886,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(configure_nutrition)
                     .configure(configure_households)
                     .configure(configure_polls_protected)
+                    .configure(configure_eat_out)
             )
     })
     .bind(&bind_address)?

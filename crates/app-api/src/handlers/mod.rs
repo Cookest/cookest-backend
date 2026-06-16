@@ -15,6 +15,7 @@ pub mod nutrition;
 pub mod taste_profile;
 pub mod household;
 pub mod meal_poll;
+pub mod eat_out;
 
 pub use auth::configure as configure_auth;
 pub use recipe::configure as configure_recipes;
@@ -36,3 +37,4 @@ pub use nutrition::configure_nutrition;
 pub use taste_profile::configure_taste_profile;
 pub use household::configure_households;
 pub use meal_poll::{configure_polls_public, configure_polls_protected};
+pub use eat_out::configure_eat_out;
