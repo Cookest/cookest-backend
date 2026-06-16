@@ -46,6 +46,8 @@ services:
       dockerfile: crates/food-api/Dockerfile
     container_name: cookest_food_api
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - "8081:8081"
     environment:
