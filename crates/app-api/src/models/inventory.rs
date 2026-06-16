@@ -41,6 +41,20 @@ pub struct FoodApiIngredientDetail {
     pub category: Option<String>,
 }
 
+/// Manually consume part of a pantry item
+#[derive(Debug, Deserialize)]
+pub struct ConsumeRequest {
+    pub quantity: Decimal,
+}
+
+/// Result of a manual consume
+#[derive(Debug, Serialize)]
+pub struct ConsumeResponse {
+    pub deleted: bool,
+    pub consumed: Decimal,
+    pub item: Option<InventoryItemResponse>,
+}
+
 /// Request to update an existing inventory item
 #[derive(Debug, Deserialize)]
 pub struct UpdateInventoryItem {

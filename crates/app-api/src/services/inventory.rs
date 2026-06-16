@@ -3,13 +3,13 @@
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
-    QueryOrder, PaginatorTrait,
+    QueryOrder, QuerySelect, PaginatorTrait,
 };
 use uuid::Uuid;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
-use crate::entity::{inventory_item, ingredient, recipe_ingredient, recipe};
+use crate::entity::{inventory_item, inventory_deduction, ingredient, recipe_ingredient, recipe, user};
 use cookest_shared::errors::AppError;
 use crate::models::inventory::*;
 use crate::services::scan::BulkAddItem;
@@ -278,54 +278,241 @@ impl InventoryService {
             .collect())
     }
 
-    /// Deduct ingredients from inventory after cooking a recipe
-    /// Called automatically when user marks a recipe as cooked
+    /// Deduct ingredients from inventory after cooking a recipe.
+    /// FIFO/expiry-aware: consumes the earliest-expiring stock first across
+    /// multiple rows, writing one `inventory_deductions` audit row per touched
+    /// item so the cook can be undone. When `servings_made` is `None`, falls
+    /// back to the user's household size.
     pub async fn deduct_for_recipe(
         &self,
         user_id: Uuid,
         recipe_id: i64,
-        servings_made: i32,
+        servings_made: Option<i32>,
         recipe_servings: i32,
+        cooking_history_id: Option<i64>,
     ) -> Result<(), AppError> {
-        use crate::entity::recipe_ingredient;
+        // Effective servings: explicit value, else the user's household size, else 1.
+        let eff_servings = match servings_made {
+            Some(s) if s > 0 => s,
+            _ => user::Entity::find_by_id(user_id)
+                .one(&self.db)
+                .await?
+                .map(|u| u.household_size)
+                .unwrap_or(1),
+        };
 
         let recipe_ings = recipe_ingredient::Entity::find()
             .filter(recipe_ingredient::Column::RecipeId.eq(recipe_id))
             .all(&self.db)
             .await?;
 
-        let scaling = servings_made as f64 / recipe_servings.max(1) as f64;
+        let denom = Decimal::from(recipe_servings.max(1));
+        let now = Utc::now().fixed_offset();
 
         for ri in recipe_ings {
-            if let Some(grams) = ri.quantity_grams {
-                let needed = grams * rust_decimal::Decimal::try_from(scaling).unwrap_or_default();
+            let Some(grams) = ri.quantity_grams else { continue };
+            let mut needed = grams * Decimal::from(eff_servings) / denom;
+            if needed <= Decimal::ZERO {
+                continue;
+            }
 
-                // Find this ingredient in user's inventory (prioritise earliest expiry)
-                if let Some(inv_item) = inventory_item::Entity::find()
-                    .filter(inventory_item::Column::UserId.eq(user_id))
-                    .filter(inventory_item::Column::IngredientId.eq(ri.ingredient_id))
-                    .one(&self.db)
-                    .await?
-                {
-                    let new_quantity = (inv_item.quantity - needed).max(rust_decimal::Decimal::ZERO);
-                    let now = Utc::now().fixed_offset();
+            // Earliest expiry first (Postgres ASC sorts NULLs last), then oldest added.
+            let candidates = inventory_item::Entity::find()
+                .filter(inventory_item::Column::UserId.eq(user_id))
+                .filter(inventory_item::Column::IngredientId.eq(ri.ingredient_id))
+                .order_by_asc(inventory_item::Column::ExpiryDate)
+                .order_by_asc(inventory_item::Column::AddedAt)
+                .all(&self.db)
+                .await?;
 
-                    if new_quantity == rust_decimal::Decimal::ZERO {
-                        // Remove item if fully consumed
-                        inventory_item::Entity::delete_by_id(inv_item.id)
-                            .exec(&self.db)
-                            .await?;
-                    } else {
-                        let mut active: inventory_item::ActiveModel = inv_item.into();
-                        active.quantity = Set(new_quantity);
-                        active.updated_at = Set(now);
-                        active.update(&self.db).await?;
-                    }
+            for inv_item in candidates {
+                if needed <= Decimal::ZERO {
+                    break;
                 }
+                let qty_before = inv_item.quantity;
+                let take = needed.min(qty_before);
+                let new_quantity = qty_before - take;
+                let was_deleted = new_quantity <= Decimal::ZERO;
+
+                inventory_deduction::ActiveModel {
+                    user_id: Set(user_id),
+                    inventory_item_id: Set(Some(inv_item.id)),
+                    ingredient_id: Set(ri.ingredient_id),
+                    recipe_id: Set(Some(recipe_id)),
+                    cooking_history_id: Set(cooking_history_id),
+                    qty_before: Set(qty_before),
+                    qty_deducted: Set(take),
+                    unit: Set(inv_item.unit.clone()),
+                    was_deleted: Set(was_deleted),
+                    reason: Set("cook".to_string()),
+                    created_at: Set(now),
+                    ..Default::default()
+                }
+                .insert(&self.db)
+                .await?;
+
+                if was_deleted {
+                    inventory_item::Entity::delete_by_id(inv_item.id)
+                        .exec(&self.db)
+                        .await?;
+                } else {
+                    let mut active: inventory_item::ActiveModel = inv_item.into();
+                    active.quantity = Set(new_quantity);
+                    active.updated_at = Set(now);
+                    active.update(&self.db).await?;
+                }
+
+                needed -= take;
             }
         }
 
         Ok(())
+    }
+
+    /// Manually consume a quantity of a single pantry item (writes an audit row).
+    pub async fn consume(
+        &self,
+        user_id: Uuid,
+        item_id: i64,
+        quantity: Decimal,
+    ) -> Result<ConsumeResponse, AppError> {
+        let item = inventory_item::Entity::find_by_id(item_id)
+            .one(&self.db)
+            .await?
+            .ok_or(AppError::NotFound("Inventory item".into()))?;
+        if item.user_id != user_id {
+            return Err(AppError::AuthenticationFailed);
+        }
+
+        let qty_before = item.quantity;
+        let take = quantity.min(qty_before).max(Decimal::ZERO);
+        let new_quantity = qty_before - take;
+        let was_deleted = new_quantity <= Decimal::ZERO;
+        let now = Utc::now().fixed_offset();
+        let today = Utc::now().date_naive();
+
+        let ing_name = ingredient::Entity::find_by_id(item.ingredient_id)
+            .one(&self.db)
+            .await?
+            .map(|i| i.name)
+            .unwrap_or_default();
+
+        inventory_deduction::ActiveModel {
+            user_id: Set(user_id),
+            inventory_item_id: Set(Some(item_id)),
+            ingredient_id: Set(item.ingredient_id),
+            recipe_id: Set(None),
+            cooking_history_id: Set(None),
+            qty_before: Set(qty_before),
+            qty_deducted: Set(take),
+            unit: Set(item.unit.clone()),
+            was_deleted: Set(was_deleted),
+            reason: Set("manual".to_string()),
+            created_at: Set(now),
+            ..Default::default()
+        }
+        .insert(&self.db)
+        .await?;
+
+        if was_deleted {
+            inventory_item::Entity::delete_by_id(item_id).exec(&self.db).await?;
+            Ok(ConsumeResponse { deleted: true, consumed: take, item: None })
+        } else {
+            let mut active: inventory_item::ActiveModel = item.into();
+            active.quantity = Set(new_quantity);
+            active.updated_at = Set(now);
+            let saved = active.update(&self.db).await?;
+            let days_until_expiry = saved.expiry_date.map(|d| (d - today).num_days());
+            let expiry_warning = days_until_expiry.map(|d| d <= 5).unwrap_or(false);
+            Ok(ConsumeResponse {
+                deleted: false,
+                consumed: take,
+                item: Some(InventoryItemResponse {
+                    id: saved.id,
+                    ingredient_id: saved.ingredient_id,
+                    ingredient_name: ing_name,
+                    custom_name: saved.custom_name,
+                    quantity: saved.quantity,
+                    unit: saved.unit,
+                    expiry_date: saved.expiry_date,
+                    storage_location: saved.storage_location,
+                    days_until_expiry,
+                    expiry_warning,
+                }),
+            })
+        }
+    }
+
+    /// Restore inventory from the audit rows of a cook, then drop those rows.
+    pub async fn undo_deduction(
+        &self,
+        user_id: Uuid,
+        cooking_history_id: i64,
+    ) -> Result<(), AppError> {
+        let deductions = inventory_deduction::Entity::find()
+            .filter(inventory_deduction::Column::CookingHistoryId.eq(cooking_history_id))
+            .filter(inventory_deduction::Column::UserId.eq(user_id))
+            .all(&self.db)
+            .await?;
+
+        let now = Utc::now().fixed_offset();
+
+        for d in &deductions {
+            // If the row still exists, add the deducted amount back; else recreate it.
+            let existing = match d.inventory_item_id {
+                Some(id) => inventory_item::Entity::find_by_id(id).one(&self.db).await?,
+                None => None,
+            };
+            match existing {
+                Some(item) => {
+                    let restored = item.quantity + d.qty_deducted;
+                    let mut active: inventory_item::ActiveModel = item.into();
+                    active.quantity = Set(restored);
+                    active.updated_at = Set(now);
+                    active.update(&self.db).await?;
+                }
+                None => {
+                    let qty = if d.was_deleted { d.qty_before } else { d.qty_deducted };
+                    inventory_item::ActiveModel {
+                        user_id: Set(user_id),
+                        ingredient_id: Set(d.ingredient_id),
+                        custom_name: Set(None),
+                        quantity: Set(qty),
+                        unit: Set(d.unit.clone()),
+                        expiry_date: Set(None),
+                        storage_location: Set(None),
+                        added_at: Set(now),
+                        updated_at: Set(now),
+                        ..Default::default()
+                    }
+                    .insert(&self.db)
+                    .await?;
+                }
+            }
+        }
+
+        inventory_deduction::Entity::delete_many()
+            .filter(inventory_deduction::Column::CookingHistoryId.eq(cooking_history_id))
+            .filter(inventory_deduction::Column::UserId.eq(user_id))
+            .exec(&self.db)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Recent deduction audit entries for a user (most recent first).
+    pub async fn get_deductions(
+        &self,
+        user_id: Uuid,
+        limit: u64,
+    ) -> Result<Vec<inventory_deduction::Model>, AppError> {
+        let rows = inventory_deduction::Entity::find()
+            .filter(inventory_deduction::Column::UserId.eq(user_id))
+            .order_by_desc(inventory_deduction::Column::CreatedAt)
+            .limit(limit)
+            .all(&self.db)
+            .await?;
+        Ok(rows)
     }
 
     /// Find-or-create an ingredient by name, then add to inventory.

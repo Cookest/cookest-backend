@@ -138,12 +138,7 @@ impl InteractionService {
             .await?
             .ok_or(AppError::NotFound("Recipe".into()))?;
 
-        // Deduct ingredients from inventory
-        self.inventory_service
-            .deduct_for_recipe(user_id, recipe_id, servings_made, recipe.servings)
-            .await?;
-
-        // Log cooking history
+        // Log cooking history first so deductions can reference it (enables undo)
         let now = Utc::now().fixed_offset();
         let history = cooking_history::ActiveModel {
             user_id: Set(user_id),
@@ -153,7 +148,18 @@ impl InteractionService {
             cooked_at: Set(now),
             ..Default::default()
         };
-        history.insert(&self.db).await?;
+        let saved_history = history.insert(&self.db).await?;
+
+        // Deduct ingredients from inventory, linking the audit to this cook
+        self.inventory_service
+            .deduct_for_recipe(
+                user_id,
+                recipe_id,
+                Some(servings_made),
+                recipe.servings,
+                Some(saved_history.id),
+            )
+            .await?;
 
         // Trigger ML update
         self.preference_service
@@ -162,6 +168,31 @@ impl InteractionService {
 
         Ok(InteractionResponse {
             message: "Recipe marked as cooked. Inventory updated.".to_string(),
+        })
+    }
+
+    /// Undo a cook: restore the deducted inventory and remove the cook event.
+    pub async fn undo_cook(
+        &self,
+        user_id: Uuid,
+        history_id: i64,
+    ) -> Result<InteractionResponse, AppError> {
+        let history = cooking_history::Entity::find_by_id(history_id)
+            .one(&self.db)
+            .await?
+            .ok_or(AppError::NotFound("Cooking history".into()))?;
+        if history.user_id != user_id {
+            return Err(AppError::AuthenticationFailed);
+        }
+
+        // Restore inventory from the audit rows (also clears them), then drop the event.
+        self.inventory_service.undo_deduction(user_id, history_id).await?;
+        cooking_history::Entity::delete_by_id(history_id)
+            .exec(&self.db)
+            .await?;
+
+        Ok(InteractionResponse {
+            message: "Cook undone. Inventory restored.".to_string(),
         })
     }
 
