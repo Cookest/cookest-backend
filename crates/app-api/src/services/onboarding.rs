@@ -22,6 +22,9 @@ pub struct OnboardingRequest {
     pub weekly_budget: Option<f64>,
     pub preferred_time_per_meal_min: Option<i32>,
     pub meal_frequency: Option<i32>,
+    /// Recipe IDs the user liked during the taste-calibration swipe step.
+    /// Merged into `taste_profile` so the recommender can use them immediately.
+    pub liked_recipe_ids: Option<Vec<i64>>,
 }
 
 pub struct OnboardingService {
@@ -43,6 +46,9 @@ impl OnboardingService {
             .one(&self.db)
             .await?
             .ok_or_else(|| AppError::NotFound("User".to_string()))?;
+
+        // Capture before `user` is moved — ActiveModel fields are Unchanged, not Set.
+        let existing_taste_profile = user.taste_profile.clone();
 
         let mut active: UserActiveModel = user.into();
 
@@ -75,6 +81,37 @@ impl OnboardingService {
         }
         if let Some(freq) = req.meal_frequency {
             active.meal_frequency = Set(Some(freq.max(1).min(21)));
+        }
+
+        // Merge taste-calibration likes into taste_profile (same JSON shape the
+        // /api/me/swipe endpoint produces) so the recommender can use them.
+        if let Some(liked) = req.liked_recipe_ids {
+            if !liked.is_empty() {
+                let mut profile = existing_taste_profile;
+                if !profile.get("liked_recipe_ids").map_or(false, |v| v.is_array()) {
+                    profile["liked_recipe_ids"] = serde_json::json!([]);
+                }
+                if !profile.get("swipe_count").map_or(false, |v| v.is_number()) {
+                    profile["swipe_count"] = serde_json::json!(0);
+                }
+
+                if let Some(arr) = profile["liked_recipe_ids"].as_array_mut() {
+                    let mut existing: std::collections::HashSet<i64> =
+                        arr.iter().filter_map(|v| v.as_i64()).collect();
+                    let mut added = 0i64;
+                    for id in liked {
+                        if existing.insert(id) {
+                            arr.push(serde_json::json!(id));
+                            added += 1;
+                        }
+                    }
+                    if let Some(count) = profile["swipe_count"].as_i64() {
+                        profile["swipe_count"] = serde_json::json!(count + added);
+                    }
+                }
+
+                active.taste_profile = Set(profile);
+            }
         }
 
         active.onboarding_completed = Set(true);
