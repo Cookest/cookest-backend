@@ -38,3 +38,6 @@ pub use taste_profile::configure_taste_profile;
 pub use household::configure_households;
 pub use meal_poll::{configure_polls_public, configure_polls_protected};
 pub use eat_out::configure_eat_out;
+
+pub mod import;
+pub use import::configure_import_proxy;

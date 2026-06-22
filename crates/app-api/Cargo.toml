@@ -70,3 +70,6 @@ hmac = "0.12"
 
 # Slug
 slug = "0.1"
+
+# URL encoding
+urlencoding = "2"
