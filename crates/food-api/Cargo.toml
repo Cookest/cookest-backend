@@ -51,5 +51,11 @@ rand = "0.8"
 # Slug generation
 slug = "0.1"
 
+# Regex
+regex = "1"
+
+# CSV parsing
+csv = "1"
+
 # Futures (for middleware)
 futures = "0.3"
