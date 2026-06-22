@@ -1,25 +1,40 @@
-//! Ingredient service — queries ingredients using the FatSecret API
+//! Ingredient service — supports Local (SeaORM), FatSecret, and Hybrid data sources
 
 use std::sync::Arc;
 use std::str::FromStr;
 use rust_decimal::Decimal;
 
+use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
+
+use crate::config::FoodDataSource;
 use crate::errors::AppError;
 use crate::models::ingredient::*;
 use crate::models::recipe::PaginatedResponse;
 use crate::services::FatSecretClient;
+use crate::entity::ingredient::{Entity as IngredientEntity, Column as IngredientCol};
+use crate::entity::ingredient_nutrient::Entity as NutrientEntity;
+use crate::entity::portion_size::Entity as PortionEntity;
 
 pub struct IngredientService {
     db: sea_orm::DatabaseConnection,
-    fs_client: Arc<FatSecretClient>,
+    source: FoodDataSource,
+    fs_client: Option<Arc<FatSecretClient>>,
 }
 
 impl IngredientService {
-    pub fn new(db: sea_orm::DatabaseConnection, fs_client: Arc<FatSecretClient>) -> Self {
-        Self { db, fs_client }
+    pub fn new(
+        db: sea_orm::DatabaseConnection,
+        source: FoodDataSource,
+        fs_client: Option<Arc<FatSecretClient>>,
+    ) -> Self {
+        Self { db, source, fs_client }
     }
 
-    /// Search ingredients via FatSecret
+    // -------------------------------------------------------------------------
+    // search
+    // -------------------------------------------------------------------------
+
+    /// Search ingredients
     pub async fn search(
         &self,
         query: IngredientQuery,
@@ -27,7 +42,81 @@ impl IngredientService {
         let page = query.page.unwrap_or(1).max(1);
         let per_page = query.per_page.unwrap_or(20).min(100);
 
-        let fs_res = self.fs_client
+        match &self.source {
+            FoodDataSource::Local => {
+                self.search_local(&query, page, per_page).await
+            }
+            FoodDataSource::FatSecret => {
+                self.search_fatsecret(&query, page, per_page).await
+            }
+            FoodDataSource::Hybrid => {
+                let local = self.search_local(&query, page, per_page).await?;
+                if local.total > 0 {
+                    Ok(local)
+                } else {
+                    self.search_fatsecret(&query, page, per_page).await
+                }
+            }
+        }
+    }
+
+    async fn search_local(
+        &self,
+        query: &IngredientQuery,
+        page: u64,
+        per_page: u64,
+    ) -> Result<PaginatedResponse<IngredientListItem>, AppError> {
+        let mut q = IngredientEntity::find();
+
+        if let Some(search) = query.q.as_deref() {
+            if !search.is_empty() {
+                q = q.filter(IngredientCol::Name.contains(search));
+            }
+        }
+
+        if let Some(category) = query.category.as_deref() {
+            q = q.filter(IngredientCol::Category.eq(category));
+        }
+
+        let total = q.clone().count(&self.db).await?;
+        let offset = ((page - 1) * per_page) as u64;
+
+        let results = q
+            .order_by_asc(IngredientCol::Name)
+            .limit(per_page)
+            .offset(offset)
+            .all(&self.db)
+            .await?;
+
+        let items: Vec<IngredientListItem> = results
+            .into_iter()
+            .map(|r| IngredientListItem {
+                id: r.id,
+                name: r.name,
+                category: r.category,
+            })
+            .collect();
+
+        Ok(PaginatedResponse {
+            data: items,
+            total,
+            page,
+            per_page,
+            total_pages: (total as f64 / per_page as f64).ceil() as u64,
+        })
+    }
+
+    async fn search_fatsecret(
+        &self,
+        query: &IngredientQuery,
+        page: u64,
+        per_page: u64,
+    ) -> Result<PaginatedResponse<IngredientListItem>, AppError> {
+        let fs = self.fs_client.as_ref().ok_or_else(|| {
+            AppError::Internal("FatSecret client not configured".to_string())
+        })?;
+
+        let fs_res = fs
             .search_ingredients(query.q.as_deref(), page - 1, per_page)
             .await
             .map_err(|e| AppError::Internal(format!("FatSecret search ingredients error: {}", e)))?;
@@ -61,9 +150,77 @@ impl IngredientService {
         })
     }
 
-    /// Get full ingredient detail with nutrients and portions via FatSecret
+    // -------------------------------------------------------------------------
+    // get_ingredient
+    // -------------------------------------------------------------------------
+
+    /// Get full ingredient detail with nutrients and portions
     pub async fn get_ingredient(&self, id: i64) -> Result<IngredientDetail, AppError> {
-        let fs_res = self.fs_client
+        match &self.source {
+            FoodDataSource::Local => self.get_ingredient_local(id).await,
+            FoodDataSource::FatSecret => self.get_ingredient_fatsecret(id).await,
+            FoodDataSource::Hybrid => {
+                match self.get_ingredient_local(id).await {
+                    Ok(detail) => Ok(detail),
+                    Err(AppError::NotFound(_)) => self.get_ingredient_fatsecret(id).await,
+                    Err(e) => Err(e),
+                }
+            }
+        }
+    }
+
+    async fn get_ingredient_local(&self, id: i64) -> Result<IngredientDetail, AppError> {
+        let ingredient = IngredientEntity::find_by_id(id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("Ingredient {}", id)))?;
+
+        let nutrient_model = NutrientEntity::find()
+            .filter(crate::entity::ingredient_nutrient::Column::IngredientId.eq(id))
+            .one(&self.db)
+            .await?;
+
+        let portion_models = PortionEntity::find()
+            .filter(crate::entity::portion_size::Column::IngredientId.eq(id))
+            .all(&self.db)
+            .await?;
+
+        let nutrients = nutrient_model.map(|n| IngredientNutrientDetail {
+            calories: n.calories,
+            protein_g: n.protein_g,
+            carbs_g: n.carbs_g,
+            fat_g: n.fat_g,
+            fiber_g: n.fiber_g,
+            sugar_g: n.sugar_g,
+            sodium_mg: n.sodium_mg,
+            saturated_fat_g: n.saturated_fat_g,
+            cholesterol_mg: n.cholesterol_mg,
+        });
+
+        let portions: Vec<PortionDetail> = portion_models
+            .into_iter()
+            .map(|p| PortionDetail {
+                description: p.description,
+                weight_grams: p.weight_grams,
+                unit: p.unit,
+            })
+            .collect();
+
+        Ok(IngredientDetail {
+            id: ingredient.id,
+            name: ingredient.name,
+            category: ingredient.category,
+            nutrients,
+            portions,
+        })
+    }
+
+    async fn get_ingredient_fatsecret(&self, id: i64) -> Result<IngredientDetail, AppError> {
+        let fs = self.fs_client.as_ref().ok_or_else(|| {
+            AppError::Internal("FatSecret client not configured".to_string())
+        })?;
+
+        let fs_res = fs
             .get_ingredient(id)
             .await
             .map_err(|e| AppError::NotFound(format!("Ingredient ID {} not found in FatSecret: {}", id, e)))?;
@@ -77,7 +234,6 @@ impl IngredientService {
 
         if let Some(servings_wrapper) = food.servings {
             if let Some(servings_list) = servings_wrapper.serving {
-                // Map the first serving as the primary nutrition profile
                 if let Some(first_serving) = servings_list.first() {
                     nutrients = Some(IngredientNutrientDetail {
                         calories: first_serving.calories.as_deref().and_then(|s| Decimal::from_str(s).ok()),
@@ -92,12 +248,11 @@ impl IngredientService {
                     });
                 }
 
-                // Map all servings to portions
                 for serving in servings_list {
                     let weight_grams = serving.metric_serving_amount
                         .as_deref()
                         .and_then(|s| Decimal::from_str(s).ok())
-                        .unwrap_or(Decimal::from(100)); // Default fallback
+                        .unwrap_or(Decimal::from(100));
 
                     portions.push(PortionDetail {
                         description: serving.serving_description,
@@ -117,13 +272,63 @@ impl IngredientService {
         })
     }
 
-    /// Resolve a barcode to a food id via FatSecret, then return full detail.
+    // -------------------------------------------------------------------------
+    // get_by_barcode
+    // -------------------------------------------------------------------------
+
+    /// Resolve a barcode to an ingredient detail
     pub async fn get_by_barcode(&self, barcode: &str) -> Result<IngredientDetail, AppError> {
-        let food_id = self.fs_client
+        match &self.source {
+            FoodDataSource::Local => {
+                self.get_by_barcode_local(barcode).await
+            }
+            FoodDataSource::FatSecret => {
+                self.get_by_barcode_fatsecret(barcode).await
+            }
+            FoodDataSource::Hybrid => {
+                // Try local DB first (off_id column)
+                match self.get_by_barcode_local(barcode).await {
+                    Ok(detail) => return Ok(detail),
+                    Err(AppError::NotFound(_)) => {}
+                    Err(e) => return Err(e),
+                }
+
+                // Try OpenFoodFacts
+                use crate::services::openfoodfacts::OpenFoodFactsClient;
+                let off_client = OpenFoodFactsClient::new();
+                match off_client.get_by_barcode(barcode, 0).await {
+                    Ok(detail) => return Ok(detail),
+                    Err(AppError::NotFound(_)) => {}
+                    Err(e) => return Err(e),
+                }
+
+                // Fall back to FatSecret
+                self.get_by_barcode_fatsecret(barcode).await
+            }
+        }
+    }
+
+    async fn get_by_barcode_local(&self, barcode: &str) -> Result<IngredientDetail, AppError> {
+        let ingredient = IngredientEntity::find()
+            .filter(IngredientCol::OffId.eq(barcode))
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("No ingredient found for barcode {}", barcode)))?;
+
+        self.get_ingredient_local(ingredient.id).await
+    }
+
+    async fn get_by_barcode_fatsecret(&self, barcode: &str) -> Result<IngredientDetail, AppError> {
+        let fs = self.fs_client.as_ref().ok_or_else(|| {
+            AppError::Internal("FatSecret client not configured".to_string())
+        })?;
+
+        let food_id = fs
             .find_food_id_by_barcode(barcode)
             .await
             .map_err(|e| AppError::Internal(format!("FatSecret barcode lookup error: {}", e)))?
             .ok_or_else(|| AppError::NotFound(format!("No food found for barcode {}", barcode)))?;
-        self.get_ingredient(food_id).await
+
+        self.get_ingredient_fatsecret(food_id).await
     }
 }
