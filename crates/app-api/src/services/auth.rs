@@ -30,10 +30,11 @@ pub struct AuthService {
     db: DatabaseConnection,
     token_service: TokenService,
     argon2: Argon2<'static>,
+    self_hosted: bool,
 }
 
 impl AuthService {
-    pub fn new(db: DatabaseConnection, token_service: TokenService) -> Self {
+    pub fn new(db: DatabaseConnection, token_service: TokenService, self_hosted: bool) -> Self {
         // Configure Argon2id with OWASP-recommended parameters
         // Memory: 19 MiB, Iterations: 2, Parallelism: 1
         let params = Params::new(
@@ -50,6 +51,7 @@ impl AuthService {
             db,
             token_service,
             argon2,
+            self_hosted,
         }
     }
 
@@ -89,7 +91,7 @@ impl AuthService {
             totp_secret: Set(None),
             failed_login_attempts: Set(0),
             locked_until: Set(None),
-            subscription_tier: Set("free".to_string()),
+            subscription_tier: Set(if self.self_hosted { "pro".to_string() } else { "free".to_string() }),
             subscription_valid_until: Set(None),
             stripe_customer_id: Set(None),
             cooking_skill_level: Set(None),

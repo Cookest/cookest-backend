@@ -35,6 +35,7 @@ pub struct Config {
     pub image_gen_token: Option<String>,
     pub overpass_url: String,
     pub rag_top_k: u64,
+    pub self_hosted: bool,
 }
 
 impl Config {
@@ -132,6 +133,10 @@ impl Config {
             .parse()
             .map_err(|_| ConfigError::InvalidValue("RAG_TOP_K must be a number"))?;
 
+        let self_hosted = env::var("SELF_HOSTED")
+            .map(|v| v.to_lowercase() == "true")
+            .unwrap_or(false);
+
         Ok(Self {
             database_url: SecretString::from(database_url),
             jwt_secret: SecretString::from(jwt_secret),
@@ -153,6 +158,7 @@ impl Config {
             image_gen_token,
             overpass_url,
             rag_top_k,
+            self_hosted,
         })
     }
 

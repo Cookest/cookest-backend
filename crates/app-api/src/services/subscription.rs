@@ -22,11 +22,12 @@ pub const FEATURE_SHOPPING_OPTIMIZER: &str = "shopping_optimizer";
 pub struct SubscriptionService {
     db: DatabaseConnection,
     stripe_webhook_secret: Option<String>,
+    self_hosted: bool,
 }
 
 impl SubscriptionService {
-    pub fn new(db: DatabaseConnection, stripe_webhook_secret: Option<String>) -> Self {
-        Self { db, stripe_webhook_secret }
+    pub fn new(db: DatabaseConnection, stripe_webhook_secret: Option<String>, self_hosted: bool) -> Self {
+        Self { db, stripe_webhook_secret, self_hosted }
     }
 
     /// Return the feature list for a given tier
@@ -142,6 +143,9 @@ impl SubscriptionService {
 
     /// Require Pro or Family tier; returns HTTP 402 if the user is on Free tier.
     pub async fn require_pro(&self, claims: &crate::middleware::Claims) -> Result<(), AppError> {
+        if self.self_hosted {
+            return Ok(());
+        }
         let tier = claims.tier.as_ref().unwrap_or(&SubscriptionTier::Free);
         match tier {
             SubscriptionTier::Pro | SubscriptionTier::Family => Ok(()),
