@@ -1,14 +1,22 @@
 use secrecy::{ExposeSecret, SecretString};
 use std::env;
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum FoodDataSource {
+    Local,
+    FatSecret,
+    Hybrid,
+}
+
 #[derive(Clone)]
 pub struct Config {
     pub database_url: SecretString,
     pub host: String,
     pub port: u16,
     pub cors_origin: String,
-    pub fs_client_id: String,
-    pub fs_client_secret: SecretString,
+    pub fs_client_id: Option<String>,
+    pub fs_client_secret: Option<SecretString>,
+    pub food_data_source: FoodDataSource,
 }
 
 impl Config {
@@ -27,10 +35,26 @@ impl Config {
         let cors_origin = env::var("FOOD_CORS_ORIGIN")
             .unwrap_or_else(|_| "*".to_string());
 
-        let fs_client_id = env::var("FS_CLIENT_ID")
-            .map_err(|_| ConfigError::Missing("FS_CLIENT_ID"))?;
-        let fs_client_secret = env::var("FS_CLIENT_SECRET")
-            .map_err(|_| ConfigError::Missing("FS_CLIENT_SECRET"))?;
+        let fs_client_id = env::var("FS_CLIENT_ID").ok();
+        let fs_client_secret = env::var("FS_CLIENT_SECRET").map(SecretString::from).ok();
+
+        let food_data_source = match env::var("FOOD_DATA_SOURCE").as_deref() {
+            Ok("fatsecret") => {
+                if fs_client_id.is_none() {
+                    return Err(ConfigError::InvalidValue("FOOD_DATA_SOURCE=fatsecret requires FS_CLIENT_ID and FS_CLIENT_SECRET"));
+                }
+                FoodDataSource::FatSecret
+            }
+            Ok("hybrid") => {
+                if fs_client_id.is_none() {
+                    return Err(ConfigError::InvalidValue("FOOD_DATA_SOURCE=hybrid requires FS_CLIENT_ID and FS_CLIENT_SECRET"));
+                }
+                FoodDataSource::Hybrid
+            }
+            _ => {
+                if fs_client_id.is_some() { FoodDataSource::Hybrid } else { FoodDataSource::Local }
+            }
+        };
 
         Ok(Self {
             database_url: SecretString::from(database_url),
@@ -38,7 +62,8 @@ impl Config {
             port,
             cors_origin,
             fs_client_id,
-            fs_client_secret: SecretString::from(fs_client_secret),
+            fs_client_secret,
+            food_data_source,
         })
     }
 
