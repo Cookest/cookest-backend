@@ -21,8 +21,8 @@ use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
-use crate::handlers::{configure_ingredients, configure_recipes};
-use crate::services::{IngredientService, RecipeService, FatSecretClient};
+use crate::handlers::{configure_ingredients, configure_recipes, configure_import};
+use crate::services::{IngredientService, RecipeService, FatSecretClient, ImportService};
 use crate::middleware::security_headers::SecurityHeaders;
 
 #[actix_web::main]
@@ -267,9 +267,14 @@ async fn main() -> std::io::Result<()> {
     tracing::info!("All food migrations complete");
 
     // Initialize services
-    let fatsecret_client = Arc::new(FatSecretClient::new(config.fs_client_id.clone(), config.fs_client_secret.clone()));
-    let recipe_service = Arc::new(RecipeService::new(db.clone(), fatsecret_client.clone()));
-    let ingredient_service = Arc::new(IngredientService::new(db.clone(), fatsecret_client));
+    let fatsecret_client: Option<Arc<FatSecretClient>> =
+        config.fs_client_id.as_ref().zip(config.fs_client_secret.as_ref()).map(|(id, secret)| {
+            Arc::new(FatSecretClient::new(id.clone(), secret.clone()))
+        });
+    let source = config.food_data_source.clone();
+    let recipe_service = Arc::new(RecipeService::new(db.clone(), source.clone(), fatsecret_client.clone()));
+    let ingredient_service = Arc::new(IngredientService::new(db.clone(), source, fatsecret_client));
+    let import_service = Arc::new(ImportService::new(db.clone()));
 
     tracing::info!("Food API starting on {}", bind_address);
 
@@ -304,6 +309,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(SecurityHeaders)
             .app_data(web::Data::new(recipe_service.clone()))
             .app_data(web::Data::new(ingredient_service.clone()))
+            .app_data(web::Data::new(import_service.clone()))
             .app_data(web::Data::new(db.clone()))
             // Health check
             .service(
@@ -319,6 +325,7 @@ async fn main() -> std::io::Result<()> {
             // API v1 routes
             .configure(configure_ingredients)
             .configure(configure_recipes)
+            .configure(configure_import)
     })
     .bind(&bind_address)?
     .run()
