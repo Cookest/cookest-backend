@@ -36,6 +36,7 @@ use crate::handlers::{
     configure_households,
     configure_polls_public, configure_polls_protected,
     configure_eat_out,
+    configure_import_proxy,
 };
 use crate::middleware::{JwtAuth, SecurityHeaders};
 use crate::services::{
@@ -740,7 +741,7 @@ async fn main() -> std::io::Result<()> {
     let food_api_client = FoodApiClient::new(config.food_api_url.clone(), config.food_api_key.clone());
 
     let token_service = Arc::new(TokenService::new(&config));
-    let auth_service = Arc::new(AuthService::new(db.clone(), TokenService::new(&config)));
+    let auth_service = Arc::new(AuthService::new(db.clone(), TokenService::new(&config), config.self_hosted));
     let recipe_service = Arc::new(RecipeService::new(db.clone(), food_api_client.clone()));
     let ingredient_service = Arc::new(IngredientService::new(db.clone(), food_api_client.clone()));
     let meal_plan_service = Arc::new(MealPlanService::new(db.clone(), food_api_client.clone()));
@@ -755,6 +756,7 @@ async fn main() -> std::io::Result<()> {
     let subscription_service = Arc::new(SubscriptionService::new(
         db.clone(),
         config.stripe_webhook_secret.clone(),
+        config.self_hosted,
     ));
 
     // Ensure PDF upload directory exists
@@ -887,6 +889,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(configure_households)
                     .configure(configure_polls_protected)
                     .configure(configure_eat_out)
+                    .configure(configure_import_proxy)
             )
     })
     .bind(&bind_address)?
