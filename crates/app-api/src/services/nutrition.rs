@@ -31,6 +31,10 @@ pub struct BuySuggestion {
     pub reason: String,
     #[serde(default)]
     pub nutrient: Option<String>,
+    #[serde(default)]
+    pub amount: Option<f64>,
+    #[serde(default)]
+    pub unit: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -167,7 +171,7 @@ impl NutritionService {
              Shopping focus: {goal_text}.\n{knowledge}\n\
              Suggest 5-8 specific grocery items that fill nutritional gaps given the pantry and goals, \
              favouring nutrient density and variety. Include at least one nutritious item the user likely hasn't tried. \
-             Return ONLY JSON: {{\"suggestions\":[{{\"item\":\"\",\"reason\":\"\",\"nutrient\":\"\"}}]}}",
+             Return ONLY JSON: {{\"suggestions\":[{{\"item\":\"\",\"reason\":\"\",\"nutrient\":\"\",\"amount\":1.0,\"unit\":\"\"}}]}}",
             pantry = list_or_none(&pantry),
             dietary = list_or_none(&dietary),
             allergies = list_or_none(&allergies),
