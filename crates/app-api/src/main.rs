@@ -797,23 +797,35 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         // Configure CORS
-        let cors = Cors::default()
-            .allowed_origin(&cors_origin)
-            .allowed_origin_fn(|origin, _req_head| {
-                if let Ok(origin_str) = std::str::from_utf8(origin.as_bytes()) {
-                    is_local_origin(origin_str)
-                } else {
-                    false
-                }
-            })
-            .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
-            .allowed_headers(vec![
-                header::AUTHORIZATION,
-                header::ACCEPT,
-                header::CONTENT_TYPE,
-            ])
-            .supports_credentials()
-            .max_age(3600);
+        let cors = if cors_origin == "*" {
+            Cors::default()
+                .send_wildcard()
+                .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+                .allowed_headers(vec![
+                    header::AUTHORIZATION,
+                    header::ACCEPT,
+                    header::CONTENT_TYPE,
+                ])
+                .max_age(3600)
+        } else {
+            Cors::default()
+                .allowed_origin(&cors_origin)
+                .allowed_origin_fn(|origin, _req_head| {
+                    if let Ok(origin_str) = std::str::from_utf8(origin.as_bytes()) {
+                        is_local_origin(origin_str)
+                    } else {
+                        false
+                    }
+                })
+                .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+                .allowed_headers(vec![
+                    header::AUTHORIZATION,
+                    header::ACCEPT,
+                    header::CONTENT_TYPE,
+                ])
+                .supports_credentials()
+                .max_age(3600)
+        };
 
         App::new()
             // Security: Request body size limit (50 MB for grocery scan images)
