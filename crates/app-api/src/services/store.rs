@@ -515,6 +515,7 @@ impl StoreService {
             .map_err(|e| AppError::Internal(format!("http client: {}", e)))?;
         let resp = client
             .post(&self.overpass_url)
+            .header("User-Agent", "Cookest/1.0 (store)")
             .header("Content-Type", "text/plain")
             .body(query)
             .send()
