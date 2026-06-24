@@ -286,7 +286,7 @@ async fn main() -> std::io::Result<()> {
                 .allowed_origin(&cors_origin)
                 .allowed_origin_fn(|origin, _| {
                     if let Ok(s) = std::str::from_utf8(origin.as_bytes()) {
-                        s.starts_with("http://localhost:") || s.starts_with("http://127.0.0.1:")
+                        is_local_origin(s)
                     } else {
                         false
                     }
@@ -330,4 +330,30 @@ async fn main() -> std::io::Result<()> {
     .bind(&bind_address)?
     .run()
     .await
+}
+
+fn is_local_origin(origin_str: &str) -> bool {
+    let target = if let Some(stripped) = origin_str.strip_prefix("http://") {
+        stripped
+    } else if let Some(stripped) = origin_str.strip_prefix("https://") {
+        stripped
+    } else {
+        return false;
+    };
+
+    let host = if let Some((h, _port)) = target.split_once(':') {
+        h
+    } else {
+        target
+    };
+
+    if host == "localhost" || host == "127.0.0.1" {
+        return true;
+    }
+
+    if let Ok(ip) = host.parse::<std::net::Ipv4Addr>() {
+        ip.is_private() || ip.is_loopback()
+    } else {
+        false
+    }
 }
