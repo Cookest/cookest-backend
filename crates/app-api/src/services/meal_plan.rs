@@ -625,6 +625,21 @@ impl MealPlanService {
             .map(|r| (r.id, r))
             .collect();
 
+        let mut daily_data = vec![];
+        let day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+        for d in 0..7 {
+            daily_data.push(serde_json::json!({
+                "day": d,
+                "day_name": day_names[d],
+                "total_calories": 0.0,
+                "total_protein": 0.0,
+                "total_carbs": 0.0,
+                "total_fat": 0.0,
+                "meals": Vec::<serde_json::Value>::new(),
+            }));
+        }
+
         let mut totals = NutritionTotals::default();
 
         for slot in &slots {
@@ -634,46 +649,49 @@ impl MealPlanService {
             let recipe_servings = recipes.get(&rid).map(|r| r.servings).unwrap_or(1).max(1);
             let scale = servings as f64 / recipe_servings as f64;
 
-            totals.calories  += f64::try_from(n.calories.unwrap_or_default()).unwrap_or(0.0) * scale;
-            totals.protein_g += f64::try_from(n.protein_g.unwrap_or_default()).unwrap_or(0.0) * scale;
-            totals.carbs_g   += f64::try_from(n.carbs_g.unwrap_or_default()).unwrap_or(0.0) * scale;
-            totals.fat_g     += f64::try_from(n.fat_g.unwrap_or_default()).unwrap_or(0.0) * scale;
-            totals.fiber_g   += f64::try_from(n.fiber_g.unwrap_or_default()).unwrap_or(0.0) * scale;
+            let calories = f64::try_from(n.calories.unwrap_or_default()).unwrap_or(0.0) * scale;
+            let protein = f64::try_from(n.protein_g.unwrap_or_default()).unwrap_or(0.0) * scale;
+            let carbs = f64::try_from(n.carbs_g.unwrap_or_default()).unwrap_or(0.0) * scale;
+            let fat = f64::try_from(n.fat_g.unwrap_or_default()).unwrap_or(0.0) * scale;
+
+            totals.calories  += calories;
+            totals.protein_g += protein;
+            totals.carbs_g   += carbs;
+            totals.fat_g     += fat;
+
+            let day_idx = slot.day_of_week as usize;
+            if day_idx < 7 {
+                let day_obj = &mut daily_data[day_idx];
+
+                if let Some(val) = day_obj["total_calories"].as_f64() {
+                    day_obj["total_calories"] = serde_json::json!(val + calories);
+                }
+                if let Some(val) = day_obj["total_protein"].as_f64() {
+                    day_obj["total_protein"] = serde_json::json!(val + protein);
+                }
+                if let Some(val) = day_obj["total_carbs"].as_f64() {
+                    day_obj["total_carbs"] = serde_json::json!(val + carbs);
+                }
+                if let Some(val) = day_obj["total_fat"].as_f64() {
+                    day_obj["total_fat"] = serde_json::json!(val + fat);
+                }
+
+                if let Some(meals) = day_obj["meals"].as_array_mut() {
+                    meals.push(serde_json::json!({
+                        "meal_type": slot.meal_type,
+                        "calories": calories,
+                        "protein": protein,
+                    }));
+                }
+            }
         }
 
-        let slot_count = slots.len().max(1) as f64;
-
         Ok(serde_json::json!({
-            "week_start": plan.week_start,
-            "totals": {
-                "calories":  totals.calories,
-                "protein_g": totals.protein_g,
-                "carbs_g":   totals.carbs_g,
-                "fat_g":     totals.fat_g,
-                "fiber_g":   totals.fiber_g,
-            },
-            "daily_average": {
-                "calories":  totals.calories / 7.0,
-                "protein_g": totals.protein_g / 7.0,
-                "carbs_g":   totals.carbs_g / 7.0,
-                "fat_g":     totals.fat_g / 7.0,
-                "fiber_g":   totals.fiber_g / 7.0,
-            },
-            "goals": {
-                "calories":  DAILY_CALORIES * 7.0,
-                "protein_g": DAILY_PROTEIN_G * 7.0,
-                "carbs_g":   DAILY_CARBS_G * 7.0,
-                "fat_g":     DAILY_FAT_G * 7.0,
-                "fiber_g":   DAILY_FIBER_G * 7.0,
-            },
-            "percent_of_goal": {
-                "calories":  (totals.calories  / (DAILY_CALORIES  * 7.0) * 100.0).round(),
-                "protein_g": (totals.protein_g / (DAILY_PROTEIN_G * 7.0) * 100.0).round(),
-                "carbs_g":   (totals.carbs_g   / (DAILY_CARBS_G   * 7.0) * 100.0).round(),
-                "fat_g":     (totals.fat_g     / (DAILY_FAT_G     * 7.0) * 100.0).round(),
-                "fiber_g":   (totals.fiber_g   / (DAILY_FIBER_G   * 7.0) * 100.0).round(),
-            },
-            "slots_with_data": slot_count as usize,
+            "days": daily_data,
+            "week_totals": {
+                "avg_daily_calories": totals.calories / 7.0,
+                "avg_daily_protein": totals.protein_g / 7.0,
+            }
         }))
     }
 

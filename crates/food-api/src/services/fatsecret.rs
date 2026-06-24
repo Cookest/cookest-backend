@@ -20,11 +20,68 @@ pub struct FatSecretClient {
 
 impl FatSecretClient {
     pub fn new(client_id: String, client_secret: SecretString) -> Self {
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .build()
+            .unwrap_or_else(|_| Client::new());
         Self {
-            client: Client::new(),
+            client,
             client_id,
             client_secret,
             token_cache: RwLock::new(None),
+        }
+    }
+
+    async fn send_with_retry<T, F, Fut>(&self, make_request: F) -> Result<T, reqwest::Error>
+    where
+        F: Fn() -> Fut,
+        Fut: std::future::Future<Output = Result<reqwest::Response, reqwest::Error>>,
+        T: serde::de::DeserializeOwned,
+    {
+        let mut attempts = 0;
+        let max_attempts = 3;
+        let mut delay = std::time::Duration::from_millis(500);
+
+        loop {
+            attempts += 1;
+            match make_request().await {
+                Ok(resp) => {
+                    let status = resp.status();
+                    if (status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS)
+                        && attempts < max_attempts
+                    {
+                        tracing::warn!(
+                            "FatSecret request failed with status {}, retrying (attempt {}/{}) after {:?}",
+                            status,
+                            attempts,
+                            max_attempts,
+                            delay
+                        );
+                        tokio::time::sleep(delay).await;
+                        delay *= 2;
+                        continue;
+                    }
+                    let resp = resp.error_for_status()?;
+                    return resp.json::<T>().await;
+                }
+                Err(e) => {
+                    let is_transient = !e.is_builder();
+                    if is_transient && attempts < max_attempts {
+                        tracing::warn!(
+                            "FatSecret request error: {}, retrying (attempt {}/{}) after {:?}",
+                            e,
+                            attempts,
+                            max_attempts,
+                            delay
+                        );
+                        tokio::time::sleep(delay).await;
+                        delay *= 2;
+                        continue;
+                    }
+                    return Err(e);
+                }
+            }
         }
     }
 
@@ -46,17 +103,17 @@ impl FatSecretClient {
         }
 
         tracing::info!("Requesting new FatSecret OAuth2 token");
-        let resp: TokenResponse = self.client
-            .post("https://oauth.fatsecret.com/connect/token")
-            .basic_auth(&self.client_id, Some(self.client_secret.expose_secret()))
-            .form(&[
-                ("grant_type", "client_credentials"),
-                ("scope", "basic"),
-            ])
-            .send()
-            .await?
-            .json()
-            .await?;
+        let resp: TokenResponse = self.send_with_retry(|| {
+            self.client
+                .post("https://oauth.fatsecret.com/connect/token")
+                .basic_auth(&self.client_id, Some(self.client_secret.expose_secret()))
+                .form(&[
+                    ("grant_type", "client_credentials"),
+                    ("scope", "basic"),
+                ])
+                .send()
+        })
+        .await?;
 
         let expiry = Utc::now() + Duration::seconds(resp.expires_in);
         *cache = Some((resp.access_token.clone(), expiry));
@@ -70,35 +127,38 @@ impl FatSecretClient {
         max_results: u64,
     ) -> Result<FSRecipeSearchWrapper, reqwest::Error> {
         let token = self.get_token().await?;
-        let mut req = self.client.get("https://platform.fatsecret.com/rest/server.api")
-            .bearer_auth(token)
-            .query(&[
-                ("method", "recipes.search.v3"),
-                ("format", "json"),
-                ("page_number", &page_number.to_string()),
-                ("max_results", &max_results.to_string()),
-            ]);
+        self.send_with_retry(|| {
+            let mut req = self.client.get("https://platform.fatsecret.com/rest/server.api")
+                .bearer_auth(&token)
+                .query(&[
+                    ("method", "recipes.search.v3"),
+                    ("format", "json"),
+                    ("page_number", &page_number.to_string()),
+                    ("max_results", &max_results.to_string()),
+                ]);
 
-        if let Some(q) = query {
-            req = req.query(&[("search_expression", q)]);
-        }
+            if let Some(q) = query {
+                req = req.query(&[("search_expression", q)]);
+            }
 
-        req.send().await?.json().await
+            req.send()
+        })
+        .await
     }
 
     pub async fn get_recipe(&self, recipe_id: i64) -> Result<FSRecipeDetailWrapper, reqwest::Error> {
         let token = self.get_token().await?;
-        self.client.get("https://platform.fatsecret.com/rest/server.api")
-            .bearer_auth(token)
-            .query(&[
-                ("method", "recipe.get.v2"),
-                ("format", "json"),
-                ("recipe_id", &recipe_id.to_string()),
-            ])
-            .send()
-            .await?
-            .json()
-            .await
+        self.send_with_retry(|| {
+            self.client.get("https://platform.fatsecret.com/rest/server.api")
+                .bearer_auth(&token)
+                .query(&[
+                    ("method", "recipe.get.v2"),
+                    ("format", "json"),
+                    ("recipe_id", &recipe_id.to_string()),
+                ])
+                .send()
+        })
+        .await
     }
 
     pub async fn search_ingredients(
@@ -108,54 +168,63 @@ impl FatSecretClient {
         max_results: u64,
     ) -> Result<FSFoodsSearchWrapper, reqwest::Error> {
         let token = self.get_token().await?;
-        let mut req = self.client.get("https://platform.fatsecret.com/rest/server.api")
-            .bearer_auth(token)
-            .query(&[
-                ("method", "foods.search"),
-                ("format", "json"),
-                ("page_number", &page_number.to_string()),
-                ("max_results", &max_results.to_string()),
-            ]);
+        self.send_with_retry(|| {
+            let mut req = self.client.get("https://platform.fatsecret.com/rest/server.api")
+                .bearer_auth(&token)
+                .query(&[
+                    ("method", "foods.search"),
+                    ("format", "json"),
+                    ("page_number", &page_number.to_string()),
+                    ("max_results", &max_results.to_string()),
+                ]);
 
-        if let Some(q) = query {
-            req = req.query(&[("search_expression", q)]);
-        }
+            if let Some(q) = query {
+                req = req.query(&[("search_expression", q)]);
+            }
 
-        req.send().await?.json().await
+            req.send()
+        })
+        .await
     }
 
     pub async fn get_ingredient(&self, food_id: i64) -> Result<FSFoodDetailWrapper, reqwest::Error> {
         let token = self.get_token().await?;
-        self.client.get("https://platform.fatsecret.com/rest/server.api")
-            .bearer_auth(token)
-            .query(&[
-                ("method", "food.get.v2"),
-                ("format", "json"),
-                ("food_id", &food_id.to_string()),
-            ])
-            .send()
-            .await?
-            .json()
-            .await
+        self.send_with_retry(|| {
+            self.client.get("https://platform.fatsecret.com/rest/server.api")
+                .bearer_auth(&token)
+                .query(&[
+                    ("method", "food.get.v2"),
+                    ("format", "json"),
+                    ("food_id", &food_id.to_string()),
+                ])
+                .send()
+        })
+        .await
     }
 
     /// Resolve a product barcode (GTIN-13) to a FatSecret food id.
     /// Returns `None` when FatSecret reports no match (value "0").
     pub async fn find_food_id_by_barcode(&self, barcode: &str) -> Result<Option<i64>, reqwest::Error> {
         let token = self.get_token().await?;
-        let wrapper: FSBarcodeWrapper = self.client.get("https://platform.fatsecret.com/rest/server.api")
-            .bearer_auth(token)
-            .query(&[
-                ("method", "food.find_id_for_barcode"),
-                ("format", "json"),
-                ("barcode", barcode),
-            ])
-            .send()
-            .await?
-            .json()
-            .await?;
-        let id = wrapper.food_id.value.parse::<i64>().unwrap_or(0);
-        Ok(if id > 0 { Some(id) } else { None })
+        let json: serde_json::Value = self.send_with_retry(|| {
+            self.client.get("https://platform.fatsecret.com/rest/server.api")
+                .bearer_auth(&token)
+                .query(&[
+                    ("method", "food.find_id_for_barcode"),
+                    ("format", "json"),
+                    ("barcode", barcode),
+                ])
+                .send()
+        })
+        .await?;
+
+        if let Some(food_id_obj) = json.get("food_id") {
+            if let Some(val_str) = food_id_obj.get("value").and_then(|v| v.as_str()) {
+                let id = val_str.parse::<i64>().unwrap_or(0);
+                return Ok(if id > 0 { Some(id) } else { None });
+            }
+        }
+        Ok(None)
     }
 }
 
