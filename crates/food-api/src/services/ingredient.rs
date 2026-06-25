@@ -30,6 +30,28 @@ impl IngredientService {
         Self { db, source, fs_client }
     }
 
+    /// Helper to resolve the active food data source dynamically from the DB settings table
+    async fn get_active_source(&self) -> FoodDataSource {
+        use sea_orm::{ConnectionTrait, Statement};
+        let query = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "SELECT value FROM system_settings WHERE key = 'food_data_source'",
+            vec![],
+        );
+        if let Ok(Some(row)) = self.db.query_one(query).await {
+            if let Ok(val) = row.try_get::<String>("", "value") {
+                match val.as_str() {
+                    "local" => return FoodDataSource::Local,
+                    "fatsecret" => return FoodDataSource::FatSecret,
+                    "openfoodfacts" => return FoodDataSource::OpenFoodFacts,
+                    "hybrid" => return FoodDataSource::Hybrid,
+                    _ => {}
+                }
+            }
+        }
+        self.source.clone()
+    }
+
     // -------------------------------------------------------------------------
     // search
     // -------------------------------------------------------------------------
@@ -41,9 +63,10 @@ impl IngredientService {
     ) -> Result<PaginatedResponse<IngredientListItem>, AppError> {
         let page = query.page.unwrap_or(1).max(1);
         let per_page = query.per_page.unwrap_or(20).min(100);
+        let active_source = self.get_active_source().await;
 
-        match &self.source {
-            FoodDataSource::Local => {
+        match active_source {
+            FoodDataSource::Local | FoodDataSource::OpenFoodFacts => {
                 self.search_local(&query, page, per_page).await
             }
             FoodDataSource::FatSecret => {
@@ -94,6 +117,7 @@ impl IngredientService {
                 id: r.id,
                 name: r.name,
                 category: r.category,
+                image_url: r.image_url,
             })
             .collect();
 
@@ -133,6 +157,7 @@ impl IngredientService {
                         id,
                         name: r.food_name,
                         category,
+                        image_url: None,
                     });
                 }
             }
@@ -156,12 +181,38 @@ impl IngredientService {
 
     /// Get full ingredient detail with nutrients and portions
     pub async fn get_ingredient(&self, id: i64) -> Result<IngredientDetail, AppError> {
-        match &self.source {
+        let active_source = self.get_active_source().await;
+        match active_source {
             FoodDataSource::Local => self.get_ingredient_local(id).await,
             FoodDataSource::FatSecret => self.get_ingredient_fatsecret(id).await,
+            FoodDataSource::OpenFoodFacts => self.get_ingredient_openfoodfacts(id).await,
             FoodDataSource::Hybrid => {
                 match self.get_ingredient_local(id).await {
-                    Ok(detail) => Ok(detail),
+                    Ok(detail) => {
+                        // If it has a barcode (off_id) but no image, fetch image dynamically from Open Food Facts API and save it!
+                        if detail.image_url.is_none() {
+                            if let Ok(ing) = IngredientEntity::find_by_id(id).one(&self.db).await {
+                                if let Some(ing) = ing {
+                                    if let Some(barcode) = &ing.off_id {
+                                        use crate::services::openfoodfacts::OpenFoodFactsClient;
+                                        let off_client = OpenFoodFactsClient::new();
+                                        if let Ok(off_detail) = off_client.get_by_barcode(barcode, id).await {
+                                            if let Some(img) = &off_detail.image_url {
+                                                use sea_orm::ActiveModelTrait;
+                                                let mut active: crate::entity::ingredient::ActiveModel = ing.into();
+                                                active.image_url = sea_orm::Set(Some(img.clone()));
+                                                let _ = active.update(&self.db).await;
+                                                let mut updated_detail = detail;
+                                                updated_detail.image_url = Some(img.clone());
+                                                return Ok(updated_detail);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Ok(detail)
+                    }
                     Err(AppError::NotFound(_)) => self.get_ingredient_fatsecret(id).await,
                     Err(e) => Err(e),
                 }
@@ -210,9 +261,36 @@ impl IngredientService {
             id: ingredient.id,
             name: ingredient.name,
             category: ingredient.category,
+            image_url: ingredient.image_url,
             nutrients,
             portions,
         })
+    }
+
+    async fn get_ingredient_openfoodfacts(&self, id: i64) -> Result<IngredientDetail, AppError> {
+        let detail = self.get_ingredient_local(id).await?;
+        if detail.image_url.is_none() {
+            if let Ok(ing) = IngredientEntity::find_by_id(id).one(&self.db).await {
+                if let Some(ing) = ing {
+                    if let Some(barcode) = &ing.off_id {
+                        use crate::services::openfoodfacts::OpenFoodFactsClient;
+                        let off_client = OpenFoodFactsClient::new();
+                        if let Ok(off_detail) = off_client.get_by_barcode(barcode, id).await {
+                            if let Some(img) = &off_detail.image_url {
+                                use sea_orm::ActiveModelTrait;
+                                let mut active: crate::entity::ingredient::ActiveModel = ing.into();
+                                active.image_url = sea_orm::Set(Some(img.clone()));
+                                let _ = active.update(&self.db).await;
+                                let mut updated_detail = detail;
+                                updated_detail.image_url = Some(img.clone());
+                                return Ok(updated_detail);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(detail)
     }
 
     async fn get_ingredient_fatsecret(&self, id: i64) -> Result<IngredientDetail, AppError> {
@@ -267,6 +345,7 @@ impl IngredientService {
             id: food_id,
             name: food.food_name,
             category,
+            image_url: None,
             nutrients,
             portions,
         })
@@ -278,12 +357,48 @@ impl IngredientService {
 
     /// Resolve a barcode to an ingredient detail
     pub async fn get_by_barcode(&self, barcode: &str) -> Result<IngredientDetail, AppError> {
-        match &self.source {
+        let active_source = self.get_active_source().await;
+        match active_source {
             FoodDataSource::Local => {
                 self.get_by_barcode_local(barcode).await
             }
             FoodDataSource::FatSecret => {
                 self.get_by_barcode_fatsecret(barcode).await
+            }
+            FoodDataSource::OpenFoodFacts => {
+                // Try local DB first (off_id column)
+                match self.get_by_barcode_local(barcode).await {
+                    Ok(detail) => return Ok(detail),
+                    Err(AppError::NotFound(_)) => {}
+                    Err(e) => return Err(e),
+                }
+
+                // Fetch live from OpenFoodFacts and save to DB
+                use crate::services::openfoodfacts::OpenFoodFactsClient;
+                let off_client = OpenFoodFactsClient::new();
+                let detail = off_client.get_by_barcode(barcode, 0).await?;
+
+                // Save to local DB so it can be searched
+                let now = chrono::Utc::now().fixed_offset();
+                let ing_row = sea_orm::ConnectionTrait::query_one(&self.db, sea_orm::Statement::from_sql_and_values(
+                    sea_orm::DatabaseBackend::Postgres,
+                    "INSERT INTO ingredients (name, category, off_id, image_url, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (name) DO UPDATE SET off_id = EXCLUDED.off_id RETURNING id",
+                    [detail.name.clone().into(), detail.category.clone().into(), Some(barcode).into(), detail.image_url.clone().into(), now.into()],
+                )).await?.ok_or_else(|| AppError::Internal("Failed to insert OFF ingredient".to_string()))?;
+
+                let ingredient_id: i64 = ing_row.try_get("", "id")?;
+
+                if let Some(ref n) = detail.nutrients {
+                    let _ = sea_orm::ConnectionTrait::execute(&self.db, sea_orm::Statement::from_sql_and_values(
+                        sea_orm::DatabaseBackend::Postgres,
+                        "INSERT INTO ingredient_nutrients (ingredient_id, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, saturated_fat_g) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (ingredient_id) DO NOTHING",
+                        [ingredient_id.into(), n.calories.into(), n.protein_g.into(), n.carbs_g.into(), n.fat_g.into(), n.fiber_g.into(), n.sugar_g.into(), n.sodium_mg.into(), n.saturated_fat_g.into()],
+                    )).await;
+                }
+
+                let mut updated_detail = detail;
+                updated_detail.id = ingredient_id;
+                Ok(updated_detail)
             }
             FoodDataSource::Hybrid => {
                 // Try local DB first (off_id column)
@@ -297,7 +412,27 @@ impl IngredientService {
                 use crate::services::openfoodfacts::OpenFoodFactsClient;
                 let off_client = OpenFoodFactsClient::new();
                 match off_client.get_by_barcode(barcode, 0).await {
-                    Ok(detail) => return Ok(detail),
+                    Ok(mut detail) => {
+                        // Save to local DB so it can be searched
+                        let now = chrono::Utc::now().fixed_offset();
+                        if let Ok(Some(ing_row)) = sea_orm::ConnectionTrait::query_one(&self.db, sea_orm::Statement::from_sql_and_values(
+                            sea_orm::DatabaseBackend::Postgres,
+                            "INSERT INTO ingredients (name, category, off_id, image_url, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (name) DO UPDATE SET off_id = EXCLUDED.off_id RETURNING id",
+                            [detail.name.clone().into(), detail.category.clone().into(), Some(barcode).into(), detail.image_url.clone().into(), now.into()],
+                        )).await {
+                            if let Ok(ingredient_id) = ing_row.try_get::<i64>("", "id") {
+                                if let Some(ref n) = detail.nutrients {
+                                    let _ = sea_orm::ConnectionTrait::execute(&self.db, sea_orm::Statement::from_sql_and_values(
+                                        sea_orm::DatabaseBackend::Postgres,
+                                        "INSERT INTO ingredient_nutrients (ingredient_id, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, saturated_fat_g) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (ingredient_id) DO NOTHING",
+                                        [ingredient_id.into(), n.calories.into(), n.protein_g.into(), n.carbs_g.into(), n.fat_g.into(), n.fiber_g.into(), n.sugar_g.into(), n.sodium_mg.into(), n.saturated_fat_g.into()],
+                                    )).await;
+                                }
+                                detail.id = ingredient_id;
+                            }
+                        }
+                        return Ok(detail);
+                    }
                     Err(AppError::NotFound(_)) => {}
                     Err(e) => return Err(e),
                 }
