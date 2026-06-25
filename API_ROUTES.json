@@ -365,30 +365,7 @@
       "description": "AI generate a recipe (generate\u2192score\u2192refine loop)",
       "tier": "pro"
     },
-    {
-      "method": "POST",
-      "path": "/api/image-gen/recipes/{id}/steps/batch",
-      "description": "Batch-generate images for all recipe steps",
-      "tier": "pro"
-    },
-    {
-      "method": "POST",
-      "path": "/api/image-gen/recipes/{id}/steps/{n}",
-      "description": "Generate image for a single recipe step",
-      "tier": "pro"
-    },
-    {
-      "method": "POST",
-      "path": "/api/image-gen/recipes/{id}/hero",
-      "description": "Generate hero image for a recipe",
-      "tier": "pro"
-    },
-    {
-      "method": "GET",
-      "path": "/api/image-gen/jobs/{job_id}",
-      "description": "Poll image generation job status",
-      "tier": "pro"
-    },
+
     {
       "method": "GET",
       "path": "/api/browse/recipes",

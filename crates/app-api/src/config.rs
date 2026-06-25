@@ -31,8 +31,6 @@ pub struct Config {
     pub food_api_key: Option<String>,
     pub resend_api_key: Option<SecretString>,
     pub resend_from_email: String,
-    pub image_gen_url: String,
-    pub image_gen_token: Option<String>,
     pub overpass_url: String,
     pub rag_top_k: u64,
     pub self_hosted: bool,
@@ -52,7 +50,6 @@ impl Config {
     /// - `CORS_ORIGIN`, `OLLAMA_URL`, `OLLAMA_MODEL`
     /// - `PDF_UPLOAD_DIR`, `FOOD_API_URL`, `FOOD_API_KEY`
     /// - `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
-    /// - `IMAGE_GEN_URL`, `IMAGE_GEN_TOKEN`
     /// - `STRIPE_WEBHOOK_SECRET`
     /// - `OLLAMA_EMBED_MODEL` (nomic-embed-text) — RAG embeddings model
     /// - `OVERPASS_URL` — OpenStreetMap Overpass endpoint for nearby stores
@@ -120,11 +117,6 @@ impl Config {
         let resend_from_email = env::var("RESEND_FROM_EMAIL")
             .unwrap_or_else(|_| "noreply@m.cookest.app".to_string());
 
-        let image_gen_url = env::var("IMAGE_GEN_URL")
-            .unwrap_or_else(|_| "http://localhost:8082".to_string());
-
-        let image_gen_token = env::var("IMAGE_GEN_TOKEN").ok();
-
         let overpass_url = env::var("OVERPASS_URL")
             .unwrap_or_else(|_| "https://overpass-api.de/api/interpreter".to_string());
 
@@ -154,8 +146,6 @@ impl Config {
             food_api_key,
             resend_api_key,
             resend_from_email,
-            image_gen_url,
-            image_gen_token,
             overpass_url,
             rag_top_k,
             self_hosted,

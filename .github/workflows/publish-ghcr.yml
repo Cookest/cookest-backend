@@ -22,8 +22,7 @@ jobs:
             image_suffix: app-api
           - dockerfile: crates/food-api/Dockerfile
             image_suffix: food-api
-          - dockerfile: image-gen/Dockerfile
-            image_suffix: image-gen
+
 
     steps:
       - name: Checkout repository
