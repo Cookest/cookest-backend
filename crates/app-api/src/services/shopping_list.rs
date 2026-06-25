@@ -116,6 +116,59 @@ impl ShoppingListService {
         active.is_checked = Set(new_checked);
         active.updated_at = Set(Utc::now().fixed_offset());
         let updated = active.update(&self.db).await?;
+
+        if new_checked {
+            let qty_f64 = updated.quantity
+                .and_then(|q| q.to_string().parse::<f64>().ok())
+                .unwrap_or(1.0);
+            let unit_str = updated.unit.clone().unwrap_or_else(|| "piece".to_string());
+
+            let inventory_service = crate::services::InventoryService::new(self.db.clone());
+
+            if let Some(ing_id) = updated.ingredient_id {
+                let exists = crate::entity::ingredient::Entity::find_by_id(ing_id)
+                    .one(&self.db)
+                    .await?
+                    .is_some();
+                if exists {
+                    let dec_qty = updated.quantity.unwrap_or(Decimal::ONE);
+                    let req = crate::models::inventory::AddInventoryItem {
+                        ingredient_id: ing_id,
+                        custom_name: None,
+                        quantity: dec_qty,
+                        unit: unit_str,
+                        expiry_date: None,
+                        storage_location: Some("pantry".to_string()),
+                    };
+                    if let Err(e) = inventory_service.add(user_id, req).await {
+                        tracing::error!("Failed to auto-add checked item to pantry: {:?}", e);
+                    }
+                } else {
+                    if let Err(e) = inventory_service.quick_add(
+                        user_id,
+                        updated.name.clone(),
+                        qty_f64,
+                        unit_str,
+                        Some("pantry".to_string()),
+                        None,
+                    ).await {
+                        tracing::error!("Failed to auto-add checked item to pantry (quick_add): {:?}", e);
+                    }
+                }
+            } else {
+                if let Err(e) = inventory_service.quick_add(
+                    user_id,
+                    updated.name.clone(),
+                    qty_f64,
+                    unit_str,
+                    Some("pantry".to_string()),
+                    None,
+                ).await {
+                    tracing::error!("Failed to auto-add checked item to pantry (quick_add): {:?}", e);
+                }
+            }
+        }
+
         Ok(ShoppingListItemResponse::from(updated))
     }
 
