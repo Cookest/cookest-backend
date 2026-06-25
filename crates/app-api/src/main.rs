@@ -36,6 +36,7 @@ use crate::handlers::{
     configure_polls_public, configure_polls_protected,
     configure_eat_out,
     configure_notification,
+    configure_suggestion,
     configure_import_proxy,
 };
 use crate::middleware::{JwtAuth, SecurityHeaders};
@@ -47,7 +48,7 @@ use crate::services::{
     OnboardingService, ShoppingListService, SubscriptionService, StoreService, PushTokenService,
     PreferenceService, EmailService, ScanService,
     HouseholdService, MealPollService,
-    NotificationService,
+    NotificationService, MealPlanSuggestionService,
 };
 use crate::services::taste_profile::TasteProfileService;
 
@@ -721,6 +722,21 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_meal_poll_votes_poll   ON meal_poll_votes(poll_id);
         "#,
 
+        // ── Family Suggestions ─────────────────────────────
+        r#"
+        CREATE TABLE IF NOT EXISTS meal_plan_suggestions (
+            id            BIGSERIAL PRIMARY KEY,
+            plan_id       BIGINT NOT NULL REFERENCES meal_plans(id) ON DELETE CASCADE,
+            slot_id       BIGINT NOT NULL REFERENCES meal_plan_slots(id) ON DELETE CASCADE,
+            recipe_id     BIGINT NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+            suggested_by  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            status        TEXT NOT NULL DEFAULT 'pending',
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_meal_plan_suggestions_slot ON meal_plan_suggestions(slot_id);
+        "#,
+
         // ── Notifications ─────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS notifications (
@@ -809,6 +825,7 @@ async fn main() -> std::io::Result<()> {
     let household_service = Arc::new(HouseholdService::new(db.clone()));
     let meal_poll_service = Arc::new(MealPollService::new(db.clone()));
     let notification_service = Arc::new(NotificationService::new(Arc::new(db.clone()), email_service.clone()));
+    let suggestion_service = Arc::new(MealPlanSuggestionService::new(Arc::new(db.clone()), notification_service.clone()));
 
 
 
@@ -884,6 +901,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(meal_poll_service.clone()))
             .app_data(web::Data::new(food_api_client.clone()))
             .app_data(web::Data::new(notification_service.clone()))
+            .app_data(web::Data::new(suggestion_service.clone()))
             .app_data(web::Data::new(db.clone()))
             // ── Public routes (no JWT required) ──────────────────────────────
             .configure(configure_auth)        // /api/auth/*
@@ -920,6 +938,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(configure_polls_protected)
                     .configure(configure_eat_out)
                     .configure(configure_notification)
+                    .configure(configure_suggestion)
                     .configure(configure_import_proxy)
             )
     })
