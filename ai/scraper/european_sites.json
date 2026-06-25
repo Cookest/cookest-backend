@@ -1,0 +1,3762 @@
+[
+  {
+    "name": "BBC Good Food",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.bbcgoodfood.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "BBC Food",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.bbc.co.uk/food/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Jamie Oliver",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.jamieoliver.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Delicious Magazine",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.deliciousmagazine.co.uk/sitemap_index.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Olive Magazine",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.olivemagazine.com/sitemap_index.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Great British Chefs",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.greatbritishchefs.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Pinch of Nom",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://pinchofnom.com/sitemap_index.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "GoodTo",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.goodto.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Tesco Real Food",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://realfood.tesco.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Sainsbury's Magazine",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.sainsburysmagazine.co.uk/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Love Food",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.lovefood.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "MOB Kitchen",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.mob.co.uk/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Gousto Cookbook",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.gousto.co.uk/sitemap.xml",
+    "pattern": "/cookbook/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "HelloFresh UK",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.hellofresh.co.uk/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Bosh!",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://bosh.tv/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Sorted Food",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://sortedfood.com/sitemap.xml",
+    "pattern": "/recipe/",
+    "limit": 20
+  },
+  {
+    "name": "Slimming Eats",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.slimmingeats.com/blog/sitemap_index.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Kitchen Sanctuary",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.kitchensanctuary.com/sitemap_index.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Lavender and Lovage",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.lavenderandlovage.com/sitemap_index.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Easy Peasy Foodie",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.easypeasyfoodie.com/sitemap_index.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Delia Online",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.deliaonline.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "The Curry Guy",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://greatcurryrecipe.co.uk/sitemap_index.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Hairy Bikers",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.hairybikers.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Tinned Tomatoes",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.tinnedtomatoes.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Baking Mad",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.bakingmad.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Chefkoch",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.chefkoch.de/sitemap-recipe.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Kochbar",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.kochbar.de/sitemap.xml",
+    "pattern": "/rezept/",
+    "limit": 20
+  },
+  {
+    "name": "Lecker",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.lecker.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Einfach Backen",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.einfachbacken.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Springlane",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.springlane.de/magazin/sitemap_index.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Backen macht glücklich",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.backenmachtgluecklich.de/sitemap_index.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Kitchen Girls",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://kitchengirls.de/sitemap_index.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Eat Smarter",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://eatsmarter.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Brigitte Rezepte",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.brigitte.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Küchengötter",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.kuechengoetter.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Essen & Trinken",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.essen-und-trinken.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Emmi kocht einfach",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://emmikochteinfach.de/sitemap_index.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Sallys Blog",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://sallys-blog.de/sitemap_index.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Maltes Kitchen",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.malteskitchen.de/sitemap_index.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Backbube",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://backbube.com/sitemap_index.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Kochkarussell",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://kochkarussell.com/sitemap_index.xml",
+    "pattern": "/rezept/",
+    "limit": 20
+  },
+  {
+    "name": "Gaumenfreundin",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.gaumenfreundin.de/sitemap_index.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Kaffee & Cupcakes",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.kaffeeundcupcakes.de/sitemap_index.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "KptnCook",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.kptncook.com/sitemap.xml",
+    "pattern": "/recipe/",
+    "limit": 20
+  },
+  {
+    "name": "Kleines Kulinarium",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.kleineskulinarium.de/sitemap_index.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Kochtrotz",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.kochtrotz.de/sitemap_index.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Miss Fancy",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://missfancy.de/sitemap_index.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Backen.de",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://backen.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Elle Republic",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://ellerepublic.de/sitemap_index.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Just Spices",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.justspices.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Marmiton",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.marmiton.org/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "750g",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.750g.com/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Cuisine AZ",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.cuisineaz.com/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Cuisine Actuelle",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.cuisineactuelle.fr/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Cuisine et Vins de France",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.cuisineetvinsdefrance.com/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Chef Simon",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://chefsimon.com/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Papilles et Pupilles",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.papillesetpupilles.fr/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Hervé Cuisine",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.hervecuisine.com/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "La Cuisine de Bernard",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://lacuisinedebernard.com/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Il était une fois la pâtisserie",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.iletaitunefoislapatisserie.com/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Amandine Cooking",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.amandinecooking.com/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Cuisine saine",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://cuisine-saine.fr/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Clem Foodie",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://clemfoodie.com/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Mercotte",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.mercotte.fr/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Elle Mijote Quelque Chose",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://ellemijotequelquechose.com/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Audrey Cuisine",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.audreycuisine.fr/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Aux Délices de Géraldine",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.auxdelicesdegeraldine.fr/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Mes Inspirations Culinaire",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://mesinspirationsculinaires.com/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Jow",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://jow.fr/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Un Déjeuner de Soleil",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.undejeunerdesoleil.com/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Cuisiner tout simplement",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://cuisinertoutsimplement.com/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Les Gourmandises de Lou",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://lesgourmandisesdelou.com/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Del's Cooking Twist",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.delscookingtwist.com/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Lilie Bakery",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://liliebakery.fr/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Recette 360",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.recette360.com/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Directo al Paladar",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.directoalpaladar.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Recetas de Rechupete",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.recetasderechupete.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "El Comidista",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://elcomidista.elpais.com/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Javi Recetas",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.javirecetas.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Velocidad Cuchara",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.velocidadcuchara.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Thermo Recetas",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.thermorecetas.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Placer al Plato",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://placeralplato.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Código Cocina",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.codigococina.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Cocinando entre Olivos",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.cocinandoentreolivos.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Webos Fritos",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://webosfritos.es/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "El Aderezo",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.eladerezo.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Estoy hecho un cocinillas",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.estoyhechouncocinillas.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Paulina Cocina",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.paulinacocina.net/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Los Tragaldabas",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.lostragaldabas.es/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Cocina Familiar",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.cocina-familiar.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Mis Recetas Veganas",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.misrecetasveganas.es/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Loleta",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.loleta.es/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Carmina en la cocina",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.carminaenlacocina.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Delicious Martha",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://deliciousmartha.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Bake Street",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://bakestreet.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Guisándome la vida",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://guisandomelavida.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Lola cocina",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://lolacocina.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Asopaipas",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.asopaipas.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Cocina con poco",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.cocinaconpoco.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Cocinar para dos",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.cocinarpara2.com/sitemap_index.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Giallozafferano",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.giallozafferano.it/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Cucchiaio d'Argento",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.cucchiaio.it/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "La Cucina Italiana",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.lacucinaitaliana.it/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Fatto in casa da Benedetta",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.fattoincasadabenedetta.it/sitemap_index.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Misya",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.misya.info/sitemap_index.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Agrodolce",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.agrodolce.it/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Cookaround",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.cookaround.com/sitemap.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Tavolartegusto",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.tavolartegusto.it/sitemap_index.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Chiarapassion",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.chiarapassion.com/sitemap_index.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Allacciate il grembiule",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://blog.giallozafferano.it/allacciateilgrembiule/sitemap_index.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Ho voglia di dolce",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.hovogliadidolce.it/sitemap_index.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Gnam Gnam",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.gnamgnam.it/sitemap_index.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Cucina Fanpage",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://cucina.fanpage.it/sitemap.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Ricette della nonna",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.ricettedellanonna.net/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Sfizioso",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.sfizioso.it/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Jul's Kitchen",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://julskitchen.com/sitemap_index.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Cibo di Strada",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.cibodistrada.it/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Sale e Pepe",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.salepepe.it/sitemap.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Dissapore",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.dissapore.com/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Mangia senza pancia",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://blog.giallozafferano.it/mangiasenzapancia/sitemap_index.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Fragola e Limone",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.fragolaelimone.it/sitemap_index.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Rossella in Padella",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://blog.giallozafferano.it/rossellainpadella/sitemap_index.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Una Famiglia in Cucina",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.unafamigliaincucina.com/sitemap_index.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Viva la Focaccia",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://vivalafocaccia.com/sitemap_index.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Il Cuore in Pentola",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.ilcuoreinpentola.it/sitemap_index.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Teleculinária",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.teleculinaria.pt/sitemap_index.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Casal Mistério",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.casalmisterio.com/sitemap_index.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Cinco Quartos de Laranja",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.cincoquartosdelaranja.com/sitemap_index.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Receitas e Menus",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://receitasemenus.net/sitemap_index.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Petit Chef",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.petitchef.pt/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Sweet My Kitchen",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.sweetmykitchen.com/sitemap_index.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Na Cadeira do Papa",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://nacadeiradopapa.com/sitemap_index.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Graça Truques e Dicas",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://gracatruquesedicas.blogspot.com/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Prato Caseiro",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://pratocaseiro.blogspot.com/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "As Receitas de Sedução",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://asreceitasdeseducao.blogspot.com/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Lume Brando",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://lumebrando.com/sitemap_index.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Delícias e Companhia",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://deliciasecompanhia.pt/sitemap_index.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Clara de Sousa",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://claradesousa.pt/sitemap_index.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "SaborIntenso",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.saborintenso.com/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "No Soup For You",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://nosoupforyou.com/sitemap_index.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Maria de Oliveira",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://mariadeoliveiraleite.com/sitemap_index.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "As Receitas da Patanisca",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://asreceitasdapatanisca.blogspot.com/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Chá dos Pastorinhos",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.chadospastorinhos.pt/sitemap_index.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Feito a preceito",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.feitoapreceito.pt/sitemap_index.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Cozinha de Algibeira",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://cozinhadealgibeira.pt/sitemap_index.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Leuke Recepten",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.leukerecepten.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Uit Paulines Keuken",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://uitpaulineskeuken.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Chicks Love Food",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://chickslovefood.com/sitemap_index.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Brenda Kookt",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://brendakookt.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Laura's Bakery",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.laurasbakery.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Eef Kookt Zo",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.eefkooktzo.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Miljuschka",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://miljuschka.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Francesca Kookt",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://francescakookt.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "KeukenLiefde",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.keukenliefde.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Rutger Bakt",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://rutgerbakt.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "OhMyFoodness",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://ohmyfoodness.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Culy",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.culy.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Smaakvol Veggie",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://smaakvolveggie.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Lekker en Simpel",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.lekkerensimpel.com/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Voedzaam & Snel",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.voedzaamensnel.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Mind Your Feed",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.mindyourfeed.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Beaufood",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://beaufood.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Flying Foodie",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.flyingfoodie.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Kookfans",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.kookfans.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Lekker Tafelen",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://lekkertafelen.nl/sitemap_index.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Kwestia Smaku",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.kwestiasmaku.com/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Moje Wypieki",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.mojewypieki.com/sitemap_index.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Jadłonomia",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.jadlonomia.com/sitemap_index.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Ania Gotuje",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://aniagotuje.pl/sitemap_index.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Smaker",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://smaker.pl/sitemap.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Przepisy.pl",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.przepisy.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Przyslij Przepis",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.przyslijprzepis.pl/sitemap.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Poezja Smaku",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://poezja-smaku.pl/sitemap_index.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Poprostu Pycha",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://poprostupycha.com.pl/sitemap_index.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Kulinarne Przeboje",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://kulinarneprzeboje.pl/sitemap_index.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Gotujmy",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://gotujmy.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "MniamMniam",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.mniammniam.com/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Kotlet.tv",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://kotlet.tv/sitemap_index.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Make Cooking Easier",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://makecookingeasier.pl/sitemap_index.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Olgasmile",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.olgasmile.com/sitemap_index.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Kuchnia Doroty",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://kuchniadoroty.pl/sitemap_index.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "White Plate",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://whiteplate.com/sitemap_index.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Kuchnia Domowa",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.kuchnia-domowa.pl/sitemap.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Przepisy Joli",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://przepisyjoli.com/sitemap_index.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Beszamel",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://beszamel.se.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Köket",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.koket.se/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Zeinas Kitchen",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://zeinaskitchen.se/sitemap_index.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Jennie Walldén",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://jenniewallden.se/sitemap_index.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Matplatsen",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://matplatsen.se/sitemap_index.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Lesscarbs",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://lesscarbs.se/sitemap_index.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Jävligt Gott",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.javligtgott.se/sitemap_index.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Fredriks Fika",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://fredriksfika.se/sitemap_index.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Linnéas Skafferi",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://linneasskafferi.se/sitemap_index.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "56kilo",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.56kilo.se/sitemap_index.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Landleys Kök",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.landleyskok.se/sitemap_index.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Salt & Peppar",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://saltpeppar.se/sitemap_index.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Tasteline",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.tasteline.com/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Niiinis Kitchenlife",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://niiinis.se/sitemap_index.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Kryddburken",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.kryddburken.se/sitemap_index.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Matsajten",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://matsajten.se/sitemap_index.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Matprat",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.matprat.no/sitemap.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Trines Matblogg",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://trinesmatblogg.no/sitemap_index.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Det søte liv",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.detsooteliv.no/sitemap_index.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Krem",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://krem.no/sitemap_index.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Mat på Bordet",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://matpaabordet.no/sitemap_index.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Fru Timian",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://frutimian.no/sitemap_index.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Hobbykokken",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://hobbykokken.no/sitemap_index.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Hverdagsmat",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://hverdagsmat.no/sitemap_index.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Gladkokken",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://gladkokken.no/sitemap_index.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Godt.no",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.godt.no/sitemap.xml",
+    "pattern": "/oppskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Matoppskrift",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.matoppskrift.no/sitemap.xml",
+    "pattern": "/oppskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Smedstuen",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://smedstuen.no/sitemap.xml",
+    "pattern": "/oppskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Matstart",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.matstart.no/sitemap.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Passion for baking",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.passionforbaking.com/sitemap_index.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Matmisjonen",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://matmisjonen.no/sitemap_index.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Valdemarsro",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://www.valdemarsro.dk/sitemap_index.xml",
+    "pattern": "/opskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Madbanditten",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://madbanditten.dk/sitemap_index.xml",
+    "pattern": "/opskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Mummum",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://mummum.dk/sitemap_index.xml",
+    "pattern": "/opskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Gastromand",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://gastromand.dk/sitemap_index.xml",
+    "pattern": "/opskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Madens Verden",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://madensverden.dk/sitemap_index.xml",
+    "pattern": "/opskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Louisa Lorang",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://lorangco.dk/sitemap_index.xml",
+    "pattern": "/opskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Foodfanatic",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://foodfanatic.dk/sitemap_index.xml",
+    "pattern": "/opskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Gane og Gaffel",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://ganeoggaffel.dk/sitemap_index.xml",
+    "pattern": "/opskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Opskrifter.dk",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://www.opskrifter.dk/sitemap.xml",
+    "pattern": "/opskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Madro",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://madro.dk/sitemap_index.xml",
+    "pattern": "/opskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Dagelijkse Kost",
+    "country": "Belgium",
+    "language": "nl",
+    "sitemap": "https://dagelijksekost.vrt.be/sitemap.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Een Recepten",
+    "country": "Belgium",
+    "language": "nl",
+    "sitemap": "https://www.een.be/sitemap.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Solo Open Kitchen",
+    "country": "Belgium",
+    "language": "nl",
+    "sitemap": "https://www.solo.be/sitemap.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "VTM Koken",
+    "country": "Belgium",
+    "language": "nl",
+    "sitemap": "https://vtmkoken.be/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Libelle Lekker",
+    "country": "Belgium",
+    "language": "nl",
+    "sitemap": "https://www.libelle-lekker.be/sitemap.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Cook'n'Roll",
+    "country": "Belgium",
+    "language": "nl",
+    "sitemap": "https://www.cookandroll.eu/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Delicieux",
+    "country": "Belgium",
+    "language": "nl",
+    "sitemap": "https://delicieux.be/sitemap_index.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Tartine et Boterham",
+    "country": "Belgium",
+    "language": "nl",
+    "sitemap": "https://www.tartine-et-boterham.be/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Knack Weekend Cooking",
+    "country": "Belgium",
+    "language": "nl",
+    "sitemap": "https://weekend.knack.be/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Lekker van bij ons",
+    "country": "Belgium",
+    "language": "nl",
+    "sitemap": "https://www.lekkervanbijons.be/sitemap.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Chefkoch",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.chefkoch.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Emmi kocht einfach",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.emmikochteinfach.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Einfach Kochen",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.einfachkochen.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Eat",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.eat.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Lecker Schmecker",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.leckerschmecker.me/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Springlane",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.springlane.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Rezeptwelt",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.rezeptwelt.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Das Kuechengefluester",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.das-kuechengefluester.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Mixtipp",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.mixtipp.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Mamas Rezepte",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.mamas-rezepte.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Schwarzgrueneszebra",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.schwarzgrueneszebra.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Aberbacken",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.aberbacken.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "KochDichTatar",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.kochdichtatar.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Vegan Heaven",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.veganheaven.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Kochform",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.kochform.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Meine Familie und ich",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.meine-familie-und-ich.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Dr Oetker",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.oetker.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Backen mit Leidenschaft",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://www.backen-mit-leidenschaft.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Bianca Zapatka",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://biancazapatka.com/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Vegane Vibes",
+    "country": "Germany",
+    "language": "de",
+    "sitemap": "https://veganevibes.de/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Cuisine AZ",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.cuisineaz.com/xml/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Papilles et Pupilles",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.papillesetpupilles.fr/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Recettes du Quebec",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.recettes.qc.ca/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Ptitchef",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.ptitchef.com/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Journal des Femmes Cuisine",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://cuisine.journaldesfemmes.fr/sitemap.xml",
+    "pattern": "/recette/",
+    "limit": 20
+  },
+  {
+    "name": "La Recette",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.larecette.fr/sitemap.xml",
+    "pattern": "/recette/",
+    "limit": 20
+  },
+  {
+    "name": "Atelier des Chefs",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.atelierdeschefs.fr/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Les Foodies",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.lesfoodies.com/sitemap.xml",
+    "pattern": "/recette/",
+    "limit": 20
+  },
+  {
+    "name": "Amandine Cooking",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.amandinecooking.com/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Cuisine Addict",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.cuisine-addict.com/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "La Cuisine de Bernard",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.lacuisinedebernard.com/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Croquons la Vie",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.croquonslavie.fr/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "La Table de Lilie",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.latabledelilie.com/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Ma Vie en Couleurs",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.mavieencouleurs.fr/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Aux Fourneaux",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.aux-fourneaux.fr/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Sandra Pascual",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.sandrapascual.com/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "La Popotte de Manue",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.lapopottedemanue.com/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Herve Cuisine",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.hervecuisine.com/sitemap.xml",
+    "pattern": "/recette/",
+    "limit": 20
+  },
+  {
+    "name": "Un Dejeuner de Soleil",
+    "country": "France",
+    "language": "fr",
+    "sitemap": "https://www.undejeunerdesoleil.com/sitemap.xml",
+    "pattern": "/recettes/",
+    "limit": 20
+  },
+  {
+    "name": "Giallo Zafferano",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.giallozafferano.it/sitemap/portate.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Fatto in Casa da Benedetta",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.fattoincasadabenedetta.it/sitemap.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Tavolartegusto",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.tavolartegusto.it/sitemap.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Cookist",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.cookist.it/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Misya",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.misya.it/sitemap.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Ricette per Cucinare",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.ricettepercucinare.com/sitemap.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Ricettario",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.ricettario.it/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Gnam Box",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.gnambox.com/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Dolcidee",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.dolcidee.it/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Petit Chef Italia",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://it.petitchef.com/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Ricette Facili",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.ricettefacili.it/sitemap.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Cotto e Postato",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.cottoepostato.it/sitemap.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Ricette per Bimby",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.ricetteperbimby.it/sitemap.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Gz",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://ricette.giallozafferano.it/sitemap.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Sale e Pepe",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.saleepepe.it/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Ricette di Checucino",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.che-cucino.it/sitemap.xml",
+    "pattern": "/ricette/",
+    "limit": 20
+  },
+  {
+    "name": "Ricette Mania",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.ricettemania.it/sitemap.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Ricette di Cucina",
+    "country": "Italy",
+    "language": "it",
+    "sitemap": "https://www.ricettedicultura.com/sitemap.xml",
+    "pattern": "/ricetta/",
+    "limit": 20
+  },
+  {
+    "name": "Directo al Paladar",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.directoalpaladar.com/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Pequerecetas",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.pequerecetas.com/sitemap.xml",
+    "pattern": "/receta/",
+    "limit": 20
+  },
+  {
+    "name": "Recetas de Rechupete",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.recetasderechupete.com/sitemap.xml",
+    "pattern": "/receta/",
+    "limit": 20
+  },
+  {
+    "name": "Divina Cocina",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.divinacocina.es/sitemap.xml",
+    "pattern": "/receta/",
+    "limit": 20
+  },
+  {
+    "name": "Canal Cocina",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.canalcocina.es/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Recetas para Thermomix",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.recetasparathermomix.com/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Cookidoo",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.cookidoo.es/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Javi Recetas",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.javirecetas.com/sitemap.xml",
+    "pattern": "/receta/",
+    "limit": 20
+  },
+  {
+    "name": "Hogar Mania",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.hogarmania.com/sitemap.xml",
+    "pattern": "/cocina/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Platos y Recetas",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.platosyrecetas.com/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Cocina Facil",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.cocinafacil.com.mx/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "La Cocina de Rebeca",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.lacocinaderebeca.es/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Recetas Gratis",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.recetasgratis.net/sitemap.xml",
+    "pattern": "/receta/",
+    "limit": 20
+  },
+  {
+    "name": "Cocina Casera",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.cocinacasera.es/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Mis Recetas",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.misrecetas.com/sitemap.xml",
+    "pattern": "/receta/",
+    "limit": 20
+  },
+  {
+    "name": "Recetas de Cocina",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.recetasdecocina.eu/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Recetas Cubanita",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.recetascubanitas.com/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Comedera",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.comedera.com/sitemap.xml",
+    "pattern": "/receta/",
+    "limit": 20
+  },
+  {
+    "name": "Recetas de Escandalo",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.recetasdeescandalo.com/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "El Mundo del Lider",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.elmundodellider.com/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Karlos Arguinano",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.karlosarguinano.com/sitemap.xml",
+    "pattern": "/receta/",
+    "limit": 20
+  },
+  {
+    "name": "Recetas Nestle",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.recetasnestle.com.mx/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Sabores en Linea",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.saboresenlinea.com/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "Cocina Delirante",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.cocinadelirante.com/sitemap.xml",
+    "pattern": "/receta/",
+    "limit": 20
+  },
+  {
+    "name": "Borges",
+    "country": "Spain",
+    "language": "es",
+    "sitemap": "https://www.borges.es/sitemap.xml",
+    "pattern": "/recetas/",
+    "limit": 20
+  },
+  {
+    "name": "BBC Good Food",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.bbcgoodfood.com/sitemaps/2026-Q1-recipe.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Delicious Magazine",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.deliciousmagazine.co.uk/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Nigella Lawson",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.nigella.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Olive Magazine",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.olivemagazine.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Taming Twins",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.tamingtwins.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Kitchen Sanctuary",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.kitchensanctuary.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Jane's Patisserie",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.janespatisserie.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Tesco Real Food",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.tescorealfood.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Waitrose",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.waitrose.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Lavender and Lovage",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.lavenderandlovage.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Elizabeth's Kitchen Diary",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.elizabethskitchendiary.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Fuss Free Flavours",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.fussfreeflavours.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "The Baking Explorer",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.thebakingexplorer.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Casa Costello",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.casacostello.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Foodie Quine",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.foodiequine.co.uk/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Glamorous Glutton",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.glamorousglutton.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Nadia's Healthy Kitchen",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.nadiashealthykitchen.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Munchies and Munchkins",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.munchiesandmunchkins.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "The Flexitarian",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.theflexitarian.co.uk/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Baking Queen 74",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.bakingqueen74.co.uk/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Supper in the Suburbs",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.supperinthesuburbs.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Curly's Cooking",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.curlyscooking.co.uk/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Marmalade and Me",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.marmaladeandme.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Recipes from a Pantry",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.recipesfromapantry.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Farmersgirl Kitchen",
+    "country": "United Kingdom",
+    "language": "en",
+    "sitemap": "https://www.farmersgirlkitchen.co.uk/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Pysznosci",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.pysznosci.pl/sitemap.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Ania Gotuje",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.aniagotuje.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Deccoria",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.deccoria.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Smaker",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.smaker.pl/sitemap.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Rozkoszny",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.rozkoszny.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Moje Wypieki",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.mojewypieki.com/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Doradca Smaku",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.doradcasmaku.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Kuchnia Lidla",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.kuchnialidla.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Kwestia Smaku Przepisy",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.kwestiasmaku.pl/sitemap.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Ewa Wachowicz",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.ewawachowicz.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Ania Starmach",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.aniastarmach.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Pychotka",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.pychotka.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Gotujmy",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.gotujmy.pl/sitemap.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Kulinarna Polska",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.kulinarnapolska.com/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Polecany Przepis",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.polecanyprzepis.pl/sitemap.xml",
+    "pattern": "/przepis/",
+    "limit": 20
+  },
+  {
+    "name": "Wieszak",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.wieszak.com.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Polki",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.polki.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Smaczne Blog",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.smaczne-blog.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Domowe Potrawy",
+    "country": "Poland",
+    "language": "pl",
+    "sitemap": "https://www.domowepotrawy.pl/sitemap.xml",
+    "pattern": "/przepisy/",
+    "limit": 20
+  },
+  {
+    "name": "Arla",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.arla.se/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Recept.se",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.recept.se/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Landleys Kök",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.landleyskok.se/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Zeinas Kitchen",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.zeinaskitchen.se/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Kungsornen",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.kungsornen.se/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Lindas Bakskola",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.lindasbakskola.se/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Mathem",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.mathem.se/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "ICA",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.ica.se/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Kokaihop",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.kokaihop.se/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Receptfavoriter",
+    "country": "Sweden",
+    "language": "sv",
+    "sitemap": "https://www.receptfavoriter.se/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Gladkokken",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.gladkokken.no/sitemap.xml",
+    "pattern": "/oppskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Tine",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.tine.no/sitemap.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Det Sote Liv",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.detsoteliv.no/sitemap.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Det Glade Kjokken",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.detgladekjokken.no/sitemap.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "TRIM",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.trimm.no/sitemap.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Dinmat",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.dinmat.no/sitemap.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Mats Paulsen",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.matspaulsen.no/sitemap.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Kolonial",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.kolonial.no/sitemap.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Mat på Bordet",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.matpaabordet.no/sitemap.xml",
+    "pattern": "/oppskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "NRK Mat",
+    "country": "Norway",
+    "language": "no",
+    "sitemap": "https://www.nrk.no/sitemap.xml",
+    "pattern": "/mat/oppskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Valdemarsro",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://www.valdemarsro.dk/sitemap.xml",
+    "pattern": "/opskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Madens Verden",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://www.madensverden.dk/sitemap.xml",
+    "pattern": "/opskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Maden i mit Liv",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://www.madenimitliv.dk/sitemap.xml",
+    "pattern": "/opskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Spis Bedre",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://www.spisbedre.dk/sitemap.xml",
+    "pattern": "/opskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Noget i Ovnen",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://www.nogetiovnen.dk/sitemap.xml",
+    "pattern": "/opskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Arla DK",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://www.arla.dk/sitemap.xml",
+    "pattern": "/opskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Karolines Køkken",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://www.karolines-kokken.dk/sitemap.xml",
+    "pattern": "/opskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Meyers",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://www.meyers.dk/sitemap.xml",
+    "pattern": "/opskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "GastroFun",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://www.gastrofun.dk/sitemap.xml",
+    "pattern": "/opskrift/",
+    "limit": 20
+  },
+  {
+    "name": "Lindas Køkken",
+    "country": "Denmark",
+    "language": "da",
+    "sitemap": "https://www.lindaskokken.dk/sitemap.xml",
+    "pattern": "/opskrifter/",
+    "limit": 20
+  },
+  {
+    "name": "Martat",
+    "country": "Finland",
+    "language": "fi",
+    "sitemap": "https://www.martat.fi/sitemap.xml",
+    "pattern": "/reseptit/",
+    "limit": 20
+  },
+  {
+    "name": "Kotikokki",
+    "country": "Finland",
+    "language": "fi",
+    "sitemap": "https://www.kotikokki.net/sitemap.xml",
+    "pattern": "/reseptit/",
+    "limit": 20
+  },
+  {
+    "name": "Herkkusuu",
+    "country": "Finland",
+    "language": "fi",
+    "sitemap": "https://www.herkkusuut.com/sitemap.xml",
+    "pattern": "/resepti/",
+    "limit": 20
+  },
+  {
+    "name": "Novita",
+    "country": "Finland",
+    "language": "fi",
+    "sitemap": "https://www.novita.com/sitemap.xml",
+    "pattern": "/reseptit/",
+    "limit": 20
+  },
+  {
+    "name": "Ruoka ja Koti",
+    "country": "Finland",
+    "language": "fi",
+    "sitemap": "https://www.ruokajakoti.fi/sitemap.xml",
+    "pattern": "/reseptit/",
+    "limit": 20
+  },
+  {
+    "name": "K-Ruoka",
+    "country": "Finland",
+    "language": "fi",
+    "sitemap": "https://www.k-ruoka.fi/sitemap.xml",
+    "pattern": "/reseptit/",
+    "limit": 20
+  },
+  {
+    "name": "Valio",
+    "country": "Finland",
+    "language": "fi",
+    "sitemap": "https://www.valio.fi/sitemap.xml",
+    "pattern": "/reseptit/",
+    "limit": 20
+  },
+  {
+    "name": "Kodin Kuvalehti",
+    "country": "Finland",
+    "language": "fi",
+    "sitemap": "https://www.kodinkuvalehti.fi/sitemap.xml",
+    "pattern": "/reseptit/",
+    "limit": 20
+  },
+  {
+    "name": "MTV Uutiset Ruoka",
+    "country": "Finland",
+    "language": "fi",
+    "sitemap": "https://www.mtvuutiset.fi/sitemap.xml",
+    "pattern": "/ruoka/reseptit/",
+    "limit": 20
+  },
+  {
+    "name": "Yhteishyvä",
+    "country": "Finland",
+    "language": "fi",
+    "sitemap": "https://www.yhteishyva.fi/sitemap.xml",
+    "pattern": "/reseptit/",
+    "limit": 20
+  },
+  {
+    "name": "Teleculinaria",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.teleculinaria.pt/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Clara de Sousa",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.claradesousa.pt/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "24 Kitchen Portugal",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.24kitchen.pt/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Cozinha da Na",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.cozinhadana.com/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Culinaria Casa",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.culinaria.casa/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Petitchef Portugal",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://pt.petitchef.com/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Receitas de Mae",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.receitasdemae.com/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Cozinha Tradicional",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.cozinhatradicional.pt/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "As Minhas Receitas",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.asminhasreceitas.com/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "O Meu Tempero",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.omeutempero.pt/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Sabores do Mundo",
+    "country": "Portugal",
+    "language": "pt",
+    "sitemap": "https://www.saboresdomundo.com.pt/sitemap.xml",
+    "pattern": "/receitas/",
+    "limit": 20
+  },
+  {
+    "name": "Albert Heijn",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.ah.nl/sitemap.xml",
+    "pattern": "/allerhande/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "NJAM",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.njam.tv/sitemap.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Lekker en Simpel",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.lekkerensimpel.com/sitemap.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Smulweb",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.smulweb.nl/sitemap.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "24 Kitchen NL",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.24kitchen.nl/sitemap.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "KookJij",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.kookjij.nl/sitemap.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Recepten.be",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.recepten.be/sitemap.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Okoko Recepten",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.okokorecepten.nl/sitemap.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Uit Paulines Keuken",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.uitpaulineskeuken.nl/sitemap.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Lauras Bakery",
+    "country": "Netherlands",
+    "language": "nl",
+    "sitemap": "https://www.laurasbakery.nl/sitemap.xml",
+    "pattern": "/recepten/",
+    "limit": 20
+  },
+  {
+    "name": "Akis Petretzikis",
+    "country": "Greece",
+    "language": "el",
+    "sitemap": "https://akispetretzikis.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Argiro Barbarigou",
+    "country": "Greece",
+    "language": "el",
+    "sitemap": "https://argirobarbarigou.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Sita",
+    "country": "Greece",
+    "language": "el",
+    "sitemap": "https://sita.gr/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Sintayes",
+    "country": "Greece",
+    "language": "el",
+    "sitemap": "https://www.sintayes.gr/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "MilkyWay",
+    "country": "Greece",
+    "language": "el",
+    "sitemap": "https://www.milkyway.gr/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Greek Chef",
+    "country": "Greece",
+    "language": "el",
+    "sitemap": "https://www.greekchef.gr/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Mary Syraki",
+    "country": "Greece",
+    "language": "el",
+    "sitemap": "https://www.marysyraki.gr/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Kouzinista",
+    "country": "Greece",
+    "language": "el",
+    "sitemap": "https://www.kouzinista.gr/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Gute Kueche",
+    "country": "Austria",
+    "language": "de",
+    "sitemap": "https://www.gutekueche.at/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Ich mache einen Blog",
+    "country": "Austria",
+    "language": "de",
+    "sitemap": "https://www.ichmacheeinenblog.at/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Mein schönes Land",
+    "country": "Austria",
+    "language": "de",
+    "sitemap": "https://www.meinschoenesland.com/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Kulinarik",
+    "country": "Austria",
+    "language": "de",
+    "sitemap": "https://www.kulinarik.at/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Austrian Recipes",
+    "country": "Austria",
+    "language": "de",
+    "sitemap": "https://www.austrianrecipes.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Lecker AT",
+    "country": "Austria",
+    "language": "de",
+    "sitemap": "https://www.lecker.at/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Swissmilk",
+    "country": "Switzerland",
+    "language": "de",
+    "sitemap": "https://www.swissmilk.ch/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Fooby",
+    "country": "Switzerland",
+    "language": "de",
+    "sitemap": "https://www.fooby.ch/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Betty Bossi",
+    "country": "Switzerland",
+    "language": "de",
+    "sitemap": "https://www.bettybossi.ch/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Annemarie Wildeisen",
+    "country": "Switzerland",
+    "language": "de",
+    "sitemap": "https://www.wildeisen.ch/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Migusto",
+    "country": "Switzerland",
+    "language": "de",
+    "sitemap": "https://migusto.migros.ch/sitemap.xml",
+    "pattern": "/rezepte/",
+    "limit": 20
+  },
+  {
+    "name": "Savori Urbane",
+    "country": "Romania",
+    "language": "ro",
+    "sitemap": "https://savoriurbane.com/sitemap.xml",
+    "pattern": "/retete/",
+    "limit": 20
+  },
+  {
+    "name": "Bucataras",
+    "country": "Romania",
+    "language": "ro",
+    "sitemap": "https://www.bucataras.ro/sitemap.xml",
+    "pattern": "/retete/",
+    "limit": 20
+  },
+  {
+    "name": "Laura Laurentiu",
+    "country": "Romania",
+    "language": "ro",
+    "sitemap": "https://www.lauralaurentiu.ro/sitemap.xml",
+    "pattern": "/reteta/",
+    "limit": 20
+  },
+  {
+    "name": "Jamila Cuisine",
+    "country": "Romania",
+    "language": "ro",
+    "sitemap": "https://www.jamilacuisine.ro/sitemap.xml",
+    "pattern": "/retete/",
+    "limit": 20
+  },
+  {
+    "name": "Pofta Buna",
+    "country": "Romania",
+    "language": "ro",
+    "sitemap": "https://www.pofta-buna.com/sitemap.xml",
+    "pattern": "/retete/",
+    "limit": 20
+  },
+  {
+    "name": "Gustos",
+    "country": "Romania",
+    "language": "ro",
+    "sitemap": "https://www.gustos.ro/sitemap.xml",
+    "pattern": "/retete/",
+    "limit": 20
+  },
+  {
+    "name": "Adi Hadean",
+    "country": "Romania",
+    "language": "ro",
+    "sitemap": "https://www.adihadean.ro/sitemap.xml",
+    "pattern": "/retete/",
+    "limit": 20
+  },
+  {
+    "name": "Teos Kitchen",
+    "country": "Romania",
+    "language": "ro",
+    "sitemap": "https://www.teoskitchen.ro/sitemap.xml",
+    "pattern": "/retete/",
+    "limit": 20
+  },
+  {
+    "name": "Lalena",
+    "country": "Romania",
+    "language": "ro",
+    "sitemap": "https://www.lalena.ro/sitemap.xml",
+    "pattern": "/retete/",
+    "limit": 20
+  },
+  {
+    "name": "Retete Culinare",
+    "country": "Romania",
+    "language": "ro",
+    "sitemap": "https://www.e-retete.ro/sitemap.xml",
+    "pattern": "/retete/",
+    "limit": 20
+  },
+  {
+    "name": "Nosalty",
+    "country": "Hungary",
+    "language": "hu",
+    "sitemap": "https://www.nosalty.hu/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Mindmegette",
+    "country": "Hungary",
+    "language": "hu",
+    "sitemap": "https://www.mindmegette.hu/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Street Kitchen",
+    "country": "Hungary",
+    "language": "hu",
+    "sitemap": "https://www.streetkitchen.hu/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Kifli",
+    "country": "Hungary",
+    "language": "hu",
+    "sitemap": "https://www.kifli.hu/sitemap.xml",
+    "pattern": "/receptek/",
+    "limit": 20
+  },
+  {
+    "name": "Rupáner Konyha",
+    "country": "Hungary",
+    "language": "hu",
+    "sitemap": "https://www.ruparnerkonyha.hu/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Dessert Ninja",
+    "country": "Hungary",
+    "language": "hu",
+    "sitemap": "https://www.dessertninja.hu/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Culinaria",
+    "country": "Hungary",
+    "language": "hu",
+    "sitemap": "https://www.culinaria.hu/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Falatozz",
+    "country": "Hungary",
+    "language": "hu",
+    "sitemap": "https://www.falatozz.hu/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Recept Város",
+    "country": "Hungary",
+    "language": "hu",
+    "sitemap": "https://www.receptvaros.hu/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Sütemény Recept",
+    "country": "Hungary",
+    "language": "hu",
+    "sitemap": "https://www.sutemenyrecept.hu/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Coolinarika",
+    "country": "Croatia",
+    "language": "hr",
+    "sitemap": "https://www.coolinarika.com/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Dobra Hrana",
+    "country": "Croatia",
+    "language": "hr",
+    "sitemap": "https://dobrhrana.24sata.hr/sitemap.xml",
+    "pattern": "/recept/",
+    "limit": 20
+  },
+  {
+    "name": "Klub Zdravih Navika",
+    "country": "Croatia",
+    "language": "hr",
+    "sitemap": "https://www.klubzdravihnavika.com/sitemap.xml",
+    "pattern": "/recepti/",
+    "limit": 20
+  },
+  {
+    "name": "Croatian Cooking",
+    "country": "Croatia",
+    "language": "hr",
+    "sitemap": "https://www.croatian-cooking.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Balkan Lunch Box",
+    "country": "Croatia",
+    "language": "hr",
+    "sitemap": "https://www.balkanlunchbox.com/sitemap.xml",
+    "pattern": "/recipes/",
+    "limit": 20
+  },
+  {
+    "name": "Povarenok",
+    "country": "Russia",
+    "language": "ru",
+    "sitemap": "https://www.povarenok.ru/sitemap.xml",
+    "pattern": "/recipes/show/",
+    "limit": 20
+  },
+  {
+    "name": "Eda.ru",
+    "country": "Russia",
+    "language": "ru",
+    "sitemap": "https://eda.ru/sitemap.xml",
+    "pattern": "/recepty/",
+    "limit": 20
+  },
+  {
+    "name": "Gastronom",
+    "country": "Russia",
+    "language": "ru",
+    "sitemap": "https://www.gastronom.ru/sitemap.xml",
+    "pattern": "/recipe/",
+    "limit": 20
+  },
+  {
+    "name": "1000 Menu",
+    "country": "Russia",
+    "language": "ru",
+    "sitemap": "https://1000.menu/sitemap.xml",
+    "pattern": "/cooking/",
+    "limit": 20
+  }
+]

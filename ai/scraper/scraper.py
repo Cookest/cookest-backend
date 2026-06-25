@@ -29,7 +29,6 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
-import psycopg
 from bs4 import BeautifulSoup
 from recipe_scrapers import scrape_me
 
@@ -118,13 +117,86 @@ def discover_urls_from_sitemap(sitemap_url: str, pattern: str = None) -> list[st
             else:
                 urls.append(url)
     
-    return list(set(urls))
+import sqlite3
+
+def get_local_cache_db():
+    db_path = Path(__file__).resolve().parent / "scraper_cache.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS etl_scrape_log (
+            source_url TEXT PRIMARY KEY,
+            status TEXT,
+            scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            error_msg TEXT
+        )
+        """
+    )
+    conn.commit()
+    return conn
+
+def is_already_scraped_local(cache_conn, url) -> bool:
+    try:
+        cur = cache_conn.cursor()
+        cur.execute("SELECT status FROM etl_scrape_log WHERE source_url = ?", (url,))
+        row = cur.fetchone()
+        return row is not None and row[0] == 'success'
+    except Exception:
+        return False
+
+def log_success_local(cache_conn, url):
+    try:
+        cur = cache_conn.cursor()
+        cur.execute(
+            "INSERT OR REPLACE INTO etl_scrape_log (source_url, status, error_msg) VALUES (?, 'success', NULL)",
+            (url,)
+        )
+        cache_conn.commit()
+    except Exception as e:
+        print(f"Warning: Could not log success to local cache: {e}")
+
+def log_error_local(cache_conn, url, error_msg):
+    try:
+        cur = cache_conn.cursor()
+        cur.execute(
+            "INSERT OR REPLACE INTO etl_scrape_log (source_url, status, error_msg) VALUES (?, 'error', ?)",
+            (url, error_msg[:1000])
+        )
+        cache_conn.commit()
+    except Exception as e:
+        print(f"Warning: Could not log error to local cache: {e}")
+
+def save_recipe_to_output_file(output_path, url, raw_data, norm_data):
+    data = []
+    if Path(output_path).exists():
+        try:
+            with open(output_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if not isinstance(data, list):
+                    data = []
+        except Exception:
+            data = []
+            
+    data.append({
+        "url": url,
+        "raw_data": raw_data,
+        "norm_data": norm_data
+    })
+    
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 def extract_raw_recipe(url: str) -> dict:
     """Use recipe-scrapers to extract raw structured microdata."""
     print(f"Scraping raw web microdata from: {url}")
     scraper = scrape_me(url)
+    
+    def safe_get(func, default=None):
+        try:
+            return func()
+        except Exception:
+            return default
     
     # Extract instructions list
     instructions = []
@@ -141,16 +213,16 @@ def extract_raw_recipe(url: str) -> dict:
             pass
 
     raw_data = {
-        "title": scraper.title(),
-        "total_time": scraper.total_time(),
-        "yields": scraper.yields(),
-        "ingredients": scraper.ingredients(),
+        "title": safe_get(scraper.title, ""),
+        "total_time": safe_get(scraper.total_time, 0),
+        "yields": safe_get(scraper.yields, "2 servings"),
+        "ingredients": safe_get(scraper.ingredients, []),
         "instructions": instructions,
-        "image": scraper.image(),
-        "nutrients": scraper.nutrients(),
-        "cuisine": scraper.cuisine(),
-        "category": scraper.category(),
-        "host": scraper.host(),
+        "image": safe_get(scraper.image, ""),
+        "nutrients": safe_get(scraper.nutrients, {}),
+        "cuisine": safe_get(scraper.cuisine, None),
+        "category": safe_get(scraper.category, None),
+        "host": safe_get(scraper.host, ""),
     }
     return raw_data
 
@@ -226,7 +298,7 @@ def normalize_with_ollama(raw_data: dict, model: str) -> dict:
         }
     }
 
-    resp = requests.post(url, json=payload, timeout=120)
+    resp = requests.post(url, json=payload, timeout=300)
     resp.raise_for_status()
     
     response_body = resp.json()
@@ -383,6 +455,8 @@ def log_error_in_db(conn: psycopg.Connection, url: str, error_msg: str):
     parsed_url = urlparse(url)
     site_domain = parsed_url.netloc.replace("www.", "")
     try:
+        # Clear any aborted transaction state so this logging command is accepted
+        conn.rollback()
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -410,13 +484,18 @@ def is_already_scraped(conn: psycopg.Connection, url: str) -> bool:
                 (url,)
             )
             row = cur.fetchone()
+            conn.commit()  # Close the select transaction
             return row is not None and row[0] == 'success'
     except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         return False
 
 
-def run_pipeline(url: str, db_conn: psycopg.Connection | None, model: str, dry_run: bool):
-    """Coordinate the scraping, LLM normalization, and DB insertion for a single URL."""
+def run_pipeline(url: str, db_conn, model: str, dry_run: bool, output_file: str = None, local_cache_conn = None):
+    """Coordinate the scraping, LLM normalization, and DB insertion/file export for a single URL."""
     try:
         # Step 1: Scrape
         raw = extract_raw_recipe(url)
@@ -442,8 +521,14 @@ def run_pipeline(url: str, db_conn: psycopg.Connection | None, model: str, dry_r
             print("===========================================\n")
             return True
 
-        # Step 3: DB Insert
-        if db_conn:
+        # Step 3: Export to file OR insert into database
+        if output_file:
+            save_recipe_to_output_file(output_file, url, raw, norm)
+            print(f"[+] Saved recipe to output file: {raw['title']}")
+            if local_cache_conn:
+                log_success_local(local_cache_conn, url)
+            return True
+        elif db_conn:
             db_conn.commit()  # Flush any previous states
             try:
                 insert_into_database(db_conn, url, raw, norm)
@@ -454,9 +539,65 @@ def run_pipeline(url: str, db_conn: psycopg.Connection | None, model: str, dry_r
                 raise e
     except Exception as e:
         print(f"[-] Pipeline error on URL {url}: {e}")
-        if db_conn and not dry_run:
-            log_error_in_db(db_conn, url, str(e))
+        if not dry_run:
+            if output_file and local_cache_conn:
+                log_error_local(local_cache_conn, url, str(e))
+            elif db_conn:
+                log_error_in_db(db_conn, url, str(e))
         return False
+
+
+def import_recipes_from_file(db_conn, file_path, force=False):
+    """Import recipes, ingredients, steps, and macros from a JSON export file into PostgreSQL."""
+    path = Path(file_path)
+    if not path.exists():
+        sys.exit(f"Error: Import file not found at {file_path}")
+    
+    with open(path, "r", encoding="utf-8") as f:
+        try:
+            recipes = json.load(f)
+        except Exception as e:
+            sys.exit(f"Error parsing import JSON file: {e}")
+            
+    if not isinstance(recipes, list):
+        sys.exit("Error: Import JSON file must contain a list of recipe objects.")
+        
+    print(f"Loaded {len(recipes)} recipes from {file_path} for database import.")
+    
+    success_count = 0
+    skipped_count = 0
+    error_count = 0
+    
+    for idx, item in enumerate(recipes, start=1):
+        url = item.get("url")
+        raw_data = item.get("raw_data")
+        norm_data = item.get("norm_data")
+        
+        if not url or not raw_data or not norm_data:
+            print(f"[-] Skipping recipe #{idx} (missing url, raw_data, or norm_data)")
+            error_count += 1
+            continue
+            
+        title = raw_data.get("title", "Unknown Title")
+        print(f"[{idx}/{len(recipes)}] Importing: {title} ({url})")
+        
+        if not force and is_already_scraped(db_conn, url):
+            print(f"  -> Skipping already imported URL: {url}")
+            skipped_count += 1
+            continue
+            
+        try:
+            db_conn.commit()
+            insert_into_database(db_conn, url, raw_data, norm_data)
+            db_conn.commit()
+            success_count += 1
+        except Exception as e:
+            db_conn.rollback()
+            print(f"  -> Error importing recipe: {e}")
+            log_error_in_db(db_conn, url, str(e))
+            error_count += 1
+            
+    print(f"\nImport finished! Success: {success_count}, Skipped: {skipped_count}, Errors: {error_count}")
 
 
 def main():
@@ -471,34 +612,66 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Do not write to the database")
     parser.add_argument("--force", action="store_true", help="Force scraping even if already successfully scraped")
     parser.add_argument("--delay", type=float, default=2.0, help="Delay in seconds between requests (default: 2.0)")
+    parser.add_argument("--output", help="Export scraped recipes to a JSON file instead of writing to the database. Ideal for running on the Ollama server offline.")
+    parser.add_argument("--import-file", dest="import_file", help="Import a previously exported JSON recipe file directly into the PostgreSQL database.")
     args = parser.parse_args()
 
-    if not args.url and not args.sitemap and not args.config:
+    if not args.url and not args.sitemap and not args.config and not args.import_file:
         parser.print_help()
-        sys.exit("\nError: Please provide either --url, --sitemap, or --config")
+        sys.exit("\nError: Please provide either --url, --sitemap, --config, or --import-file")
+
+    # ── Import mode ─────────────────────────────────────────────────────────────
+    if args.import_file:
+        import psycopg
+        db_url = get_db_url(args.db_url)
+        print("Connecting to database for import...")
+        db_conn = psycopg.connect(db_url)
+        print("Connected successfully.")
+        import_recipes_from_file(db_conn, args.import_file, force=args.force)
+        db_conn.close()
+        return
 
     model = get_ollama_model(args.model)
     print(f"AI Model: {model}")
     print(f"Ollama endpoint: {get_ollama_url()}")
 
+    # ── Output file mode (offline, no DB needed) ─────────────────────────────
+    output_file = args.output
+    local_cache_conn = None
     db_conn = None
-    if not args.dry_run:
+
+    if output_file:
+        print(f"Output mode: saving results to '{output_file}' (no database required)")
+        local_cache_conn = get_local_cache_db()
+    elif not args.dry_run:
+        import psycopg
         db_url = get_db_url(args.db_url)
         print("Connecting to database...")
         db_conn = psycopg.connect(db_url)
         print("Connected successfully.")
 
-    # 1. Process single URL
+    def already_done(url):
+        if output_file and local_cache_conn:
+            return is_already_scraped_local(local_cache_conn, url)
+        elif db_conn:
+            return is_already_scraped(db_conn, url)
+        return False
+
+    def pipeline(url):
+        return run_pipeline(url, db_conn, model, args.dry_run,
+                            output_file=output_file,
+                            local_cache_conn=local_cache_conn)
+
+    # ── 1. Process single URL ────────────────────────────────────────────────
     if args.url:
-        if db_conn and not args.force and is_already_scraped(db_conn, args.url):
-            print(f"Skipping already scraped URL: {args.url} (Use --force to override)")
+        if not args.force and already_done(args.url):
+            print(f"Skipping already scraped URL: {args.url} (use --force to override)")
             return
-        
-        success = run_pipeline(args.url, db_conn, model, args.dry_run)
+        success = pipeline(args.url)
         if not success:
             sys.exit(1)
 
-    # 2. Process multi-site config file
+    # ── 2. Process multi-site config file ────────────────────────────────────
     elif args.config:
         config_path = Path(args.config)
         if not config_path.exists():
@@ -508,68 +681,57 @@ def main():
                 targets = json.load(f)
             except Exception as e:
                 sys.exit(f"Error parsing JSON config: {e}")
-        
+
         if not isinstance(targets, list):
             sys.exit("Error: Config JSON must be a list of objects.")
-        
+
         print(f"Loaded config with {len(targets)} sitemap targets.")
-        
+
         for t_idx, target in enumerate(targets, start=1):
             sitemap_url = target.get("sitemap")
             if not sitemap_url:
                 print(f"[-] Skipping target #{t_idx} (missing 'sitemap' field)")
                 continue
-            
+
             pattern = target.get("pattern")
             limit = target.get("limit", args.limit)
-            
+
             print(f"\n==========================================")
             print(f"Target [{t_idx}/{len(targets)}]: {sitemap_url}")
             print(f"Pattern: {pattern}, Limit: {limit}")
             print(f"==========================================")
-            
+
             all_urls = discover_urls_from_sitemap(sitemap_url, pattern)
             print(f"Discovered {len(all_urls)} URLs.")
-            
-            queue = []
-            for url in all_urls:
-                if db_conn and not args.force and is_already_scraped(db_conn, url):
-                    continue
-                queue.append(url)
-            
+
+            queue = [url for url in all_urls if args.force or not already_done(url)]
+
             print(f"Queue has {len(queue)} pending URLs (after deduplication). Limit set to {limit}.")
             queue = queue[:limit]
-            
+
             success_count = 0
             for idx, url in enumerate(queue, start=1):
                 print(f"\n[{idx}/{len(queue)}] Processing: {url}")
-                success = run_pipeline(url, db_conn, model, args.dry_run)
-                if success:
+                if pipeline(url):
                     success_count += 1
                 if idx < len(queue):
                     time.sleep(args.delay)
             print(f"Finished target. Successfully processed {success_count}/{len(queue)} recipes.")
 
-    # 3. Process single sitemap
+    # ── 3. Process single sitemap ─────────────────────────────────────────────
     elif args.sitemap:
         all_urls = discover_urls_from_sitemap(args.sitemap, args.pattern)
         print(f"Discovered {len(all_urls)} URLs from sitemap.")
-        
-        # Filter urls already scraped to avoid double-processing
-        queue = []
-        for url in all_urls:
-            if db_conn and not args.force and is_already_scraped(db_conn, url):
-                continue
-            queue.append(url)
-        
+
+        queue = [url for url in all_urls if args.force or not already_done(url)]
+
         print(f"Queue has {len(queue)} pending URLs (after deduplication). Limit set to {args.limit}.")
         queue = queue[:args.limit]
 
         success_count = 0
         for idx, url in enumerate(queue, start=1):
             print(f"\n[{idx}/{len(queue)}] Processing: {url}")
-            success = run_pipeline(url, db_conn, model, args.dry_run)
-            if success:
+            if pipeline(url):
                 success_count += 1
             if idx < len(queue):
                 time.sleep(args.delay)
@@ -578,6 +740,8 @@ def main():
 
     if db_conn:
         db_conn.close()
+    if local_cache_conn:
+        local_cache_conn.close()
 
 
 if __name__ == "__main__":
