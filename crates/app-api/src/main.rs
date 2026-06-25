@@ -575,6 +575,7 @@ async fn main() -> std::io::Result<()> {
         CREATE UNIQUE INDEX IF NOT EXISTS idx_ingredients_fs_food_id
             ON ingredients(fs_food_id) WHERE fs_food_id IS NOT NULL;
         "#,
+        r#"ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS image_url TEXT;"#,
 
         // ── Ingredient base price (for budget-aware meal planning) ────────────
         // Seeded by the ETL pipeline (USDA/OFF + category defaults); used by

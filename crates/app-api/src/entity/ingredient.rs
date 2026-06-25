@@ -33,6 +33,9 @@ pub struct Model {
     #[sea_orm(column_type = "Decimal(Some((10, 2)))", nullable)]
     pub base_price_per_kg: Option<Decimal>,
 
+    #[sea_orm(column_type = "Text", nullable)]
+    pub image_url: Option<String>,
+
     pub created_at: DateTimeWithTimeZone,
 }
 

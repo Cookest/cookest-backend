@@ -84,6 +84,7 @@ impl IngredientService {
                 id: ing.id,
                 name: ing.name,
                 category: ing.category,
+                image_url: ing.image_url,
                 nutrients,
                 portions,
             });
