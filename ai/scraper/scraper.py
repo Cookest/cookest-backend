@@ -215,7 +215,9 @@ def extract_raw_recipe(url: str) -> dict:
         resp.raise_for_status()
     except Exception as e:
         raise RuntimeError(f"HTTP fetch failed: {e}")
-    scraper = scrape_html(resp.text, org_url=url)
+    # wild_mode lets recipe-scrapers fall back to generic schema.org/JSON-LD
+    # parsing for sites without a dedicated scraper (most of the European list).
+    scraper = scrape_html(resp.text, org_url=url, wild_mode=True)
 
     
     def safe_get(func, default=None):
@@ -341,6 +343,8 @@ def insert_into_database(conn: "psycopg.Connection", url: str, raw_data: dict, n
 
     title = raw_data["title"]
     slug = f"{slugify(title)}-{uuid.uuid4().hex[:8]}"
+    # total_time may be None (scraper found no value); coerce so the // fallbacks below don't crash
+    total_time = raw_data.get("total_time") or 0
 
     with conn.cursor() as cur:
         # 1. Insert into recipes table
@@ -362,8 +366,8 @@ def insert_into_database(conn: "psycopg.Connection", url: str, raw_data: dict, n
                 norm_data.get("category"),
                 norm_data.get("difficulty"),
                 norm_data.get("servings", 2),
-                norm_data.get("prep_time_min") or raw_data.get("total_time", 0) // 3,
-                norm_data.get("cook_time_min") or raw_data.get("total_time", 0) // 3 * 2,
+                norm_data.get("prep_time_min") or total_time // 3,
+                norm_data.get("cook_time_min") or total_time // 3 * 2,
                 norm_data.get("total_time_min") or raw_data.get("total_time"),
                 norm_data.get("is_vegetarian", False),
                 norm_data.get("is_vegan", False),
