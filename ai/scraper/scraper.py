@@ -84,8 +84,10 @@ def slugify(text: str) -> str:
     return text.strip("-")
 
 
-def discover_urls_from_sitemap(sitemap_url: str, pattern: str = None) -> list[str]:
-    """Recursively fetch and parse sitemap or sitemap index to find matching URLs."""
+def discover_urls_from_sitemap(sitemap_url: str, pattern: str = None, limit: int = None) -> list[str]:
+    """Recursively fetch and parse sitemap or sitemap index to find matching URLs.
+    Stops early once `limit` URLs have been collected (avoids fetching hundreds of sub-sitemaps).
+    """
     print(f"Fetching sitemap: {sitemap_url}")
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     try:
@@ -110,8 +112,11 @@ def discover_urls_from_sitemap(sitemap_url: str, pattern: str = None) -> list[st
         sub_urls = [loc.text.strip() for loc in sub_urls if loc]
         print(f"Found sitemap index with {len(sub_urls)} sub-sitemaps. Parsing...")
         for sub in sub_urls:
+            if limit and len(urls) >= limit:
+                print(f"  Reached limit of {limit} URLs, stopping sitemap traversal early.")
+                break
             try:
-                result = discover_urls_from_sitemap(sub, pattern)
+                result = discover_urls_from_sitemap(sub, pattern, limit=limit)
                 urls.extend(result or [])
             except Exception as e:
                 print(f"[-] Skipping sub-sitemap {sub}: {e}")
@@ -128,6 +133,7 @@ def discover_urls_from_sitemap(sitemap_url: str, pattern: str = None) -> list[st
             else:
                 urls.append(url)
     return urls
+
 
 
 import sqlite3
@@ -714,7 +720,7 @@ def main():
             print(f"Pattern: {pattern}, Limit: {limit}")
             print(f"==========================================")
 
-            all_urls = discover_urls_from_sitemap(sitemap_url, pattern)
+            all_urls = discover_urls_from_sitemap(sitemap_url, pattern, limit=limit)
             print(f"Discovered {len(all_urls)} URLs.")
 
             queue = [url for url in all_urls if args.force or not already_done(url)]
@@ -733,7 +739,7 @@ def main():
 
     # ── 3. Process single sitemap ─────────────────────────────────────────────
     elif args.sitemap:
-        all_urls = discover_urls_from_sitemap(args.sitemap, args.pattern)
+        all_urls = discover_urls_from_sitemap(args.sitemap, args.pattern, limit=args.limit)
         print(f"Discovered {len(all_urls)} URLs from sitemap.")
 
         queue = [url for url in all_urls if args.force or not already_done(url)]
