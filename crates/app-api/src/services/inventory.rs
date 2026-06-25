@@ -25,6 +25,7 @@ impl InventoryService {
 
     /// List all inventory items for a user with expiry metadata
     pub async fn list(&self, user_id: Uuid) -> Result<Vec<InventoryItemResponse>, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let items = inventory_item::Entity::find()
             .filter(inventory_item::Column::UserId.eq(user_id))
             .all(&self.db)
@@ -77,6 +78,7 @@ impl InventoryService {
         user_id: Uuid,
         req: AddInventoryItem,
     ) -> Result<InventoryItemResponse, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         // Verify ingredient exists
         let ing = ingredient::Entity::find_by_id(req.ingredient_id)
             .one(&self.db)
@@ -207,6 +209,7 @@ impl InventoryService {
         item_id: i64,
         req: UpdateInventoryItem,
     ) -> Result<InventoryItemResponse, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let item = inventory_item::Entity::find_by_id(item_id)
             .one(&self.db)
             .await?
@@ -261,6 +264,7 @@ impl InventoryService {
 
     /// Remove an item from inventory
     pub async fn delete(&self, user_id: Uuid, item_id: i64) -> Result<(), AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let item = inventory_item::Entity::find_by_id(item_id)
             .one(&self.db)
             .await?
@@ -465,6 +469,7 @@ impl InventoryService {
         user_id: Uuid,
         cooking_history_id: i64,
     ) -> Result<(), AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let deductions = inventory_deduction::Entity::find()
             .filter(inventory_deduction::Column::CookingHistoryId.eq(cooking_history_id))
             .filter(inventory_deduction::Column::UserId.eq(user_id))
@@ -522,6 +527,7 @@ impl InventoryService {
         user_id: Uuid,
         limit: u64,
     ) -> Result<Vec<inventory_deduction::Model>, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let rows = inventory_deduction::Entity::find()
             .filter(inventory_deduction::Column::UserId.eq(user_id))
             .order_by_desc(inventory_deduction::Column::CreatedAt)

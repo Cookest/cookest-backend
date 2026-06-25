@@ -68,6 +68,7 @@ impl ShoppingListService {
 
     /// Get all shopping list items for a user
     pub async fn get_list(&self, user_id: Uuid) -> Result<Vec<ShoppingListItemResponse>, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let items = ShoppingListItem::find()
             .filter(shopping_list_item::Column::UserId.eq(user_id))
             .all(&self.db)
@@ -81,6 +82,7 @@ impl ShoppingListService {
         user_id: Uuid,
         req: AddItemRequest,
     ) -> Result<ShoppingListItemResponse, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let now = Utc::now().fixed_offset();
         let item = ActiveModel {
             id: Set(Uuid::new_v4()),
@@ -105,6 +107,7 @@ impl ShoppingListService {
         user_id: Uuid,
         item_id: Uuid,
     ) -> Result<ShoppingListItemResponse, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let item = ShoppingListItem::find_by_id(item_id)
             .filter(shopping_list_item::Column::UserId.eq(user_id))
             .one(&self.db)
@@ -174,6 +177,7 @@ impl ShoppingListService {
 
     /// Remove an item
     pub async fn delete_item(&self, user_id: Uuid, item_id: Uuid) -> Result<(), AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let item = ShoppingListItem::find_by_id(item_id)
             .filter(shopping_list_item::Column::UserId.eq(user_id))
             .one(&self.db)
@@ -192,6 +196,7 @@ impl ShoppingListService {
         user_id: Uuid,
         items: Vec<SyncItem>,
     ) -> Result<Vec<ShoppingListItemResponse>, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let txn = self.db.begin().await?;
 
         // Delete all previously-synced (non-manual) items
@@ -228,6 +233,7 @@ impl ShoppingListService {
 
     /// Clear all checked items
     pub async fn clear_checked(&self, user_id: Uuid) -> Result<u64, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let res = ShoppingListItem::delete_many()
             .filter(shopping_list_item::Column::UserId.eq(user_id))
             .filter(shopping_list_item::Column::IsChecked.eq(true))

@@ -27,6 +27,35 @@ pub mod pricing;
 pub mod household;
 pub mod meal_poll;
 
+use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait};
+use uuid::Uuid;
+
+/// Returns the effective user ID for data ownership.
+/// If the user is part of a household, returns the household owner's ID.
+/// This ensures family members sync their meal plans, inventory, and shopping lists.
+pub async fn get_effective_user_id(db: &DatabaseConnection, user_id: Uuid) -> Result<Uuid, String> {
+    use crate::entity::{household, household_member};
+
+    let member = household_member::Entity::find()
+        .filter(household_member::Column::UserId.eq(user_id))
+        .one(db)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if let Some(m) = member {
+        let h = household::Entity::find_by_id(m.household_id)
+            .one(db)
+            .await
+            .map_err(|e| e.to_string())?;
+        
+        if let Some(household) = h {
+            return Ok(household.owner_id);
+        }
+    }
+
+    Ok(user_id)
+}
+
 pub use auth::AuthService;
 pub use token::TokenService;
 pub use recipe::RecipeService;

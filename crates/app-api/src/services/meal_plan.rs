@@ -67,6 +67,8 @@ impl MealPlanService {
         household_size: i32,
         week_start: NaiveDate,
     ) -> Result<meal_plan::Model, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+
         // ── 1. Load context data ──────────────────────────────────────────────
 
         let inventory = inventory_item::Entity::find()
@@ -377,6 +379,7 @@ impl MealPlanService {
         &self,
         user_id: Uuid,
     ) -> Result<Option<serde_json::Value>, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let today = Utc::now().date_naive();
         let days_since_monday = today.weekday().num_days_from_monday() as i64;
         let week_start = today - chrono::Duration::days(days_since_monday);
@@ -390,8 +393,7 @@ impl MealPlanService {
         let Some(plan) = plan else {
             return Ok(None);
         };
-
-        Ok(Some(self.plan_to_json(&plan).await?))
+        self.get_plan(user_id, plan.id).await.map(Some)
     }
 
     /// List all meal plans for a user (newest first, paginated)
@@ -401,6 +403,7 @@ impl MealPlanService {
         page: u64,
         per_page: u64,
     ) -> Result<serde_json::Value, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let paginator = meal_plan::Entity::find()
             .filter(meal_plan::Column::UserId.eq(user_id))
             .order_by_desc(meal_plan::Column::WeekStart)
@@ -433,6 +436,7 @@ impl MealPlanService {
         user_id: Uuid,
         plan_id: i64,
     ) -> Result<serde_json::Value, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let plan = meal_plan::Entity::find_by_id(plan_id)
             .one(&self.db)
             .await?
@@ -444,6 +448,7 @@ impl MealPlanService {
 
     /// Delete a meal plan and all its slots
     pub async fn delete_plan(&self, user_id: Uuid, plan_id: i64) -> Result<(), AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let plan = meal_plan::Entity::find_by_id(plan_id)
             .one(&self.db)
             .await?
@@ -471,6 +476,7 @@ impl MealPlanService {
         meal_type: String,
         servings: Option<i32>,
     ) -> Result<serde_json::Value, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
         let _ = recipe_service.get_recipe_or_import(recipe_id).await?;
 
@@ -537,6 +543,7 @@ impl MealPlanService {
         flex_type: Option<String>,
         energy_level: Option<String>,
     ) -> Result<serde_json::Value, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
         if let Some(r_id) = recipe_id {
             let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
             let _ = recipe_service.get_recipe_or_import(r_id).await?;
