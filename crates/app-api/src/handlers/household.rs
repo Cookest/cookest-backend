@@ -6,6 +6,7 @@
 //! - `POST /api/households/join`       — join a household with an invite token
 
 use actix_web::{web, HttpResponse};
+use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -19,7 +20,9 @@ pub fn configure_households(cfg: &mut web::ServiceConfig) {
             .route("", web::post().to(create))
             .route("/me", web::get().to(me))
             .route("/join", web::post().to(join))
-            .route("/{id}/invites", web::post().to(create_invite)),
+            .route("/{id}/invites", web::post().to(create_invite))
+            .route("/members/{member_id}", web::delete().to(remove_member))
+            .route("/transfer-ownership", web::post().to(transfer_ownership)),
     );
 }
 
@@ -57,5 +60,30 @@ async fn join(
     body: web::Json<JoinRequest>,
 ) -> Result<HttpResponse, AppError> {
     let view = service.join(user.id, &body.into_inner().token).await?;
+    Ok(HttpResponse::Ok().json(view))
+}
+
+#[derive(Debug, Deserialize)]
+struct TransferOwnershipRequest {
+    new_owner_id: Uuid,
+}
+
+async fn remove_member(
+    user: AuthenticatedUser,
+    service: web::Data<Arc<HouseholdService>>,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    match service.remove_member(user.id, path.into_inner()).await? {
+        Some(view) => Ok(HttpResponse::Ok().json(view)),
+        None => Ok(HttpResponse::Ok().json(serde_json::json!(null))),
+    }
+}
+
+async fn transfer_ownership(
+    user: AuthenticatedUser,
+    service: web::Data<Arc<HouseholdService>>,
+    body: web::Json<TransferOwnershipRequest>,
+) -> Result<HttpResponse, AppError> {
+    let view = service.transfer_ownership(user.id, body.into_inner().new_owner_id).await?;
     Ok(HttpResponse::Ok().json(view))
 }

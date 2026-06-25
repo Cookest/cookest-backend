@@ -6,7 +6,7 @@
 
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, QueryOrder,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -184,5 +184,158 @@ impl HouseholdService {
                 })
                 .collect(),
         })
+    }
+
+    /// Remove a member from a household (either leave or kick).
+    /// If the owner leaves:
+    /// - If they are the last member, the household is deleted (disbanded).
+    /// - Otherwise, ownership is transferred to the next joined member.
+    pub async fn remove_member(
+        &self,
+        user_id: Uuid,
+        member_id: Uuid,
+    ) -> Result<Option<HouseholdView>, AppError> {
+        let membership = household_member::Entity::find()
+            .filter(household_member::Column::UserId.eq(user_id))
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Household membership".to_string()))?;
+
+        let household_id = membership.household_id;
+        let hh = household::Entity::find_by_id(household_id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Household".to_string()))?;
+
+        if user_id == member_id {
+            // Caller is leaving
+            if hh.owner_id == user_id {
+                // Owner is leaving
+                // Check if there are other members
+                let other_members = household_member::Entity::find()
+                    .filter(household_member::Column::HouseholdId.eq(household_id))
+                    .filter(household_member::Column::UserId.ne(user_id))
+                    .order_by_asc(household_member::Column::JoinedAt)
+                    .all(&self.db)
+                    .await?;
+
+                if other_members.is_empty() {
+                    // Disband household
+                    household::Entity::delete_by_id(household_id)
+                        .exec(&self.db)
+                        .await?;
+                    return Ok(None);
+                } else {
+                    // Promote the next member who joined
+                    let next_owner = &other_members[0];
+                    
+                    // Update household owner_id
+                    let mut hh_active: household::ActiveModel = hh.into();
+                    hh_active.owner_id = Set(next_owner.user_id);
+                    hh_active.update(&self.db).await?;
+
+                    // Update next owner's role to "owner"
+                    let mut member_active: household_member::ActiveModel = next_owner.clone().into();
+                    member_active.role = Set("owner".to_string());
+                    member_active.update(&self.db).await?;
+
+                    // Delete old owner's membership
+                    household_member::Entity::delete_many()
+                        .filter(household_member::Column::HouseholdId.eq(household_id))
+                        .filter(household_member::Column::UserId.eq(user_id))
+                        .exec(&self.db)
+                        .await?;
+                }
+            } else {
+                // Non-owner is leaving
+                household_member::Entity::delete_many()
+                    .filter(household_member::Column::HouseholdId.eq(household_id))
+                    .filter(household_member::Column::UserId.eq(user_id))
+                    .exec(&self.db)
+                    .await?;
+            }
+        } else {
+            // Kicking another member
+            // Verify caller is owner
+            if hh.owner_id != user_id {
+                return Err(AppError::Forbidden);
+            }
+
+            // Verify member to be removed is in the same household
+            let member_to_kick = household_member::Entity::find()
+                .filter(household_member::Column::HouseholdId.eq(household_id))
+                .filter(household_member::Column::UserId.eq(member_id))
+                .one(&self.db)
+                .await?;
+
+            if member_to_kick.is_none() {
+                return Err(AppError::NotFound("Member".to_string()));
+            }
+
+            household_member::Entity::delete_many()
+                .filter(household_member::Column::HouseholdId.eq(household_id))
+                .filter(household_member::Column::UserId.eq(member_id))
+                .exec(&self.db)
+                .await?;
+        }
+
+        // Return updated household view if still exists
+        let hh_exists = household::Entity::find_by_id(household_id)
+            .one(&self.db)
+            .await?;
+
+        match hh_exists {
+            Some(_) => Ok(Some(self.view(household_id).await?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Transfer ownership of the household to another member.
+    pub async fn transfer_ownership(
+        &self,
+        user_id: Uuid,
+        new_owner_id: Uuid,
+    ) -> Result<HouseholdView, AppError> {
+        let membership = household_member::Entity::find()
+            .filter(household_member::Column::UserId.eq(user_id))
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Household membership".to_string()))?;
+
+        let household_id = membership.household_id;
+        let hh = household::Entity::find_by_id(household_id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Household".to_string()))?;
+
+        // Verify caller is owner
+        if hh.owner_id != user_id {
+            return Err(AppError::Forbidden);
+        }
+
+        // Verify new owner is a member of the same household
+        let new_owner_membership = household_member::Entity::find()
+            .filter(household_member::Column::HouseholdId.eq(household_id))
+            .filter(household_member::Column::UserId.eq(new_owner_id))
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Recipient member".to_string()))?;
+
+        // 1. Update household owner_id
+        let mut hh_active: household::ActiveModel = hh.into();
+        hh_active.owner_id = Set(new_owner_id);
+        hh_active.update(&self.db).await?;
+
+        // 2. Demote old owner's role to "member"
+        let mut old_owner_active: household_member::ActiveModel = membership.into();
+        old_owner_active.role = Set("member".to_string());
+        old_owner_active.update(&self.db).await?;
+
+        // 3. Promote new owner's role to "owner"
+        let mut new_owner_active: household_member::ActiveModel = new_owner_membership.into();
+        new_owner_active.role = Set("owner".to_string());
+        new_owner_active.update(&self.db).await?;
+
+        self.view(household_id).await
     }
 }
