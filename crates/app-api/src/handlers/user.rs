@@ -516,11 +516,19 @@ pub struct AddSlotBody {
 pub async fn add_slot(
     meal_svc: web::Data<Arc<MealPlanService>>,
     claims: web::ReqData<Claims>,
-    path: web::Path<i64>,
+    path: web::Path<String>,
     body: web::Json<AddSlotBody>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
-    let plan_id = path.into_inner();
+    let plan_id_str = path.into_inner();
+    
+    let plan_id = if plan_id_str == "current" {
+        meal_svc.get_or_create_current_plan_id(user_id).await?
+    } else if let Ok(date) = chrono::NaiveDate::parse_from_str(&plan_id_str, "%Y-%m-%d") {
+        meal_svc.get_or_create_plan_for_week(user_id, date).await?
+    } else {
+        plan_id_str.parse::<i64>().map_err(|_| AppError::BadRequest("Invalid plan ID".into()))?
+    };
     let body = body.into_inner();
     let result = meal_svc
         .add_recipe_to_slot(

@@ -425,6 +425,38 @@ impl MealPlanService {
         self.get_plan(user_id, plan.id).await.map(Some)
     }
 
+    pub async fn get_or_create_current_plan_id(&self, user_id: Uuid) -> Result<i64, AppError> {
+        let today = Utc::now().date_naive();
+        let days_since_monday = today.weekday().num_days_from_monday() as i64;
+        let week_start = today - chrono::Duration::days(days_since_monday);
+        self.get_or_create_plan_for_week(user_id, week_start).await
+    }
+
+    pub async fn get_or_create_plan_for_week(&self, user_id: Uuid, week_start: chrono::NaiveDate) -> Result<i64, AppError> {
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
+
+        let existing = meal_plan::Entity::find()
+            .filter(meal_plan::Column::UserId.eq(user_id))
+            .filter(meal_plan::Column::WeekStart.eq(week_start))
+            .one(&self.db)
+            .await?;
+
+        if let Some(plan) = existing {
+            Ok(plan.id)
+        } else {
+            let new_plan = meal_plan::ActiveModel {
+                user_id: Set(user_id),
+                week_start: Set(week_start),
+                is_ai_generated: Set(false),
+                ..Default::default()
+            };
+            let inserted = new_plan.insert(&self.db).await?;
+            Ok(inserted.id)
+        }
+    }
+
     /// List all meal plans for a user (newest first, paginated)
     pub async fn list_plans(
         &self,
