@@ -209,7 +209,14 @@ def save_recipe_to_output_file(output_path, url, raw_data, norm_data):
 def extract_raw_recipe(url: str) -> dict:
     """Use recipe-scrapers to extract raw structured microdata."""
     print(f"Scraping raw web microdata from: {url}")
-    scraper = scrape_me(url)
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    try:
+        resp = requests.get(url, timeout=20, headers=headers)
+        resp.raise_for_status()
+    except Exception as e:
+        raise RuntimeError(f"HTTP fetch failed: {e}")
+    scraper = scrape_me(url, html=resp.text)
+
     
     def safe_get(func, default=None):
         try:
