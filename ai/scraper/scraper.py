@@ -308,7 +308,7 @@ def normalize_with_ollama(raw_data: dict, model: str) -> dict:
     return normalized
 
 
-def insert_into_database(conn: psycopg.Connection, url: str, raw_data: dict, norm_data: dict):
+def insert_into_database(conn: "psycopg.Connection", url: str, raw_data: dict, norm_data: dict):
     """Insert normalized recipe details into PostgreSQL in a single transaction."""
     parsed_url = urlparse(url)
     site_domain = parsed_url.netloc.replace("www.", "")
@@ -450,7 +450,7 @@ def insert_into_database(conn: psycopg.Connection, url: str, raw_data: dict, nor
     return recipe_id
 
 
-def log_error_in_db(conn: psycopg.Connection, url: str, error_msg: str):
+def log_error_in_db(conn: "psycopg.Connection", url: str, error_msg: str):
     """Log an execution failure to etl_scrape_log table so we track it."""
     parsed_url = urlparse(url)
     site_domain = parsed_url.netloc.replace("www.", "")
@@ -475,7 +475,7 @@ def log_error_in_db(conn: psycopg.Connection, url: str, error_msg: str):
         print(f"Warning: Could not log error to database: {e}")
 
 
-def is_already_scraped(conn: psycopg.Connection, url: str) -> bool:
+def is_already_scraped(conn: "psycopg.Connection", url: str) -> bool:
     """Check if the URL is already successfully scraped and stored."""
     try:
         with conn.cursor() as cur:
