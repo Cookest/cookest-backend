@@ -30,7 +30,7 @@ from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
-from recipe_scrapers import scrape_me
+from recipe_scrapers import scrape_html
 
 # Default Fallbacks
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
@@ -215,7 +215,7 @@ def extract_raw_recipe(url: str) -> dict:
         resp.raise_for_status()
     except Exception as e:
         raise RuntimeError(f"HTTP fetch failed: {e}")
-    scraper = scrape_me(url, html=resp.text)
+    scraper = scrape_html(resp.text, org_url=url)
 
     
     def safe_get(func, default=None):
