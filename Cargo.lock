@@ -821,6 +821,7 @@ dependencies = [
  "chrono",
  "csv",
  "dotenvy",
+ "flate2",
  "futures",
  "governor",
  "rand 0.8.5",

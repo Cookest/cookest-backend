@@ -1,7 +1,7 @@
 //! Dataset import service — scans folders, parses CSV/JSON, inserts into local DB
 
 use std::path::{Path, PathBuf};
-use sea_orm::{DatabaseConnection, ActiveModelTrait, Set, TransactionTrait};
+use sea_orm::{DatabaseConnection, ActiveModelTrait, Set, TransactionTrait, ConnectionTrait};
 use serde::Deserialize;
 use crate::errors::AppError;
 use crate::entity::recipe;
@@ -46,7 +46,7 @@ impl ImportService {
         Self { db }
     }
 
-    /// List .csv and .json files in the given folder path (container-local).
+    /// List .csv, .json, and .csv.gz files in the given folder path (container-local).
     pub fn scan_folder(&self, folder: &str) -> Result<Vec<String>, AppError> {
         // Basic sandbox check: disallow path traversal
         let path = Path::new(folder);
@@ -66,7 +66,7 @@ impl ImportService {
         {
             let entry = entry.map_err(|e| AppError::Internal(e.to_string()))?;
             let fname = entry.file_name().to_string_lossy().to_string();
-            if fname.ends_with(".csv") || fname.ends_with(".json") {
+            if fname.ends_with(".csv") || fname.ends_with(".json") || fname.ends_with(".csv.gz") {
                 files.push(fname);
             }
         }
@@ -74,7 +74,7 @@ impl ImportService {
         Ok(files)
     }
 
-    /// Import a single file into the recipes table using a SeaORM transaction.
+    /// Import a single file into the recipes table or ingredients table using a SeaORM transaction.
     pub async fn import_file(
         &self,
         folder: &str,
@@ -84,6 +84,12 @@ impl ImportService {
         if folder.contains("..") || filename.contains("..") {
             return Err(AppError::Forbidden);
         }
+
+        // If it's an Open Food Facts file, delegate to off importer
+        if filename.contains("openfoodfacts") || filename.contains("products") {
+            return self.import_openfoodfacts(folder, filename).await;
+        }
+
         let path = PathBuf::from(folder).join(filename);
         if !path.exists() {
             return Err(AppError::NotFound(format!("File '{}' not found", filename)));
@@ -184,6 +190,164 @@ impl ImportService {
             rows_skipped: total - imported,
             message: format!("Imported {}/{} rows", imported, total),
         })
+    }
+
+    async fn import_openfoodfacts(
+        &self,
+        folder: &str,
+        filename: &str,
+    ) -> Result<ImportResult, AppError> {
+        use std::fs::File;
+        use std::io::BufReader;
+        use flate2::read::GzDecoder;
+        use std::str::FromStr;
+
+        let path = PathBuf::from(folder).join(filename);
+        if !path.exists() {
+            return Err(AppError::NotFound(format!("File '{}' not found", filename)));
+        }
+
+        let file = File::open(&path)
+            .map_err(|e| AppError::Internal(format!("Failed to open file: {}", e)))?;
+        let reader = BufReader::new(file);
+
+        let input: Box<dyn std::io::Read> = if filename.ends_with(".gz") {
+            let decoder = GzDecoder::new(reader);
+            Box::new(decoder)
+        } else {
+            Box::new(reader)
+        };
+
+        let mut rdr = csv::ReaderBuilder::new()
+            .delimiter(b'\t')
+            .flexible(true)
+            .from_reader(input);
+
+        let headers = rdr.headers()
+            .map_err(|e| AppError::Internal(format!("Failed to read CSV headers: {}", e)))?;
+        
+        let get_idx = |name: &str| headers.iter().position(|h| h == name);
+
+        let code_idx = get_idx("code");
+        let name_idx = get_idx("product_name");
+        let cat_idx = get_idx("categories");
+        let img_idx = get_idx("image_url");
+        
+        let kcal_idx = get_idx("energy-kcal_100g");
+        let protein_idx = get_idx("proteins_100g");
+        let carbs_idx = get_idx("carbohydrates_100g");
+        let fat_idx = get_idx("fat_100g");
+        let fiber_idx = get_idx("fiber_100g");
+        let sugar_idx = get_idx("sugars_100g");
+        let sodium_idx = get_idx("sodium_100g");
+        let sat_fat_idx = get_idx("saturated-fat_100g");
+
+        let mut imported = 0usize;
+        let mut skipped = 0usize;
+
+        // Limit the total imports to 100,000 to keep execution time under 1 minute.
+        let max_rows = 100_000;
+
+        let mut record = csv::StringRecord::new();
+        let mut batch = Vec::new();
+
+        while rdr.read_record(&mut record).map_err(|e| AppError::Internal(format!("CSV read record error: {}", e)))? {
+            if imported >= max_rows {
+                break;
+            }
+
+            let code = code_idx.and_then(|idx| record.get(idx)).unwrap_or("").trim().to_string();
+            let name = name_idx.and_then(|idx| record.get(idx)).unwrap_or("").trim().to_string();
+            if code.is_empty() || name.is_empty() {
+                skipped += 1;
+                continue;
+            }
+
+            let categories = cat_idx.and_then(|idx| record.get(idx))
+                .map(|c| c.split(',').next().unwrap_or("").trim().to_string());
+            let image_url = img_idx.and_then(|idx| record.get(idx)).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+
+            let parse_dec = |idx: Option<usize>, record: &csv::StringRecord| -> Option<rust_decimal::Decimal> {
+                idx.and_then(|i| record.get(i))
+                    .and_then(|val| rust_decimal::Decimal::from_str(val).ok())
+            };
+            
+            let calories = parse_dec(kcal_idx, &record);
+            let protein = parse_dec(protein_idx, &record);
+            let carbs = parse_dec(carbs_idx, &record);
+            let fat = parse_dec(fat_idx, &record);
+            let fiber = parse_dec(fiber_idx, &record);
+            let sugar = parse_dec(sugar_idx, &record);
+            let sodium = parse_dec(sodium_idx, &record).map(|s| s * rust_decimal::Decimal::from(1000));
+            let saturated_fat = parse_dec(sat_fat_idx, &record);
+
+            batch.push((code, name, categories, image_url, calories, protein, carbs, fat, fiber, sugar, sodium, saturated_fat));
+
+            if batch.len() >= 500 {
+                self.flush_batch_off(&batch).await?;
+                imported += batch.len();
+                batch.clear();
+            }
+        }
+
+        if !batch.is_empty() {
+            self.flush_batch_off(&batch).await?;
+            imported += batch.len();
+        }
+
+        Ok(ImportResult {
+            rows_imported: imported,
+            rows_skipped: skipped,
+            message: format!("Successfully imported {} OpenFoodFacts products (skipped {})", imported, skipped),
+        })
+    }
+
+    async fn flush_batch_off(&self, batch: &[(String, String, Option<String>, Option<String>, Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>)]) -> Result<(), AppError> {
+        use sea_orm::TransactionTrait;
+        let txn = self.db.begin().await?;
+
+        for (code, name, cat, img, calories, protein, carbs, fat, fiber, sugar, sodium, sat_fat) in batch {
+            let now = chrono::Utc::now().fixed_offset();
+            let ing_row = txn.query_one(sea_orm::Statement::from_sql_and_values(
+                sea_orm::DatabaseBackend::Postgres,
+                "INSERT INTO ingredients (name, category, off_id, image_url, created_at)
+                 VALUES ($1, $2, $3, $4, $5)
+                 ON CONFLICT (name) DO UPDATE SET off_id = EXCLUDED.off_id, image_url = COALESCE(ingredients.image_url, EXCLUDED.image_url)
+                 RETURNING id",
+                [name.clone().into(), cat.clone().into(), Some(code.clone()).into(), img.clone().into(), now.into()],
+            )).await?;
+
+            if let Some(row) = ing_row {
+                if let Ok(ing_id) = row.try_get::<i64>("", "id") {
+                    let _ = txn.execute(sea_orm::Statement::from_sql_and_values(
+                        sea_orm::DatabaseBackend::Postgres,
+                        "INSERT INTO ingredient_nutrients (ingredient_id, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, saturated_fat_g)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                         ON CONFLICT (ingredient_id) DO UPDATE SET
+                            calories = EXCLUDED.calories,
+                            protein_g = EXCLUDED.protein_g,
+                            carbs_g = EXCLUDED.carbs_g,
+                            fat_g = EXCLUDED.fat_g,
+                            fiber_g = EXCLUDED.fiber_g,
+                            sugar_g = EXCLUDED.sugar_g,
+                            sodium_mg = EXCLUDED.sodium_mg,
+                            saturated_fat_g = EXCLUDED.saturated_fat_g",
+                        [ing_id.into(), calories.clone().into(), protein.clone().into(), carbs.clone().into(), fat.clone().into(), fiber.clone().into(), sugar.clone().into(), sodium.clone().into(), sat_fat.clone().into()],
+                    )).await;
+
+                    let _ = txn.execute(sea_orm::Statement::from_sql_and_values(
+                        sea_orm::DatabaseBackend::Postgres,
+                        "INSERT INTO portion_sizes (ingredient_id, description, weight_grams, unit)
+                         VALUES ($1, '100g', 100.0, 'g')
+                         ON CONFLICT DO NOTHING",
+                        [ing_id.into()],
+                    )).await;
+                }
+            }
+        }
+
+        txn.commit().await?;
+        Ok(())
     }
 
     fn parse_csv(&self, path: &Path) -> Result<Vec<ImportRow>, AppError> {

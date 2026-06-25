@@ -56,6 +56,7 @@ regex = "1"
 
 # CSV parsing
 csv = "1"
+flate2 = "1"
 
 # Futures (for middleware)
 futures = "0.3"
