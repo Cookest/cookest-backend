@@ -68,30 +68,35 @@ def vector_literal(vec: list[float]) -> str:
     return "[" + ",".join(repr(float(x)) for x in vec) + "]"
 
 
-def extract_text(pdf_path: Path) -> str:
-    reader = PdfReader(str(pdf_path))
-    return "\n\n".join((page.extract_text() or "") for page in reader.pages)
+def extract_text(file_path: Path) -> str:
+    if file_path.suffix.lower() == ".pdf":
+        reader = PdfReader(str(file_path))
+        return "\n\n".join((page.extract_text() or "") for page in reader.pages)
+    else:
+        return file_path.read_text(encoding="utf-8", errors="ignore")
 
 
-def pdf_paths(inputs: list[str]) -> list[Path]:
+def file_paths(inputs: list[str]) -> list[Path]:
     out: list[Path] = []
     for raw in inputs:
         p = Path(raw)
         if p.is_dir():
             out.extend(sorted(p.glob("*.pdf")))
-        elif p.suffix.lower() == ".pdf" and p.exists():
+            out.extend(sorted(p.glob("*.md")))
+            out.extend(sorted(p.glob("*.txt")))
+        elif p.suffix.lower() in (".pdf", ".md", ".txt") and p.exists():
             out.append(p)
         else:
-            print(f"skip (not a PDF): {raw}", file=sys.stderr)
+            print(f"skip (unsupported file format): {raw}", file=sys.stderr)
     return out
 
 
-def ingest_pdf(conn: psycopg.Connection, pdf_path: Path, title: str | None) -> int:
-    source = pdf_path.name
-    text = extract_text(pdf_path)
+def ingest_file(conn: psycopg.Connection, file_path: Path, title: str | None) -> int:
+    source = file_path.name
+    text = extract_text(file_path)
     chunks = chunk_text(text)
     if not chunks:
-        print(f"  no extractable text in {source} (scanned PDF?) — skipping")
+        print(f"  no extractable text in {source} — skipping")
         return 0
 
     with conn.cursor() as cur:
@@ -117,20 +122,20 @@ def ingest_pdf(conn: psycopg.Connection, pdf_path: Path, title: str | None) -> i
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Ingest nutrition PDFs into the RAG store.")
-    ap.add_argument("inputs", nargs="+", help="PDF files and/or directories of PDFs")
+    ap = argparse.ArgumentParser(description="Ingest nutrition documents (PDF, MD, TXT) into the RAG store.")
+    ap.add_argument("inputs", nargs="+", help="Files and/or directories of documents")
     ap.add_argument("--title", default=None, help="Human-readable source title for citations")
     args = ap.parse_args()
 
-    paths = pdf_paths(args.inputs)
+    paths = file_paths(args.inputs)
     if not paths:
-        sys.exit("No PDF files found.")
+        sys.exit("No supported files found.")
 
     total = 0
     with psycopg.connect(db_url()) as conn:
-        for pdf in paths:
-            print(f"Ingesting {pdf} ...")
-            total += ingest_pdf(conn, pdf, args.title)
+        for p in paths:
+            print(f"Ingesting {p} ...")
+            total += ingest_file(conn, p, args.title)
     print(f"Done. {total} chunks across {len(paths)} file(s).")
 
 
