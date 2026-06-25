@@ -15,6 +15,7 @@ pub struct IngredientListItem {
     pub id: i64,
     pub name: String,
     pub category: Option<String>,
+    pub image_url: Option<String>,
 }
 
 /// Full ingredient detail with nutrients
@@ -23,6 +24,7 @@ pub struct IngredientDetail {
     pub id: i64,
     pub name: String,
     pub category: Option<String>,
+    pub image_url: Option<String>,
     pub nutrients: Option<IngredientNutrientDetail>,
     pub portions: Vec<PortionDetail>,
 }

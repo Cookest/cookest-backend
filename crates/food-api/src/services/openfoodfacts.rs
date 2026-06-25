@@ -17,6 +17,7 @@ struct OffResponse {
 struct OffProduct {
     product_name: Option<String>,
     categories: Option<String>,
+    image_url: Option<String>,
     nutriments: Option<OffNutriments>,
 }
 
@@ -70,6 +71,7 @@ impl OpenFoodFactsClient {
         let product = resp.product.unwrap_or_default();
         let name = product.product_name.unwrap_or_else(|| barcode.to_string());
         let category = product.categories.map(|c| c.split(',').next().unwrap_or("").trim().to_string());
+        let image_url = product.image_url.clone();
 
         let nutrients = product.nutriments.map(|n| IngredientNutrientDetail {
             calories: n.energy_kcal_100g.and_then(|v| Decimal::from_str(&v.to_string()).ok()),
@@ -93,6 +95,7 @@ impl OpenFoodFactsClient {
             id: ingredient_id,
             name,
             category,
+            image_url,
             nutrients,
             portions,
         })
@@ -104,6 +107,7 @@ impl Default for OffProduct {
         Self {
             product_name: None,
             categories: None,
+            image_url: None,
             nutriments: None,
         }
     }
