@@ -450,6 +450,74 @@ impl MealPlanService {
         Ok(())
     }
 
+    /// Add a recipe to a slot in the current week's meal plan (creating the plan and slot if needed)
+    pub async fn add_to_current_plan_slot(
+        &self,
+        user_id: Uuid,
+        recipe_id: i64,
+        day_of_week: i16,
+        meal_type: String,
+        servings: i32,
+    ) -> Result<serde_json::Value, AppError> {
+        let today = Utc::now().date_naive();
+        let days_since_monday = today.weekday().num_days_from_monday() as i64;
+        let week_start = today - chrono::Duration::days(days_since_monday);
+
+        let plan = if let Some(p) = meal_plan::Entity::find()
+            .filter(meal_plan::Column::UserId.eq(user_id))
+            .filter(meal_plan::Column::WeekStart.eq(week_start))
+            .one(&self.db)
+            .await?
+        {
+            p
+        } else {
+            let now = Utc::now().fixed_offset();
+            let new_plan = meal_plan::ActiveModel {
+                user_id: Set(user_id),
+                week_start: Set(week_start),
+                is_ai_generated: Set(false),
+                created_at: Set(now),
+                updated_at: Set(now),
+                ..Default::default()
+            };
+            new_plan.insert(&self.db).await?
+        };
+
+        let existing_slot = meal_plan_slot::Entity::find()
+            .filter(meal_plan_slot::Column::MealPlanId.eq(plan.id))
+            .filter(meal_plan_slot::Column::DayOfWeek.eq(day_of_week))
+            .filter(meal_plan_slot::Column::MealType.eq(meal_type.clone()))
+            .one(&self.db)
+            .await?;
+
+        let updated = if let Some(slot) = existing_slot {
+            let mut active: meal_plan_slot::ActiveModel = slot.into();
+            active.recipe_id = Set(Some(recipe_id));
+            active.is_flex = Set(false);
+            active.servings_override = Set(Some(servings));
+            active.update(&self.db).await?
+        } else {
+            let new_slot = meal_plan_slot::ActiveModel {
+                meal_plan_id: Set(plan.id),
+                recipe_id: Set(Some(recipe_id)),
+                day_of_week: Set(day_of_week),
+                meal_type: Set(meal_type),
+                servings_override: Set(Some(servings)),
+                is_completed: Set(false),
+                is_flex: Set(false),
+                ..Default::default()
+            };
+            new_slot.insert(&self.db).await?
+        };
+
+        Ok(serde_json::json!({
+            "id": updated.id,
+            "recipe_id": updated.recipe_id,
+            "meal_type": updated.meal_type,
+            "day_of_week": updated.day_of_week,
+        }))
+    }
+
     /// Weekly nutrition summary: macro totals for all slots vs user goals
     pub async fn get_nutrition_summary(
         &self,

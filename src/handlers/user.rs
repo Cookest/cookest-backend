@@ -241,6 +241,33 @@ pub async fn delete_meal_plan(
 }
 
 #[derive(serde::Deserialize)]
+pub struct AddCurrentSlotBody {
+    pub recipe_id: i64,
+    pub day_of_week: i16,
+    pub meal_type: String,
+    pub servings: i32,
+}
+
+pub async fn add_current_slot(
+    meal_svc: web::Data<Arc<MealPlanService>>,
+    claims: web::ReqData<Claims>,
+    body: web::Json<AddCurrentSlotBody>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let body = body.into_inner();
+    let result = meal_svc
+        .add_to_current_plan_slot(
+            user_id,
+            body.recipe_id,
+            body.day_of_week,
+            body.meal_type,
+            body.servings,
+        )
+        .await?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
+#[derive(serde::Deserialize)]
 pub struct SwapSlotBody {
     pub recipe_id: Option<i64>,
     pub flex_type: Option<String>,
@@ -387,6 +414,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .route("", web::get().to(list_meal_plans))
                 .route("/generate", web::post().to(generate_meal_plan))
                 .route("/current", web::get().to(get_current_meal_plan))
+                .route("/current/slots", web::post().to(add_current_slot))
                 .route("/current/shopping-list", web::get().to(get_shopping_list))
                 .route("/{id}", web::get().to(get_meal_plan))
                 .route("/{id}", web::delete().to(delete_meal_plan))
