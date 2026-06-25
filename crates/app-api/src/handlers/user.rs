@@ -329,7 +329,7 @@ pub async fn generate_meal_plan(
     sub_service.check_ai_meal_plan_limit(&claims, user_id).await?;
     let profile = profile_svc.get_profile(user_id).await?;
     let plan = meal_svc
-        .generate_week_plan(user_id, profile.household_size, body.week_start)
+        .generate_week_plan(user_id, profile.household_size, body.week_start, None)
         .await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "id": plan.id,

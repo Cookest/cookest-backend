@@ -95,8 +95,23 @@ impl IngredientService {
 
         if let Some(search) = query.q.as_deref() {
             if !search.is_empty() {
-                // Case-insensitive substring match so "chick" finds "Chicken".
-                q = q.filter(Expr::col(IngredientCol::Name).ilike(format!("%{}%", search)));
+                let lower_search = search.to_lowercase();
+                let singular_search = if lower_search.ends_with("es") {
+                    &search[..search.len() - 2]
+                } else if lower_search.ends_with('s') {
+                    &search[..search.len() - 1]
+                } else {
+                    search
+                };
+
+                if singular_search != search {
+                    q = q.filter(
+                        Expr::col(IngredientCol::Name).ilike(format!("%{}%", search))
+                        .or(Expr::col(IngredientCol::Name).ilike(format!("%{}%", singular_search)))
+                    );
+                } else {
+                    q = q.filter(Expr::col(IngredientCol::Name).ilike(format!("%{}%", search)));
+                }
             }
         }
 

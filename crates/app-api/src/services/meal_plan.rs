@@ -66,6 +66,7 @@ impl MealPlanService {
         user_id: Uuid,
         household_size: i32,
         week_start: NaiveDate,
+        theme: Option<String>,
     ) -> Result<meal_plan::Model, AppError> {
         let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
 
@@ -104,10 +105,27 @@ impl MealPlanService {
             .map(|f| f.recipe_id)
             .collect();
 
-        let all_recipes = recipe::Entity::find()
+        let mut all_recipes = recipe::Entity::find()
             .order_by_asc(recipe::Column::Id)
             .all(&self.db)
             .await?;
+
+        if theme.is_some() || all_recipes.len() < 28 {
+            let q = theme.as_deref().unwrap_or("");
+            let path = format!("/api/v1/recipes?q={}&per_page=30", urlencoding::encode(q));
+            let recipe_service = crate::services::RecipeService::new(self.db.clone(), self.food_api_client.clone());
+            if let Ok(resp) = self.food_api_client.get(&path).send().await {
+                if let Ok(paginated) = resp.json::<crate::models::recipe::PaginatedResponse<crate::models::recipe::RecipeListItem>>().await {
+                    for r in paginated.data {
+                        let _ = recipe_service.get_recipe_or_import(r.id).await;
+                    }
+                }
+            }
+            all_recipes = recipe::Entity::find()
+                .order_by_asc(recipe::Column::Id)
+                .all(&self.db)
+                .await?;
+        }
 
         let all_recipe_ids: Vec<i64> = all_recipes.iter().map(|r| r.id).collect();
         let all_recipe_ingredients = recipe_ingredient::Entity::find()

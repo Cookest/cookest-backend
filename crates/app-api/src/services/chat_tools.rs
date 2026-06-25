@@ -52,7 +52,16 @@ pub fn tool_definitions() -> Vec<Value> {
             "function": {
                 "name": "generate_meal_plan",
                 "description": "Generate a completely new full-week meal plan for the user, filling all slots based on their pantry and preferences. Use this when the user doesn't have a plan and wants one.",
-                "parameters": { "type": "object", "properties": {}, "required": [] }
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "theme": {
+                            "type": "string",
+                            "description": "Optional theme, dietary request, or cuisine (e.g. 'vegetarian', 'more plants', 'italian')"
+                        }
+                    },
+                    "required": []
+                }
             }
         }),
         json!({
@@ -167,7 +176,7 @@ impl ToolDispatch {
         match name {
             "search_recipes"       => self.search_recipes(args).await,
             "get_meal_plan"        => self.get_meal_plan(user_id).await,
-            "generate_meal_plan"   => self.generate_meal_plan(user_id).await,
+            "generate_meal_plan"   => self.generate_meal_plan(user_id, args).await,
             "update_meal_plan_slot"=> self.update_meal_plan_slot(user_id, args).await,
             "mark_meal_completed"  => self.mark_meal_completed(user_id, args).await,
             "get_pantry"           => self.get_pantry(user_id).await,
@@ -279,7 +288,7 @@ impl ToolDispatch {
         }
     }
 
-    async fn generate_meal_plan(&self, user_id: Uuid) -> String {
+    async fn generate_meal_plan(&self, user_id: Uuid, args: Value) -> String {
         use chrono::Datelike;
         let today = chrono::Utc::now().date_naive();
         let days_since_monday = today.weekday().num_days_from_monday() as i64;
@@ -290,14 +299,22 @@ impl ToolDispatch {
             _ => 2,
         };
 
+        let theme = args["theme"].as_str().map(|s| s.to_string());
+
         let svc = MealPlanService::new(self.db.clone(), self.food_api_client.clone());
-        match svc.generate_week_plan(user_id, household_size, week_start).await {
-            Ok(plan) => json!({
-                "status": "success",
-                "message": "Generated a new 7-day meal plan based on pantry and preferences.",
-                "plan_id": plan.id
-            })
-            .to_string(),
+        match svc.generate_week_plan(user_id, household_size, week_start, theme).await {
+            Ok(_) => {
+                if let Ok(Some(plan_json)) = svc.get_current_plan(user_id).await {
+                    json!({
+                        "status": "success",
+                        "message": "Generated a new 7-day meal plan. Present these actual generated slots to the user so they can see what was scheduled. If the plan looks empty, tell the user they need to save or import more recipes.",
+                        "plan": plan_json
+                    })
+                    .to_string()
+                } else {
+                    json!({"status": "error", "message": "Failed to load generated plan"}).to_string()
+                }
+            }
             Err(e) => {
                 tracing::error!("generate_meal_plan tool error: {}", e);
                 json!({"status": "error", "message": format!("Failed to generate plan: {}", e)}).to_string()
