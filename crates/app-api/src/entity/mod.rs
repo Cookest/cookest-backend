@@ -50,6 +50,7 @@ pub mod osm_store_poi;
 pub mod household;
 pub mod household_member;
 pub mod household_invite;
+pub mod notification;
 
 // Meal polls (shareable voting, incl. non-app users)
 pub mod meal_poll;

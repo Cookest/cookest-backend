@@ -35,6 +35,7 @@ use crate::handlers::{
     configure_households,
     configure_polls_public, configure_polls_protected,
     configure_eat_out,
+    configure_notification,
     configure_import_proxy,
 };
 use crate::middleware::{JwtAuth, SecurityHeaders};
@@ -46,6 +47,7 @@ use crate::services::{
     OnboardingService, ShoppingListService, SubscriptionService, StoreService, PushTokenService,
     PreferenceService, EmailService, ScanService,
     HouseholdService, MealPollService,
+    NotificationService,
 };
 use crate::services::taste_profile::TasteProfileService;
 
@@ -718,6 +720,21 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_meal_poll_options_poll ON meal_poll_options(poll_id);
         CREATE INDEX IF NOT EXISTS idx_meal_poll_votes_poll   ON meal_poll_votes(poll_id);
         "#,
+
+        // ── Notifications ─────────────────────────────────
+        r#"
+        CREATE TABLE IF NOT EXISTS notifications (
+            id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            title         TEXT NOT NULL,
+            message       TEXT NOT NULL,
+            type          TEXT NOT NULL,
+            metadata      JSONB NOT NULL DEFAULT '{}',
+            is_read       BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+        "#,
     ];
 
     for sql in migrations {
@@ -791,6 +808,7 @@ async fn main() -> std::io::Result<()> {
     let nutrition_service = Arc::new(NutritionService::new(db.clone()));
     let household_service = Arc::new(HouseholdService::new(db.clone()));
     let meal_poll_service = Arc::new(MealPollService::new(db.clone()));
+    let notification_service = Arc::new(NotificationService::new(Arc::new(db.clone()), email_service.clone()));
 
 
 
@@ -865,6 +883,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(household_service.clone()))
             .app_data(web::Data::new(meal_poll_service.clone()))
             .app_data(web::Data::new(food_api_client.clone()))
+            .app_data(web::Data::new(notification_service.clone()))
             .app_data(web::Data::new(db.clone()))
             // ── Public routes (no JWT required) ──────────────────────────────
             .configure(configure_auth)        // /api/auth/*
@@ -900,6 +919,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(configure_households)
                     .configure(configure_polls_protected)
                     .configure(configure_eat_out)
+                    .configure(configure_notification)
                     .configure(configure_import_proxy)
             )
     })
