@@ -86,20 +86,36 @@ impl InventoryService {
         let now = Utc::now().fixed_offset();
         let today = Utc::now().date_naive();
 
-        let new_item = inventory_item::ActiveModel {
-            user_id: Set(user_id),
-            ingredient_id: Set(req.ingredient_id),
-            custom_name: Set(req.custom_name.clone()),
-            quantity: Set(req.quantity),
-            unit: Set(req.unit.clone()),
-            expiry_date: Set(req.expiry_date),
-            storage_location: Set(req.storage_location.clone()),
-            added_at: Set(now),
-            updated_at: Set(now),
-            ..Default::default()
-        };
+        let existing_item = inventory_item::Entity::find()
+            .filter(inventory_item::Column::UserId.eq(user_id))
+            .filter(inventory_item::Column::IngredientId.eq(req.ingredient_id))
+            .filter(inventory_item::Column::StorageLocation.eq(req.storage_location.clone()))
+            .one(&self.db)
+            .await?;
 
-        let saved = new_item.insert(&self.db).await?;
+        let saved = if let Some(item) = existing_item {
+            let mut active: inventory_item::ActiveModel = item.into();
+            active.quantity = Set(active.quantity.unwrap() + req.quantity);
+            active.updated_at = Set(now);
+            if req.expiry_date.is_some() {
+                active.expiry_date = Set(req.expiry_date);
+            }
+            active.update(&self.db).await?
+        } else {
+            let new_item = inventory_item::ActiveModel {
+                user_id: Set(user_id),
+                ingredient_id: Set(req.ingredient_id),
+                custom_name: Set(req.custom_name.clone()),
+                quantity: Set(req.quantity),
+                unit: Set(req.unit.clone()),
+                expiry_date: Set(req.expiry_date),
+                storage_location: Set(req.storage_location.clone()),
+                added_at: Set(now),
+                updated_at: Set(now),
+                ..Default::default()
+            };
+            new_item.insert(&self.db).await?
+        };
 
         let days_until_expiry = saved.expiry_date.map(|d| (d - today).num_days());
         let expiry_warning = days_until_expiry.map(|d| d <= 5).unwrap_or(false);
@@ -557,20 +573,36 @@ impl InventoryService {
         let now = Utc::now().fixed_offset();
         let today = Utc::now().date_naive();
 
-        let new_item = inventory_item::ActiveModel {
-            user_id: Set(user_id),
-            ingredient_id: Set(ing.id),
-            custom_name: Set(None),
-            quantity: Set(dec_qty),
-            unit: Set(unit.clone()),
-            expiry_date: Set(expiry_date),
-            storage_location: Set(storage_location.clone()),
-            added_at: Set(now),
-            updated_at: Set(now),
-            ..Default::default()
-        };
+        let existing_item = inventory_item::Entity::find()
+            .filter(inventory_item::Column::UserId.eq(user_id))
+            .filter(inventory_item::Column::IngredientId.eq(ing.id))
+            .filter(inventory_item::Column::StorageLocation.eq(storage_location.clone()))
+            .one(&self.db)
+            .await?;
 
-        let saved = new_item.insert(&self.db).await?;
+        let saved = if let Some(item) = existing_item {
+            let mut active: inventory_item::ActiveModel = item.into();
+            active.quantity = Set(active.quantity.unwrap() + dec_qty);
+            active.updated_at = Set(now);
+            if expiry_date.is_some() {
+                active.expiry_date = Set(expiry_date);
+            }
+            active.update(&self.db).await?
+        } else {
+            let new_item = inventory_item::ActiveModel {
+                user_id: Set(user_id),
+                ingredient_id: Set(ing.id),
+                custom_name: Set(None),
+                quantity: Set(dec_qty),
+                unit: Set(unit.clone()),
+                expiry_date: Set(expiry_date),
+                storage_location: Set(storage_location.clone()),
+                added_at: Set(now),
+                updated_at: Set(now),
+                ..Default::default()
+            };
+            new_item.insert(&self.db).await?
+        };
         let days_until_expiry = saved.expiry_date.map(|d| (d - today).num_days());
         let expiry_warning = days_until_expiry.map(|d| d <= 5).unwrap_or(false);
 
