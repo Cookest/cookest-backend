@@ -92,18 +92,29 @@ def discover_urls_from_sitemap(sitemap_url: str, pattern: str = None) -> list[st
         resp = requests.get(sitemap_url, timeout=30, headers=headers)
         resp.raise_for_status()
     except Exception as e:
-        print(f"Error fetching sitemap {sitemap_url}: {e}")
+        print(f"[-] Error fetching sitemap {sitemap_url}: {e}")
         return []
 
-    soup = BeautifulSoup(resp.content, "xml")
+    try:
+        soup = BeautifulSoup(resp.content, "xml")
+    except Exception as e:
+        print(f"[-] Error parsing sitemap XML {sitemap_url}: {e}")
+        return []
+
     urls = []
 
-    # Check if sitemap index
-    sitemaps = [loc.text.strip() for loc in soup.find_all("sitemap")]
-    if sitemaps:
-        print(f"Found sitemap index with {len(sitemaps)} sub-sitemaps. Parsing...")
-        for sub in sitemaps:
-            urls.extend(discover_urls_from_sitemap(sub, pattern))
+    # Check if this is a sitemap index (contains <sitemap><loc>...</loc></sitemap> entries)
+    sitemap_tags = soup.find_all("sitemap")
+    if sitemap_tags:
+        sub_urls = [tag.find("loc") for tag in sitemap_tags]
+        sub_urls = [loc.text.strip() for loc in sub_urls if loc]
+        print(f"Found sitemap index with {len(sub_urls)} sub-sitemaps. Parsing...")
+        for sub in sub_urls:
+            try:
+                result = discover_urls_from_sitemap(sub, pattern)
+                urls.extend(result or [])
+            except Exception as e:
+                print(f"[-] Skipping sub-sitemap {sub}: {e}")
         return urls
 
     # Parse regular sitemap URLs
@@ -116,7 +127,9 @@ def discover_urls_from_sitemap(sitemap_url: str, pattern: str = None) -> list[st
                     urls.append(url)
             else:
                 urls.append(url)
-    
+    return urls
+
+
 import sqlite3
 
 def get_local_cache_db():
