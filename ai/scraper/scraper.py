@@ -110,6 +110,10 @@ def discover_urls_from_sitemap(sitemap_url: str, pattern: str = None, limit: int
     if sitemap_tags:
         sub_urls = [tag.find("loc") for tag in sitemap_tags]
         sub_urls = [loc.text.strip() for loc in sub_urls if loc]
+        # Visit recipe-looking sub-sitemaps first so an early `limit` stop spends the
+        # budget on actual recipes, not articles/listicles that share the URL pattern
+        # (e.g. BBC files both under /recipes/, but in separate -recipe.xml vs -post.xml maps).
+        sub_urls.sort(key=lambda loc: 0 if "recipe" in loc.lower() else 1)
         print(f"Found sitemap index with {len(sub_urls)} sub-sitemaps. Parsing...")
         for sub in sub_urls:
             if limit and len(urls) >= limit:
