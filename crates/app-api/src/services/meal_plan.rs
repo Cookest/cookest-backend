@@ -950,12 +950,26 @@ impl MealPlanService {
         let days_since_monday = today.weekday().num_days_from_monday() as i64;
         let week_start = today - Duration::days(days_since_monday);
 
-        let plan = meal_plan::Entity::find()
+        let plan_opt = meal_plan::Entity::find()
             .filter(meal_plan::Column::UserId.eq(user_id))
             .filter(meal_plan::Column::WeekStart.eq(week_start))
             .one(&self.db)
-            .await?
-            .ok_or_else(|| AppError::NotFound("Meal plan for this week".into()))?;
+            .await?;
+
+        let plan = if let Some(p) = plan_opt {
+            p
+        } else {
+            let now = Utc::now().fixed_offset();
+            let new_plan = meal_plan::ActiveModel {
+                user_id: Set(user_id),
+                week_start: Set(week_start),
+                is_ai_generated: Set(false),
+                created_at: Set(now),
+                updated_at: Set(now),
+                ..Default::default()
+            };
+            new_plan.insert(&self.db).await?
+        };
 
         let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
         let recipe_model = recipe_service.get_recipe_or_import(recipe_id).await?;
@@ -966,13 +980,26 @@ impl MealPlanService {
             .filter(meal_plan_slot::Column::DayOfWeek.eq(day_of_week))
             .filter(meal_plan_slot::Column::MealType.eq(meal_type))
             .one(&self.db)
-            .await?
-            .ok_or_else(|| AppError::NotFound("Slot".into()))?;
+            .await?;
 
-        let mut active: meal_plan_slot::ActiveModel = slot.into();
-        active.recipe_id = Set(Some(recipe_id));
-        active.is_completed = Set(false);
-        active.update(&self.db).await?;
+        if let Some(slot) = slot {
+            let mut active: meal_plan_slot::ActiveModel = slot.into();
+            active.recipe_id = Set(Some(recipe_id));
+            active.is_completed = Set(false);
+            active.is_flex = Set(false);
+            active.update(&self.db).await?;
+        } else {
+            let active = meal_plan_slot::ActiveModel {
+                meal_plan_id: Set(plan.id),
+                recipe_id: Set(Some(recipe_id)),
+                day_of_week: Set(day_of_week),
+                meal_type: Set(meal_type.to_string()),
+                is_completed: Set(false),
+                is_flex: Set(false),
+                ..Default::default()
+            };
+            active.insert(&self.db).await?;
+        }
 
         Ok(recipe_name)
     }

@@ -716,8 +716,8 @@ impl ChatService {
              1. FIRST call get_meal_plan to see the current state\n\
              2. THEN call search_recipes with the requested cuisine/type/constraint\n\
              3. Pick the BEST matching recipe (prefer one that matches their pantry)\n\
-             4. Tell the user EXACTLY what you're going to change: \"I'll replace [current recipe] on [day] [meal_type] with [new recipe]. Shall I go ahead?\"\n\
-             5. ONLY call update_meal_plan_slot using the EXACT integer `recipe_id` from search_recipes after the user confirms (says \"yes\", \"sure\", \"go ahead\", \"do it\", etc.) OR if their original message was clearly an unambiguous direct command (e.g. \"change Wednesday dinner to pasta\"). DO NOT invent or guess the recipe_id.\n\
+             4. If the user's message was clearly an unambiguous direct command (e.g. \"change Wednesday dinner to pasta\", \"don't ask me\"), call update_meal_plan_slot IMMEDIATELY with the EXACT integer `recipe_id` from search_recipes.\n\
+             5. Otherwise, tell the user EXACTLY what you're going to change (e.g. \"I'll add [new recipe] to [day] [meal_type]\" or \"I'll replace [current recipe] with [new recipe]\") and ONLY call update_meal_plan_slot after they confirm. DO NOT invent or guess the recipe_id.\n\
              \n\
              ## DAY AND MEAL MAPPING\n\
              - Monday = 0, Tuesday = 1, Wednesday = 2, Thursday = 3, Friday = 4, Saturday = 5, Sunday = 6\n\
