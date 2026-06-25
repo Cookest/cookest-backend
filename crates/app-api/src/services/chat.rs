@@ -35,6 +35,13 @@ struct OllamaRequest {
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    options: Option<OllamaOptions>,
+}
+
+#[derive(Debug, Serialize)]
+struct OllamaOptions {
+    temperature: f32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -238,6 +245,7 @@ impl ChatService {
                 messages: ollama_messages.clone(),
                 stream: false,
                 tools: Some(tool_definitions()),
+                options: Some(OllamaOptions { temperature: 0.1 }),
             };
 
             let resp = self
@@ -300,9 +308,7 @@ impl ChatService {
             }
         }
 
-        if reply.is_empty() {
-            reply = "I'm sorry, I wasn't able to complete that action. Please try again.".to_string();
-        }
+        // Empty check removed here to be performed after the correction block (including cleanup)
 
         // ── Post-loop: hallucination guard ────────────────────────────────────
         // If the AI claims it performed an action but called no tools, catch it.
@@ -327,6 +333,7 @@ impl ChatService {
                 messages: ollama_messages.clone(),
                 stream: false,
                 tools: Some(tool_definitions()),
+                options: Some(OllamaOptions { temperature: 0.1 }),
             };
             if let Ok(body) = serde_json::to_string(&req) {
                 if let Ok(resp) = reqwest::Client::new()
@@ -363,6 +370,7 @@ impl ChatService {
                                     messages: ollama_messages,
                                     stream: false,
                                     tools: Some(tool_definitions()),
+                                    options: Some(OllamaOptions { temperature: 0.1 }),
                                 };
                                 if let Ok(final_body) = serde_json::to_string(&final_req) {
                                     if let Ok(final_resp) = reqwest::Client::new()
@@ -386,6 +394,12 @@ impl ChatService {
                     }
                 }
             }
+        }
+
+        reply = clean_hallucinated_json_responses(&reply);
+
+        if reply.is_empty() {
+            reply = "I'm sorry, I wasn't able to complete that action. Please try again.".to_string();
         }
 
         // ── 7. Save assistant reply to DB ─────────────────────────────────────
@@ -723,7 +737,10 @@ impl ChatService {
              - If the user asks you to perform an action and you do NOT have a tool for it → say \"I don't have the ability to do that yet\" — do NOT pretend.\n\
              - If a tool returns {{\"error\": ...}} or {{\"success\": false}} → tell the user it failed. NEVER say \"done\" or \"I've updated\" after a failed tool call.\n\
              - Do NOT describe what you are about to do as if it already happened. Only describe things AFTER the tool confirms them.\n\
-             - If you are unsure whether an action succeeded, say so and ask the user to verify.\n"
+             - If you are unsure whether an action succeeded, say so and ask the user to verify.\n\
+             - NEVER output raw JSON tool calls, mock tool definitions, or function/JSON syntax in your conversational response text. Conversational responses must be clean, natural, and user-friendly.\n\
+             - Do NOT invent or hallucinate new tools that are not in the provided tools list. If the user asks a general question like \"What can you do?\" or \"Who are you?\", answer directly in plain text without trying to call any tool.\n\
+             - If you decide to reply with text instead of calling a tool, output ONLY conversational text. NEVER format your text to look like a JSON tool call (e.g., starting with `{{\"name\": ...}}` or `{{\"function\": ...}}`).\n"
         );
 
         Ok(ctx)
@@ -759,3 +776,60 @@ impl ChatService {
         action_phrases.iter().any(|p| lower.contains(p))
     }
 }
+
+// Helper to strip hallucinated JSON tool call representation blocks from response text
+fn clean_hallucinated_json_responses(reply: &str) -> String {
+    let trimmed = reply.trim();
+    if trimmed.starts_with('{') {
+        let mut brace_count = 0;
+        let mut json_end_idx = None;
+        for (i, c) in trimmed.char_indices() {
+            if c == '{' {
+                brace_count += 1;
+            } else if c == '}' {
+                brace_count -= 1;
+                if brace_count == 0 {
+                    json_end_idx = Some(i);
+                    break;
+                }
+            }
+        }
+        if let Some(end_idx) = json_end_idx {
+            let json_candidate = &trimmed[..=end_idx];
+            if json_candidate.contains("\"name\"") {
+                let remainder = &trimmed[end_idx + 1..];
+                return clean_hallucinated_json_responses(remainder);
+            }
+        }
+    }
+    reply.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clean_hallucinated_json_responses() {
+        // Case 1: Hallucinated JSON before text response
+        let input = r#"{"name": "explain_user_capabilities", "parameters": {}}
+
+Note: The tool doesn't exist for explaining user
+capabilities directly."#;
+        let expected = "Note: The tool doesn't exist for explaining user\ncapabilities directly.";
+        assert_eq!(clean_hallucinated_json_responses(input).trim(), expected);
+
+        // Case 2: Pure JSON tool call (should become empty string)
+        let input_pure = r#"{"name": "explain_user_capabilities", "parameters": {}}"#;
+        assert_eq!(clean_hallucinated_json_responses(input_pure).trim(), "");
+
+        // Case 3: Regular text response (should be unchanged)
+        let input_text = "Hello! I can help you with recipes and meal planning.";
+        assert_eq!(clean_hallucinated_json_responses(input_text), input_text);
+
+        // Case 4: JSON object that is NOT a tool call (e.g. nutrition data example)
+        let input_nutrition = r#"{"calories": 250, "protein_g": 20}"#;
+        assert_eq!(clean_hallucinated_json_responses(input_nutrition), input_nutrition);
+    }
+}
+
