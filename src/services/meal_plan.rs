@@ -450,18 +450,29 @@ impl MealPlanService {
         Ok(())
     }
 
-    /// Add a recipe to a slot in the current week's meal plan (creating the plan and slot if needed)
-    pub async fn add_to_current_plan_slot(
+    /// Add a recipe to a slot in the given week's meal plan (creating the plan and slot if needed)
+    pub async fn add_to_plan_slot_by_identifier(
         &self,
         user_id: Uuid,
+        identifier: &str,
         recipe_id: i64,
         day_of_week: i16,
         meal_type: String,
         servings: i32,
     ) -> Result<serde_json::Value, AppError> {
-        let today = Utc::now().date_naive();
-        let days_since_monday = today.weekday().num_days_from_monday() as i64;
-        let week_start = today - chrono::Duration::days(days_since_monday);
+        let week_start = if identifier == "current" {
+            let today = Utc::now().date_naive();
+            let days_since_monday = today.weekday().num_days_from_monday() as i64;
+            today - chrono::Duration::days(days_since_monday)
+        } else if let Ok(date) = chrono::NaiveDate::parse_from_str(identifier, "%Y-%m-%d") {
+            date
+        } else if let Ok(id) = identifier.parse::<i64>() {
+            let p = meal_plan::Entity::find_by_id(id).one(&self.db).await?
+                .filter(|p| p.user_id == user_id).ok_or(AppError::NotFound("Meal plan".into()))?;
+            p.week_start
+        } else {
+            return Err(AppError::BadRequest("Invalid plan identifier".into()));
+        };
 
         let plan = if let Some(p) = meal_plan::Entity::find()
             .filter(meal_plan::Column::UserId.eq(user_id))

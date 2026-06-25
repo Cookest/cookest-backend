@@ -248,16 +248,19 @@ pub struct AddCurrentSlotBody {
     pub servings: i32,
 }
 
-pub async fn add_current_slot(
+pub async fn add_slot(
     meal_svc: web::Data<Arc<MealPlanService>>,
     claims: web::ReqData<Claims>,
+    path: web::Path<String>,
     body: web::Json<AddCurrentSlotBody>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let identifier = path.into_inner();
     let body = body.into_inner();
     let result = meal_svc
-        .add_to_current_plan_slot(
+        .add_to_plan_slot_by_identifier(
             user_id,
+            &identifier,
             body.recipe_id,
             body.day_of_week,
             body.meal_type,
@@ -414,7 +417,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .route("", web::get().to(list_meal_plans))
                 .route("/generate", web::post().to(generate_meal_plan))
                 .route("/current", web::get().to(get_current_meal_plan))
-                .route("/current/slots", web::post().to(add_current_slot))
+                .route("/{identifier}/slots", web::post().to(add_slot))
                 .route("/current/shopping-list", web::get().to(get_shopping_list))
                 .route("/{id}", web::get().to(get_meal_plan))
                 .route("/{id}", web::delete().to(delete_meal_plan))
