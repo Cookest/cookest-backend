@@ -80,6 +80,8 @@ pub struct Claims {
 pub enum TokenType {
     Access,
     Refresh,
+    Verification,
+    PasswordReset,
 }
 
 /// Token pair returned after successful authentication
@@ -146,6 +148,48 @@ impl TokenService {
             sub: user_id.to_string(),
             email: email.to_string(),
             token_type: TokenType::Refresh,
+            exp: exp.timestamp(),
+            iat: now.timestamp(),
+            jti: generate_jti(),
+            tier: None,
+            is_admin: None,
+            onboarding_completed: None,
+        };
+
+        encode(&Header::default(), &claims, &self.encoding_key)
+            .map_err(|e| AppError::Internal(format!("Token generation failed: {}", e)))
+    }
+
+    /// Generate email verification token (24 hours)
+    pub fn generate_verification_token(&self, user_id: Uuid, email: &str) -> Result<String, AppError> {
+        let now = Utc::now();
+        let exp = now + Duration::hours(24);
+
+        let claims = Claims {
+            sub: user_id.to_string(),
+            email: email.to_string(),
+            token_type: TokenType::Verification,
+            exp: exp.timestamp(),
+            iat: now.timestamp(),
+            jti: generate_jti(),
+            tier: None,
+            is_admin: None,
+            onboarding_completed: None,
+        };
+
+        encode(&Header::default(), &claims, &self.encoding_key)
+            .map_err(|e| AppError::Internal(format!("Token generation failed: {}", e)))
+    }
+
+    /// Generate password reset token (1 hour)
+    pub fn generate_password_reset_token(&self, user_id: Uuid, email: &str) -> Result<String, AppError> {
+        let now = Utc::now();
+        let exp = now + Duration::hours(1);
+
+        let claims = Claims {
+            sub: user_id.to_string(),
+            email: email.to_string(),
+            token_type: TokenType::PasswordReset,
             exp: exp.timestamp(),
             iat: now.timestamp(),
             jti: generate_jti(),

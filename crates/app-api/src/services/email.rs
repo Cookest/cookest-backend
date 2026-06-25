@@ -165,20 +165,24 @@ impl EmailService {
   <head>
     <meta charset="utf-8" />
     <style>
-      body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }}
-      .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-      .header {{ text-align: center; margin-bottom: 30px; }}
-      .content {{ background-color: #f9fafb; padding: 20px; border-radius: 8px; }}
+      body {{ font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #F5F5F0; margin: 0; padding: 40px 20px; }}
+      .container {{ max-width: 500px; margin: 0 auto; background-color: #FFFFFF; border: 1px solid #E4EBE0; border-radius: 12px; overflow: hidden; }}
+      .header {{ text-align: center; padding: 30px 20px; background-color: #FAFAF6; border-bottom: 1px solid #E4EBE0; }}
+      h1 {{ font-family: 'Playfair Display', serif; color: #1C3A2A; margin: 0; font-size: 24px; }}
+      .content {{ padding: 30px 20px; color: #3D5040; line-height: 1.6; }}
       .button {{ 
-        background-color: #10b981; 
-        color: white; 
-        padding: 12px 30px; 
+        background-color: #7A9A65; 
+        color: #FFFFFF; 
+        padding: 14px 24px; 
         text-decoration: none; 
-        border-radius: 6px; 
-        display: inline-block; 
-        margin: 20px 0;
+        border-radius: 8px; 
+        display: block; 
+        text-align: center;
+        font-weight: 600;
+        margin: 24px 0;
       }}
-      .footer {{ text-align: center; color: #666; font-size: 12px; margin-top: 20px; }}
+      .footer {{ text-align: center; color: #7A8E74; font-size: 13px; padding: 20px; border-top: 1px solid #E4EBE0; background-color: #FAFAF6; }}
+      .link-text {{ word-break: break-all; color: #7A8E74; font-size: 13px; margin-top: 8px; }}
     </style>
   </head>
   <body>
@@ -187,12 +191,10 @@ impl EmailService {
         <h1>Welcome to Cookest!</h1>
       </div>
       <div class="content">
-        <p>Thank you for signing up. Please verify your email address to get started.</p>
-        <p>
-          <a href="{}" class="button">Verify Email</a>
-        </p>
-        <p>Or copy and paste this link in your browser:</p>
-        <p style="word-break: break-all; color: #666; font-size: 14px;">{}</p>
+        <p>Thank you for signing up. Please verify your email address to get started with intelligent meal planning.</p>
+        <a href="{}" class="button">Verify Email</a>
+        <p style="font-size: 14px; margin-top: 30px;">Or copy and paste this link in your browser:</p>
+        <p class="link-text">{}</p>
       </div>
       <div class="footer">
         <p>© 2026 Cookest. All rights reserved.</p>
@@ -211,21 +213,25 @@ impl EmailService {
   <head>
     <meta charset="utf-8" />
     <style>
-      body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }}
-      .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-      .header {{ text-align: center; margin-bottom: 30px; }}
-      .content {{ background-color: #f9fafb; padding: 20px; border-radius: 8px; }}
+      body {{ font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #F5F5F0; margin: 0; padding: 40px 20px; }}
+      .container {{ max-width: 500px; margin: 0 auto; background-color: #FFFFFF; border: 1px solid #E4EBE0; border-radius: 12px; overflow: hidden; }}
+      .header {{ text-align: center; padding: 30px 20px; background-color: #FAFAF6; border-bottom: 1px solid #E4EBE0; }}
+      h1 {{ font-family: 'Playfair Display', serif; color: #1C3A2A; margin: 0; font-size: 24px; }}
+      .content {{ padding: 30px 20px; color: #3D5040; line-height: 1.6; }}
       .button {{ 
-        background-color: #10b981; 
-        color: white; 
-        padding: 12px 30px; 
+        background-color: #7A9A65; 
+        color: #FFFFFF; 
+        padding: 14px 24px; 
         text-decoration: none; 
-        border-radius: 6px; 
-        display: inline-block; 
-        margin: 20px 0;
+        border-radius: 8px; 
+        display: block; 
+        text-align: center;
+        font-weight: 600;
+        margin: 24px 0;
       }}
-      .footer {{ text-align: center; color: #666; font-size: 12px; margin-top: 20px; }}
-      .warning {{ background-color: #fef3c7; padding: 10px; border-radius: 4px; margin: 10px 0; }}
+      .footer {{ text-align: center; color: #7A8E74; font-size: 13px; padding: 20px; border-top: 1px solid #E4EBE0; background-color: #FAFAF6; }}
+      .warning {{ background-color: #FAFAF6; padding: 16px; border: 1px solid #E4EBE0; border-radius: 8px; margin-top: 24px; font-size: 13px; color: #7A8E74; }}
+      .link-text {{ word-break: break-all; color: #7A8E74; font-size: 13px; margin-top: 8px; }}
     </style>
   </head>
   <body>
@@ -235,13 +241,11 @@ impl EmailService {
       </div>
       <div class="content">
         <p>We received a request to reset your Cookest password. Click the button below to set a new password.</p>
-        <p>
-          <a href="{}" class="button">Reset Password</a>
-        </p>
-        <p>Or copy and paste this link in your browser:</p>
-        <p style="word-break: break-all; color: #666; font-size: 14px;">{}</p>
+        <a href="{}" class="button">Reset Password</a>
+        <p style="font-size: 14px; margin-top: 30px;">Or copy and paste this link in your browser:</p>
+        <p class="link-text">{}</p>
         <div class="warning">
-          <p><strong>Note:</strong> This link will expire in 24 hours. If you didn't request a password reset, please ignore this email.</p>
+          <p style="margin: 0;"><strong>Note:</strong> This link will expire in 24 hours. If you didn't request a password reset, please safely ignore this email.</p>
         </div>
       </div>
       <div class="footer">
@@ -261,22 +265,27 @@ impl EmailService {
   <head>
     <meta charset="utf-8" />
     <style>
-      body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }}
-      .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-      .header {{ text-align: center; margin-bottom: 30px; }}
-      .content {{ background-color: #f9fafb; padding: 20px; border-radius: 8px; }}
+      body {{ font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #F5F5F0; margin: 0; padding: 40px 20px; }}
+      .container {{ max-width: 500px; margin: 0 auto; background-color: #FFFFFF; border: 1px solid #E4EBE0; border-radius: 12px; overflow: hidden; }}
+      .header {{ text-align: center; padding: 30px 20px; background-color: #FAFAF6; border-bottom: 1px solid #E4EBE0; }}
+      h1 {{ font-family: 'Playfair Display', serif; color: #1C3A2A; margin: 0; font-size: 24px; }}
+      .content {{ padding: 30px 20px; color: #3D5040; line-height: 1.6; }}
       .button {{ 
-        background-color: #10b981; 
-        color: white; 
-        padding: 12px 30px; 
+        background-color: #7A9A65; 
+        color: #FFFFFF; 
+        padding: 14px 24px; 
         text-decoration: none; 
-        border-radius: 6px; 
-        display: inline-block; 
-        margin: 20px 0;
+        border-radius: 8px; 
+        display: block; 
+        text-align: center;
+        font-weight: 600;
+        margin: 24px 0;
       }}
-      .footer {{ text-align: center; color: #666; font-size: 12px; margin-top: 20px; }}
-      .features {{ margin: 20px 0; }}
-      .feature {{ margin: 10px 0; padding-left: 20px; }}
+      .footer {{ text-align: center; color: #7A8E74; font-size: 13px; padding: 20px; border-top: 1px solid #E4EBE0; background-color: #FAFAF6; }}
+      .features {{ margin: 24px 0; padding: 20px; background-color: #FAFAF6; border-radius: 8px; border: 1px solid #E4EBE0; }}
+      .features h3 {{ font-family: 'Playfair Display', serif; color: #1C3A2A; margin-top: 0; }}
+      .feature {{ margin: 12px 0; padding-left: 24px; position: relative; color: #3D5040; }}
+      .feature::before {{ content: "✓"; position: absolute; left: 0; color: #7A9A65; font-weight: bold; }}
     </style>
   </head>
   <body>
@@ -288,14 +297,12 @@ impl EmailService {
         <p>We're excited to have you join Cookest. Start exploring intelligent meal planning, smart grocery lists, and personalized recipes.</p>
         <div class="features">
           <h3>Get started with:</h3>
-          <div class="feature">✓ AI-powered meal planning</div>
-          <div class="feature">✓ Inventory management</div>
-          <div class="feature">✓ Shopping list optimization</div>
-          <div class="feature">✓ Recipe discovery</div>
+          <div class="feature">AI-powered meal planning</div>
+          <div class="feature">Inventory management</div>
+          <div class="feature">Shopping list optimization</div>
+          <div class="feature">Recipe discovery</div>
         </div>
-        <p>
-          <a href="https://m.cookest.app" class="button">Open Cookest</a>
-        </p>
+        <a href="https://m.cookest.app" class="button">Open Cookest</a>
       </div>
       <div class="footer">
         <p>© 2026 Cookest. All rights reserved.</p>

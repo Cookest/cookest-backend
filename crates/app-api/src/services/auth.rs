@@ -31,10 +31,16 @@ pub struct AuthService {
     token_service: TokenService,
     argon2: Argon2<'static>,
     self_hosted: bool,
+    email_service: std::sync::Arc<crate::services::email::EmailService>,
 }
 
 impl AuthService {
-    pub fn new(db: DatabaseConnection, token_service: TokenService, self_hosted: bool) -> Self {
+    pub fn new(
+        db: DatabaseConnection, 
+        token_service: TokenService, 
+        self_hosted: bool,
+        email_service: std::sync::Arc<crate::services::email::EmailService>,
+    ) -> Self {
         // Configure Argon2id with OWASP-recommended parameters
         // Memory: 19 MiB, Iterations: 2, Parallelism: 1
         let params = Params::new(
@@ -52,6 +58,7 @@ impl AuthService {
             token_service,
             argon2,
             self_hosted,
+            email_service,
         }
     }
 
@@ -78,7 +85,7 @@ impl AuthService {
 
         let user = ActiveModel {
             id: Set(user_id),
-            email: Set(email),
+            email: Set(email.clone()),
             password_hash: Set(password_hash),
             refresh_token_hash: Set(None),
             name: Set(None),
@@ -110,6 +117,26 @@ impl AuthService {
         let user = user.insert(&self.db).await?;
 
         tracing::info!("User registered: {}", user.id);
+
+        // Send welcome email immediately
+        let email_clone = self.email_service.clone();
+        let email_addr = email.clone();
+        tokio::spawn(async move {
+            if let Err(e) = email_clone.send_welcome_email(email_addr.clone(), "Chef".to_string()).await {
+                tracing::error!("Failed to send welcome email to {}: {}", email_addr, e);
+            }
+        });
+
+        // Send verification email
+        if let Ok(token) = self.token_service.generate_verification_token(user.id, &email) {
+            let email_clone2 = self.email_service.clone();
+            let email_addr2 = email.clone();
+            tokio::spawn(async move {
+                if let Err(e) = email_clone2.send_verification_email(email_addr2.clone(), token).await {
+                    tracing::error!("Failed to send verification email to {}: {}", email_addr2, e);
+                }
+            });
+        }
 
         Ok(UserResponse::from(user))
     }
@@ -240,6 +267,50 @@ impl AuthService {
     }
 
     /// Change user password — invalidates all sessions
+    pub async fn verify_email(&self, token: &str) -> Result<(), AppError> {
+        let claims = self.token_service.validate_token(token)?;
+        if claims.claims.token_type != crate::services::token::TokenType::Verification {
+            return Err(AppError::InvalidToken);
+        }
+        let user_id = Uuid::parse_str(&claims.claims.sub).map_err(|_| AppError::InvalidToken)?;
+
+        let user = User::find_by_id(user_id).one(&self.db).await?.ok_or(AppError::InvalidToken)?;
+        let mut active: ActiveModel = user.into();
+        active.is_email_verified = Set(true);
+        active.update(&self.db).await?;
+        Ok(())
+    }
+
+    pub async fn forgot_password(&self, email: &str) -> Result<(), AppError> {
+        let email = normalize_email(email);
+        if let Some(user) = User::find().filter(user::Column::Email.eq(&email)).one(&self.db).await? {
+            if let Ok(token) = self.token_service.generate_password_reset_token(user.id, &email) {
+                let email_clone = self.email_service.clone();
+                let email_addr = email.clone();
+                tokio::spawn(async move {
+                    let _ = email_clone.send_password_reset_email(email_addr, token).await;
+                });
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn reset_password(&self, token: &str, new_password: &str) -> Result<(), AppError> {
+        let claims = self.token_service.validate_token(token)?;
+        if claims.claims.token_type != crate::services::token::TokenType::PasswordReset {
+            return Err(AppError::InvalidToken);
+        }
+        let user_id = Uuid::parse_str(&claims.claims.sub).map_err(|_| AppError::InvalidToken)?;
+
+        let user = User::find_by_id(user_id).one(&self.db).await?.ok_or(AppError::InvalidToken)?;
+        let password_hash = self.hash_password(new_password)?;
+        
+        let mut active: ActiveModel = user.into();
+        active.password_hash = Set(password_hash);
+        active.update(&self.db).await?;
+        Ok(())
+    }
+
     pub async fn change_password(
         &self,
         user_id: Uuid,

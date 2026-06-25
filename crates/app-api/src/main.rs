@@ -740,8 +740,22 @@ async fn main() -> std::io::Result<()> {
     // Initialize services
     let food_api_client = FoodApiClient::new(config.food_api_url.clone(), config.food_api_key.clone());
 
+    // Initialize email service if Resend API key is available
+    let email_service = if let Some(api_key) = &config.resend_api_key {
+        Arc::new(EmailService::new(
+            api_key.expose_secret().to_string(),
+            config.resend_from_email.clone(),
+        ))
+    } else {
+        tracing::warn!("RESEND_API_KEY not configured - email notifications disabled");
+        Arc::new(EmailService::new(
+            String::new(),
+            config.resend_from_email.clone(),
+        ))
+    };
+
     let token_service = Arc::new(TokenService::new(&config));
-    let auth_service = Arc::new(AuthService::new(db.clone(), TokenService::new(&config), config.self_hosted));
+    let auth_service = Arc::new(AuthService::new(db.clone(), TokenService::new(&config), config.self_hosted, email_service.clone()));
     let recipe_service = Arc::new(RecipeService::new(db.clone(), food_api_client.clone()));
     let ingredient_service = Arc::new(IngredientService::new(db.clone(), food_api_client.clone()));
     let meal_plan_service = Arc::new(MealPlanService::new(db.clone(), food_api_client.clone()));
@@ -778,19 +792,7 @@ async fn main() -> std::io::Result<()> {
     let household_service = Arc::new(HouseholdService::new(db.clone()));
     let meal_poll_service = Arc::new(MealPollService::new(db.clone()));
 
-    // Initialize email service if Resend API key is available
-    let email_service = if let Some(api_key) = &config.resend_api_key {
-        Arc::new(EmailService::new(
-            api_key.expose_secret().to_string(),
-            config.resend_from_email.clone(),
-        ))
-    } else {
-        tracing::warn!("RESEND_API_KEY not configured - email notifications disabled");
-        Arc::new(EmailService::new(
-            String::new(),
-            config.resend_from_email.clone(),
-        ))
-    };
+
 
     tracing::info!("Server starting on {}", bind_address);
 

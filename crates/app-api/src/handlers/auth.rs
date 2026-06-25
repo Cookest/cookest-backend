@@ -13,7 +13,7 @@ use validator::Validate;
 use cookest_shared::errors::AppError;
 use crate::middleware::{RateLimit, RateLimitConfig};
 use crate::services::AuthService;
-use crate::validation::{LoginRequest, RegisterRequest};
+use crate::validation::{LoginRequest, RegisterRequest, VerifyEmailRequest, ForgotPasswordRequest, ResetPasswordRequest};
 
 /// POST /api/auth/register
 /// 
@@ -125,6 +125,37 @@ pub async fn logout(
         })))
 }
 
+/// POST /api/auth/verify
+pub async fn verify_email(
+    auth_service: web::Data<Arc<AuthService>>,
+    body: web::Json<VerifyEmailRequest>,
+) -> Result<HttpResponse, AppError> {
+    body.validate()?;
+    auth_service.verify_email(&body.token).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "Email verified successfully" })))
+}
+
+/// POST /api/auth/forgot-password
+pub async fn forgot_password(
+    auth_service: web::Data<Arc<AuthService>>,
+    body: web::Json<ForgotPasswordRequest>,
+) -> Result<HttpResponse, AppError> {
+    body.validate()?;
+    auth_service.forgot_password(&body.email).await?;
+    // Always return success to prevent email enumeration
+    Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "If that email exists, a password reset link has been sent" })))
+}
+
+/// POST /api/auth/reset-password
+pub async fn reset_password(
+    auth_service: web::Data<Arc<AuthService>>,
+    body: web::Json<ResetPasswordRequest>,
+) -> Result<HttpResponse, AppError> {
+    body.validate()?;
+    auth_service.reset_password(&body.token, &body.password).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "Password reset successfully" })))
+}
+
 fn should_use_secure_cookie(req: &HttpRequest) -> bool {
     if let Ok(value) = std::env::var("COOKIE_SECURE") {
         let normalized = value.trim().to_ascii_lowercase();
@@ -142,5 +173,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/login", web::post().to(login))
             .route("/refresh", web::post().to(refresh))
             .route("/logout", web::post().to(logout))
+            .route("/verify", web::post().to(verify_email))
+            .route("/forgot-password", web::post().to(forgot_password))
+            .route("/reset-password", web::post().to(reset_password))
     );
 }
