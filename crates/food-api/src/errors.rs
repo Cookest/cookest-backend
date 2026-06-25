@@ -23,6 +23,8 @@ pub enum AppError {
     RateLimitExceeded,
     /// Forbidden — authenticated but not allowed
     Forbidden,
+    /// Bad Request
+    BadRequest(String),
 }
 
 #[derive(Serialize)]
@@ -43,6 +45,7 @@ impl fmt::Display for AppError {
             AppError::Internal(_) => write!(f, "Internal server error"),
             AppError::RateLimitExceeded => write!(f, "Too many requests"),
             AppError::Forbidden => write!(f, "Forbidden"),
+            AppError::BadRequest(msg) => write!(f, "Bad request: {}", msg),
         }
     }
 }
@@ -109,6 +112,13 @@ impl ResponseError for AppError {
                 actix_web::http::StatusCode::FORBIDDEN,
                 ErrorResponse {
                     error: "You do not have permission to perform this action.".to_string(),
+                    details: None,
+                },
+            ),
+            AppError::BadRequest(msg) => (
+                actix_web::http::StatusCode::BAD_REQUEST,
+                ErrorResponse {
+                    error: msg.clone(),
                     details: None,
                 },
             ),

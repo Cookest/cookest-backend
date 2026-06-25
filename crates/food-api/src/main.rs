@@ -253,6 +253,14 @@ async fn main() -> std::io::Result<()> {
         r#"CREATE UNIQUE INDEX IF NOT EXISTS idx_ingredients_fs_food_id ON ingredients(fs_food_id) WHERE fs_food_id IS NOT NULL"#,
         r#"ALTER TABLE recipes ADD COLUMN IF NOT EXISTS fs_recipe_id BIGINT"#,
         r#"CREATE UNIQUE INDEX IF NOT EXISTS idx_recipes_fs_recipe_id ON recipes(fs_recipe_id) WHERE fs_recipe_id IS NOT NULL"#,
+        r#"ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS image_url TEXT"#,
+        r#"
+        CREATE TABLE IF NOT EXISTS system_settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        "#,
+        r#"INSERT INTO system_settings (key, value) VALUES ('food_data_source', 'local') ON CONFLICT (key) DO NOTHING"#,
     ];
 
     for sql in migrations {

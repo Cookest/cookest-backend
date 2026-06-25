@@ -45,7 +45,7 @@ impl RecipeService {
         let per_page = query.per_page.unwrap_or(20).min(50);
 
         match &self.source {
-            FoodDataSource::Local => {
+            FoodDataSource::Local | FoodDataSource::OpenFoodFacts => {
                 self.list_recipes_local(&query, page, per_page).await
             }
             FoodDataSource::FatSecret => {
@@ -224,7 +224,7 @@ impl RecipeService {
     /// Get full recipe detail by ID
     pub async fn get_recipe(&self, id: i64) -> Result<RecipeDetail, AppError> {
         match &self.source {
-            FoodDataSource::Local => self.get_recipe_local(id).await,
+            FoodDataSource::Local | FoodDataSource::OpenFoodFacts => self.get_recipe_local(id).await,
             FoodDataSource::FatSecret => self.get_recipe_fatsecret(id).await,
             FoodDataSource::Hybrid => {
                 match self.get_recipe_local(id).await {
@@ -470,7 +470,7 @@ impl RecipeService {
     /// Get recipe by slug
     pub async fn get_recipe_by_slug(&self, slug_str: &str) -> Result<RecipeDetail, AppError> {
         match &self.source {
-            FoodDataSource::Local | FoodDataSource::Hybrid => {
+            FoodDataSource::Local | FoodDataSource::Hybrid | FoodDataSource::OpenFoodFacts => {
                 use crate::entity::recipe::Column as RecipeCol;
                 let r = RecipeEntity::find()
                     .filter(RecipeCol::Slug.eq(slug_str))
@@ -512,7 +512,7 @@ impl RecipeService {
             FoodDataSource::FatSecret => {
                 Err(AppError::Internal("Not supported in FatSecret catalog".into()))
             }
-            FoodDataSource::Local | FoodDataSource::Hybrid => {
+            FoodDataSource::Local | FoodDataSource::Hybrid | FoodDataSource::OpenFoodFacts => {
                 use crate::services::time_region::{estimate_time, classify_region};
 
                 let servings = req.servings.unwrap_or(2);
@@ -599,7 +599,7 @@ impl RecipeService {
             FoodDataSource::FatSecret => {
                 Err(AppError::Internal("Not supported in FatSecret catalog".into()))
             }
-            FoodDataSource::Local | FoodDataSource::Hybrid => {
+            FoodDataSource::Local | FoodDataSource::Hybrid | FoodDataSource::OpenFoodFacts => {
                 let existing = RecipeEntity::find_by_id(recipe_id)
                     .one(&self.db)
                     .await?
@@ -670,7 +670,7 @@ impl RecipeService {
             FoodDataSource::FatSecret => {
                 Err(AppError::Internal("Not supported in FatSecret catalog".into()))
             }
-            FoodDataSource::Local | FoodDataSource::Hybrid => {
+            FoodDataSource::Local | FoodDataSource::Hybrid | FoodDataSource::OpenFoodFacts => {
                 let existing = RecipeEntity::find_by_id(recipe_id)
                     .one(&self.db)
                     .await?

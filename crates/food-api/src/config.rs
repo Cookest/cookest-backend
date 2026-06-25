@@ -6,6 +6,7 @@ pub enum FoodDataSource {
     Local,
     FatSecret,
     Hybrid,
+    OpenFoodFacts,
 }
 
 #[derive(Clone)]
@@ -51,6 +52,7 @@ impl Config {
                 }
                 FoodDataSource::Hybrid
             }
+            Ok("openfoodfacts") => FoodDataSource::OpenFoodFacts,
             _ => {
                 if fs_client_id.is_some() { FoodDataSource::Hybrid } else { FoodDataSource::Local }
             }

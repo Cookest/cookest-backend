@@ -104,10 +104,73 @@ pub async fn execute(
         .body(body_bytes))
 }
 
+#[derive(Deserialize, serde::Serialize)]
+pub struct FoodSourcePayload {
+    pub source: String,
+}
+
+/// GET /api/admin/database/settings/food-source
+pub async fn get_proxy_food_source(
+    food: web::Data<FoodApiClient>,
+    db: web::Data<sea_orm::DatabaseConnection>,
+    claims: web::ReqData<Claims>,
+) -> Result<HttpResponse, AppError> {
+    require_admin(&db, &claims).await?;
+    let resp = food
+        .client
+        .get(format!("{}/api/v1/admin/settings/food-source", food.base_url))
+        .header("X-API-Key", food.api_key.as_deref().unwrap_or(""))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("food-api get settings error: {}", e)))?;
+    let status = actix_web::http::StatusCode::from_u16(resp.status().as_u16())
+        .unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR);
+    let body = resp
+        .bytes()
+        .await
+        .map_err(|e| AppError::Internal(format!("food-api read error: {}", e)))?;
+    Ok(HttpResponse::build(status)
+        .content_type("application/json")
+        .body(body))
+}
+
+/// POST /api/admin/database/settings/food-source
+pub async fn update_proxy_food_source(
+    food: web::Data<FoodApiClient>,
+    db: web::Data<sea_orm::DatabaseConnection>,
+    claims: web::ReqData<Claims>,
+    body: web::Json<FoodSourcePayload>,
+) -> Result<HttpResponse, AppError> {
+    require_admin(&db, &claims).await?;
+    let resp = food
+        .client
+        .post(format!("{}/api/v1/admin/settings/food-source", food.base_url))
+        .header("Content-Type", "application/json")
+        .header("X-API-Key", food.api_key.as_deref().unwrap_or(""))
+        .json(&body.into_inner())
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("food-api update settings error: {}", e)))?;
+    let status = actix_web::http::StatusCode::from_u16(resp.status().as_u16())
+        .unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR);
+    let body_bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| AppError::Internal(format!("food-api read error: {}", e)))?;
+    Ok(HttpResponse::build(status)
+        .content_type("application/json")
+        .body(body_bytes))
+}
+
 pub fn configure_import_proxy(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api/admin/database/import")
             .route("/scan", web::get().to(scan))
             .route("/execute", web::post().to(execute)),
+    );
+    cfg.service(
+        web::scope("/api/admin/database/settings")
+            .route("/food-source", web::get().to(get_proxy_food_source))
+            .route("/food-source", web::post().to(update_proxy_food_source)),
     );
 }

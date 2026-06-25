@@ -63,10 +63,62 @@ pub async fn execute_import(
     }))
 }
 
+#[derive(Serialize)]
+pub struct FoodSourceResponse {
+    pub source: String,
+}
+
+#[derive(Deserialize)]
+pub struct FoodSourceRequest {
+    pub source: String,
+}
+
+pub async fn get_food_source(
+    db: web::Data<sea_orm::DatabaseConnection>,
+) -> Result<HttpResponse, AppError> {
+    use sea_orm::{ConnectionTrait, Statement};
+    let query = Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT value FROM system_settings WHERE key = 'food_data_source'",
+        vec![],
+    );
+    let row = db.query_one(query).await?;
+    let source = if let Some(row) = row {
+        row.try_get::<String>("", "value").unwrap_or_else(|_| "local".to_string())
+    } else {
+        "local".to_string()
+    };
+    Ok(HttpResponse::Ok().json(FoodSourceResponse { source }))
+}
+
+pub async fn update_food_source(
+    db: web::Data<sea_orm::DatabaseConnection>,
+    body: web::Json<FoodSourceRequest>,
+) -> Result<HttpResponse, AppError> {
+    use sea_orm::{ConnectionTrait, Statement};
+    let source = body.source.to_lowercase();
+    if !["local", "fatsecret", "openfoodfacts", "hybrid"].contains(&source.as_str()) {
+        return Err(AppError::BadRequest("Invalid data source value".to_string()));
+    }
+    let query = Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "INSERT INTO system_settings (key, value) VALUES ('food_data_source', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+        [source.clone().into()],
+    );
+    db.execute(query).await?;
+    Ok(HttpResponse::Ok().json(FoodSourceResponse { source }))
+}
+
 pub fn configure_import(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api/v1/admin/import")
             .route("/scan", web::get().to(scan_folder))
             .route("/execute", web::post().to(execute_import)),
+    );
+    cfg.service(
+        web::scope("/api/v1/admin/settings")
+            .route("/food-source", web::get().to(get_food_source))
+            .route("/food-source", web::post().to(update_food_source)),
     );
 }
