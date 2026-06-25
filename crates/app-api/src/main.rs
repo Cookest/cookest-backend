@@ -19,40 +19,29 @@ mod validation;
 
 use actix_cors::Cors;
 use actix_web::{http::header, middleware::Logger, web, App, HttpServer};
+use secrecy::ExposeSecret;
 use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use secrecy::ExposeSecret;
 
 use crate::config::Config;
 use crate::handlers::{
-    configure_auth, configure_recipes, configure_ingredients, configure_user, configure_chat,
-    configure_onboarding, configure_shopping_list, configure_subscription, configure_stores,
-    configure_recipes_protected, configure_subscription_protected,
-    configure_browse, FoodApiClient,
-    configure_recipe_gen,
-    configure_nutrition,
-    configure_taste_profile,
-    configure_households,
-    configure_polls_public, configure_polls_protected,
-    configure_eat_out,
-    configure_notification,
-    configure_suggestion,
-    configure_import_proxy,
-    configure_admin, configure_admin_setup,
-    configure_admin_ingredients,
+    configure_admin, configure_admin_ingredients, configure_admin_setup, configure_auth,
+    configure_browse, configure_chat, configure_eat_out, configure_households,
+    configure_import_proxy, configure_ingredients, configure_notification, configure_nutrition,
+    configure_onboarding, configure_polls_protected, configure_polls_public, configure_recipe_gen,
+    configure_recipes, configure_recipes_protected, configure_shopping_list, configure_stores,
+    configure_subscription, configure_subscription_protected, configure_suggestion,
+    configure_taste_profile, configure_user, FoodApiClient,
 };
 use crate::middleware::{JwtAuth, SecurityHeaders};
-use crate::services::{
-    AuthService, TokenService, RecipeService, IngredientService,
-    RecipeGenService,
-    NutritionService,
-    MealPlanService, InventoryService, ProfileService, InteractionService, ChatService,
-    OnboardingService, ShoppingListService, SubscriptionService, StoreService, PushTokenService,
-    PreferenceService, EmailService, ScanService,
-    HouseholdService, MealPollService,
-    NotificationService, MealPlanSuggestionService,
-};
 use crate::services::taste_profile::TasteProfileService;
+use crate::services::{
+    AuthService, ChatService, EmailService, HouseholdService, IngredientService,
+    InteractionService, InventoryService, MealPlanService, MealPlanSuggestionService,
+    MealPollService, NotificationService, NutritionService, OnboardingService, PreferenceService,
+    ProfileService, PushTokenService, RecipeGenService, RecipeService, ScanService,
+    ShoppingListService, StoreService, SubscriptionService, TokenService,
+};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -86,7 +75,6 @@ async fn main() -> std::io::Result<()> {
         r#"CREATE EXTENSION IF NOT EXISTS "uuid-ossp";"#,
         r#"CREATE EXTENSION IF NOT EXISTS pg_trgm;"#,
         r#"CREATE EXTENSION IF NOT EXISTS vector;"#,
-
         // ── Users (extended with profile fields) ────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS users (
@@ -109,7 +97,6 @@ async fn main() -> std::io::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
         "#,
-
         // ── Ingredients ──────────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS ingredients (
@@ -127,7 +114,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_ingredients_fdc_id
             ON ingredients(fdc_id) WHERE fdc_id IS NOT NULL;
         "#,
-
         // ── Ingredient Nutrients ─────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS ingredient_nutrients (
@@ -150,7 +136,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_ingredient_nutrients_micros
             ON ingredient_nutrients USING GIN (micronutrients);
         "#,
-
         // ── Portion Sizes ────────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS portion_sizes (
@@ -163,7 +148,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_portion_sizes_ingredient
             ON portion_sizes(ingredient_id);
         "#,
-
         // ── Recipes ──────────────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS recipes (
@@ -197,7 +181,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_recipes_dietary
             ON recipes(is_vegetarian, is_vegan, is_gluten_free, is_dairy_free, is_nut_free);
         "#,
-
         // ── Recipe Ingredients ───────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS recipe_ingredients (
@@ -215,7 +198,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_ingredient
             ON recipe_ingredients(ingredient_id);
         "#,
-
         // ── Recipe Steps ─────────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS recipe_steps (
@@ -231,7 +213,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_recipe_steps_recipe
             ON recipe_steps(recipe_id);
         "#,
-
         // ── Recipe Images ────────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS recipe_images (
@@ -250,7 +231,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_recipe_images_primary
             ON recipe_images(recipe_id, is_primary) WHERE is_primary = TRUE;
         "#,
-
         // ── Recipe Nutrition (precomputed) ───────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS recipe_nutrition (
@@ -273,7 +253,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_recipe_nutrition_recipe
             ON recipe_nutrition(recipe_id);
         "#,
-
         // ── User Favorites ───────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS user_favorites (
@@ -286,7 +265,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_user_favorites_user   ON user_favorites(user_id);
         CREATE INDEX IF NOT EXISTS idx_user_favorites_recipe ON user_favorites(recipe_id);
         "#,
-
         // ── Recipe Ratings ───────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS recipe_ratings (
@@ -302,7 +280,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_recipe_ratings_recipe ON recipe_ratings(recipe_id);
         CREATE INDEX IF NOT EXISTS idx_recipe_ratings_user   ON recipe_ratings(user_id);
         "#,
-
         // ── Cooking History ──────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS cooking_history (
@@ -317,7 +294,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_cooking_history_recipe ON cooking_history(recipe_id);
         CREATE INDEX IF NOT EXISTS idx_cooking_history_date   ON cooking_history(user_id, cooked_at DESC);
         "#,
-
         // ── Inventory Items ──────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS inventory_items (
@@ -337,7 +313,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_inventory_expiry
             ON inventory_items(user_id, expiry_date) WHERE expiry_date IS NOT NULL;
         "#,
-
         // ── Meal Plans ───────────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS meal_plans (
@@ -351,7 +326,6 @@ async fn main() -> std::io::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_meal_plans_user ON meal_plans(user_id);
         "#,
-
         // ── Meal Plan Slots ──────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS meal_plan_slots (
@@ -367,7 +341,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_meal_plan_slots_plan   ON meal_plan_slots(meal_plan_id);
         CREATE INDEX IF NOT EXISTS idx_meal_plan_slots_recipe ON meal_plan_slots(recipe_id);
         "#,
-
         // ── Chat Sessions ────────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -380,7 +353,6 @@ async fn main() -> std::io::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat_sessions(user_id);
         "#,
-
         // ── Chat Messages ────────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS chat_messages (
@@ -394,7 +366,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_chat_messages_session
             ON chat_messages(session_id, created_at ASC);
         "#,
-
         // ── User Preferences (ML vector) ─────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS user_preferences (
@@ -410,7 +381,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_user_preferences_updated
             ON user_preferences(updated_at);
         "#,
-
         // ── Schema v2: Subscription + onboarding fields on users ────────────
         r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier TEXT NOT NULL DEFAULT 'free';"#,
         r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_valid_until TIMESTAMPTZ;"#,
@@ -425,18 +395,15 @@ async fn main() -> std::io::Result<()> {
         r#"CREATE INDEX IF NOT EXISTS idx_users_stripe ON users(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;"#,
         r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS meal_frequency INTEGER DEFAULT 3;"#,
         r#"ALTER TABLE users ADD COLUMN IF NOT EXISTS taste_profile JSONB NOT NULL DEFAULT '{}';"#,
-
         // ── Schema v2: Flex / energy fields on meal_plan_slots ──────────────
         r#"ALTER TABLE meal_plan_slots ALTER COLUMN recipe_id DROP NOT NULL;"#,
         r#"ALTER TABLE meal_plan_slots ADD COLUMN IF NOT EXISTS is_flex BOOLEAN NOT NULL DEFAULT FALSE;"#,
         r#"ALTER TABLE meal_plan_slots ADD COLUMN IF NOT EXISTS flex_type TEXT;"#,
         r#"ALTER TABLE meal_plan_slots ADD COLUMN IF NOT EXISTS energy_level TEXT;"#,
-
         // ── Schema v2: author_id on recipes ──────────────────────────────────
         r#"ALTER TABLE recipes ADD COLUMN IF NOT EXISTS author_id UUID REFERENCES users(id) ON DELETE SET NULL;"#,
         r#"ALTER TABLE recipes ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT TRUE;"#,
         r#"CREATE INDEX IF NOT EXISTS idx_recipes_author ON recipes(author_id) WHERE author_id IS NOT NULL;"#,
-
         // ── Stores ─────────────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS stores (
@@ -454,7 +421,6 @@ async fn main() -> std::io::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_stores_slug ON stores(slug);
         "#,
-
         // ── PDF Processing Jobs ───────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS pdf_processing_jobs (
@@ -472,7 +438,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_pdf_jobs_store  ON pdf_processing_jobs(store_id);
         CREATE INDEX IF NOT EXISTS idx_pdf_jobs_status ON pdf_processing_jobs(status);
         "#,
-
         // ── Store Promotions (published, admin-approved) ──────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS store_promotions (
@@ -497,7 +462,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_store_promotions_name_trgm
             ON store_promotions USING GIN (product_name gin_trgm_ops);
         "#,
-
         // ── Store Promotion Ingredients (cross-reference) ─────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS store_promotion_ingredients (
@@ -509,7 +473,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_promo_ingredients_ingredient
             ON store_promotion_ingredients(ingredient_id);
         "#,
-
         // ── Store Promotion Candidates (AI staging, awaiting admin review) ────
         r#"
         CREATE TABLE IF NOT EXISTS store_promotion_candidates (
@@ -533,7 +496,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_candidates_job    ON store_promotion_candidates(job_id);
         CREATE INDEX IF NOT EXISTS idx_candidates_review ON store_promotion_candidates(review_status);
         "#,
-
         // ── Shopping List ─────────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS shopping_list_items (
@@ -552,7 +514,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_shopping_list_user       ON shopping_list_items(user_id);
         CREATE INDEX IF NOT EXISTS idx_shopping_list_ingredient ON shopping_list_items(ingredient_id) WHERE ingredient_id IS NOT NULL;
         "#,
-
         // ── User Push Tokens ─────────────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS user_push_tokens (
@@ -564,7 +525,6 @@ async fn main() -> std::io::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON user_push_tokens(user_id);
         "#,
-
         // ── Stripe Processed Events (idempotency) ─────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS stripe_processed_events (
@@ -572,7 +532,6 @@ async fn main() -> std::io::Result<()> {
             processed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         "#,
-
         // ── FatSecret linkage ─────────────────────────────────────────────────
         r#"
         ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS fs_food_id BIGINT;
@@ -580,12 +539,10 @@ async fn main() -> std::io::Result<()> {
             ON ingredients(fs_food_id) WHERE fs_food_id IS NOT NULL;
         "#,
         r#"ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS image_url TEXT;"#,
-
         // ── Ingredient base price (for budget-aware meal planning) ────────────
         // Seeded by the ETL pipeline (USDA/OFF + category defaults); used by
         // PricingService as the base price, overridden by active store promotions.
         r#"ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS base_price_per_kg NUMERIC(10,2);"#,
-
         // Seed a sensible base price by category for any ingredient that has none
         // yet (idempotent — only fills NULLs; the ETL can refine these later).
         r#"
@@ -611,7 +568,6 @@ async fn main() -> std::io::Result<()> {
         END
         WHERE base_price_per_kg IS NULL;
         "#,
-
         // ── Inventory deduction audit (cook/consume, enables undo) ────────────
         r#"
         CREATE TABLE IF NOT EXISTS inventory_deductions (
@@ -631,7 +587,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_inv_deduct_user    ON inventory_deductions(user_id, created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_inv_deduct_history ON inventory_deductions(cooking_history_id);
         "#,
-
         // ── OpenStreetMap supermarket POI cache (nearby stores) ───────────────
         r#"
         CREATE TABLE IF NOT EXISTS osm_store_pois (
@@ -649,7 +604,6 @@ async fn main() -> std::io::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_osm_pois_geo ON osm_store_pois(lat, lng);
         "#,
-
         // ── Nutrition knowledge base (RAG, pgvector) ──────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS knowledge_chunks (
@@ -665,7 +619,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_embedding
             ON knowledge_chunks USING hnsw (embedding vector_cosine_ops);
         "#,
-
         // ── Households (family groups) ────────────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS households (
@@ -691,7 +644,6 @@ async fn main() -> std::io::Result<()> {
             created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         "#,
-
         // ── Meal polls (vote on what to cook — incl. non-app users) ───────────
         r#"
         CREATE TABLE IF NOT EXISTS meal_polls (
@@ -723,7 +675,6 @@ async fn main() -> std::io::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_meal_poll_options_poll ON meal_poll_options(poll_id);
         CREATE INDEX IF NOT EXISTS idx_meal_poll_votes_poll   ON meal_poll_votes(poll_id);
         "#,
-
         // ── Family Suggestions ─────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS meal_plan_suggestions (
@@ -738,7 +689,6 @@ async fn main() -> std::io::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_meal_plan_suggestions_slot ON meal_plan_suggestions(slot_id);
         "#,
-
         // ── Notifications ─────────────────────────────────
         r#"
         CREATE TABLE IF NOT EXISTS notifications (
@@ -773,7 +723,8 @@ async fn main() -> std::io::Result<()> {
     tracing::info!("All {} migrations complete", migrations.len());
 
     // Initialize services
-    let food_api_client = FoodApiClient::new(config.food_api_url.clone(), config.food_api_key.clone());
+    let food_api_client =
+        FoodApiClient::new(config.food_api_url.clone(), config.food_api_key.clone());
 
     // Initialize email service if Resend API key is available
     let email_service = if let Some(api_key) = &config.resend_api_key {
@@ -790,8 +741,13 @@ async fn main() -> std::io::Result<()> {
     };
 
     let token_service = Arc::new(TokenService::new(&config));
-    let auth_service = Arc::new(AuthService::new(db.clone(), TokenService::new(&config), config.self_hosted, email_service.clone()));
-    
+    let auth_service = Arc::new(AuthService::new(
+        db.clone(),
+        TokenService::new(&config),
+        config.self_hosted,
+        email_service.clone(),
+    ));
+
     // Initialize S3 client
     let credentials = aws_sdk_s3::config::Credentials::new(
         &config.s3_access_key,
@@ -809,22 +765,27 @@ async fn main() -> std::io::Result<()> {
         .build();
     let s3_client = aws_sdk_s3::Client::from_conf(s3_config);
 
-    let recipe_service = Arc::new(RecipeService::new(db.clone(), food_api_client.clone())
-        .with_s3(
+    let recipe_service = Arc::new(
+        RecipeService::new(db.clone(), food_api_client.clone()).with_s3(
             s3_client,
             config.s3_bucket.clone(),
             config.s3_public_url.clone(),
-        ));
+        ),
+    );
     let ingredient_service = Arc::new(IngredientService::new(db.clone(), food_api_client.clone()));
     let meal_plan_service = Arc::new(MealPlanService::new(db.clone(), food_api_client.clone()));
     let inventory_service = Arc::new(InventoryService::new(db.clone(), food_api_client.clone()));
     let profile_service = Arc::new(ProfileService::new(db.clone()));
-    let interaction_service = Arc::new(InteractionService::new(db.clone(), food_api_client.clone()));
+    let interaction_service =
+        Arc::new(InteractionService::new(db.clone(), food_api_client.clone()));
     let preference_service = Arc::new(PreferenceService::new(db.clone()));
     let chat_service = Arc::new(ChatService::new(db.clone(), food_api_client.clone()));
     let onboarding_service = Arc::new(OnboardingService::new(db.clone()));
     let taste_profile_service = Arc::new(TasteProfileService::new(db.clone()));
-    let shopping_list_service = Arc::new(ShoppingListService::new(db.clone(), food_api_client.clone()));
+    let shopping_list_service = Arc::new(ShoppingListService::new(
+        db.clone(),
+        food_api_client.clone(),
+    ));
     let subscription_service = Arc::new(SubscriptionService::new(
         db.clone(),
         config.stripe_webhook_secret.clone(),
@@ -845,10 +806,14 @@ async fn main() -> std::io::Result<()> {
     let nutrition_service = Arc::new(NutritionService::new(db.clone()));
     let household_service = Arc::new(HouseholdService::new(db.clone()));
     let meal_poll_service = Arc::new(MealPollService::new(db.clone()));
-    let notification_service = Arc::new(NotificationService::new(Arc::new(db.clone()), email_service.clone()));
-    let suggestion_service = Arc::new(MealPlanSuggestionService::new(Arc::new(db.clone()), notification_service.clone()));
-
-
+    let notification_service = Arc::new(NotificationService::new(
+        Arc::new(db.clone()),
+        email_service.clone(),
+    ));
+    let suggestion_service = Arc::new(MealPlanSuggestionService::new(
+        Arc::new(db.clone()),
+        notification_service.clone(),
+    ));
 
     tracing::info!("Server starting on {}", bind_address);
 
@@ -888,8 +853,7 @@ async fn main() -> std::io::Result<()> {
             // Security: Request body size limit (50 MB for grocery scan images)
             .app_data(web::JsonConfig::default().limit(10 * 1024 * 1024))
             .app_data(
-                actix_multipart::form::MultipartFormConfig::default()
-                    .total_limit(50 * 1024 * 1024),
+                actix_multipart::form::MultipartFormConfig::default().total_limit(50 * 1024 * 1024),
             )
             // Logging
             .wrap(Logger::default())
@@ -925,24 +889,20 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(suggestion_service.clone()))
             .app_data(web::Data::new(db.clone()))
             // ── Static files ─────────────────────────────────────────
-
             // ── Public routes (no JWT required) ──────────────────────────────
-            .configure(configure_auth)        // /api/auth/*
-            .configure(configure_recipes)     // /api/recipes/* (read-only browsing)
+            .configure(configure_auth) // /api/auth/*
+            .configure(configure_recipes) // /api/recipes/* (read-only browsing)
             .configure(configure_ingredients) // /api/ingredients/* (search)
             .configure(configure_subscription) // /api/webhooks/stripe (raw body, no JWT)
             .configure(configure_polls_public) // /api/polls/* (public voting, no JWT)
             .configure(configure_admin_setup) // /admin/setup (one-time, public)
             // Health check (public, no auth)
-            .service(
-                web::resource("/health")
-                    .route(web::get().to(|| async {
-                        actix_web::HttpResponse::Ok().json(serde_json::json!({
-                            "status": "healthy",
-                            "service": "cookest-app-api"
-                        }))
-                    }))
-            )
+            .service(web::resource("/health").route(web::get().to(|| async {
+                actix_web::HttpResponse::Ok().json(serde_json::json!({
+                    "status": "healthy",
+                    "service": "cookest-app-api"
+                }))
+            })))
             // ── Protected routes (JWT required) ──────────────────────────────
             .service(
                 web::scope("")
@@ -965,7 +925,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(configure_suggestion)
                     .configure(configure_import_proxy)
                     .configure(configure_admin_ingredients) // /admin/ingredients/* (proxy to food-api)
-                    .configure(configure_admin)   // /admin/* (JWT + DB admin check)
+                    .configure(configure_admin), // /admin/* (JWT + DB admin check)
             )
     })
     .bind(&bind_address)?

@@ -39,16 +39,18 @@ pub struct SetupRequest {
 }
 
 fn is_self_hosted() -> bool {
-    std::env::var("SELF_HOSTED").unwrap_or_default().trim().to_ascii_lowercase() == "true"
+    std::env::var("SELF_HOSTED")
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase()
+        == "true"
 }
 
 /// `GET /admin/setup/status` — lets the frontend know if first-run setup is needed.
 ///
 /// Public endpoint. Returns `{ self_hosted, needs_setup }` so the admin panel
 /// root page can redirect to /setup on a fresh self-hosted install.
-pub async fn setup_status(
-    db: web::Data<DatabaseConnection>,
-) -> Result<HttpResponse, AppError> {
+pub async fn setup_status(db: web::Data<DatabaseConnection>) -> Result<HttpResponse, AppError> {
     let self_hosted = is_self_hosted();
 
     let needs_setup = if self_hosted {
@@ -100,7 +102,9 @@ pub async fn setup(
         return Err(AppError::Internal("Invalid admin email".into()));
     }
     if body.admin_password.len() < 8 {
-        return Err(AppError::Internal("Password must be at least 8 characters".into()));
+        return Err(AppError::Internal(
+            "Password must be at least 8 characters".into(),
+        ));
     }
 
     // Check the email isn't already taken
@@ -321,7 +325,11 @@ pub async fn get_stats(
     // local mirror count if food-api is unreachable.
     let total_ingredients = match fetch_catalog_count(&food).await {
         Ok(n) => n,
-        Err(_) => crate::entity::ingredient::Entity::find().count(db.get_ref()).await?,
+        Err(_) => {
+            crate::entity::ingredient::Entity::find()
+                .count(db.get_ref())
+                .await?
+        }
     };
 
     let active_meal_plans = crate::entity::meal_plan::Entity::find()

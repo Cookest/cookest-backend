@@ -1,5 +1,5 @@
 //! Token service for JWT generation and validation
-//! 
+//!
 //! Security features:
 //! - Short-lived access tokens (15 min default)
 //! - Refresh tokens stored as hashes in DB
@@ -161,7 +161,11 @@ impl TokenService {
     }
 
     /// Generate email verification token (24 hours)
-    pub fn generate_verification_token(&self, user_id: Uuid, email: &str) -> Result<String, AppError> {
+    pub fn generate_verification_token(
+        &self,
+        user_id: Uuid,
+        email: &str,
+    ) -> Result<String, AppError> {
         let now = Utc::now();
         let exp = now + Duration::hours(24);
 
@@ -182,7 +186,11 @@ impl TokenService {
     }
 
     /// Generate password reset token (1 hour)
-    pub fn generate_password_reset_token(&self, user_id: Uuid, email: &str) -> Result<String, AppError> {
+    pub fn generate_password_reset_token(
+        &self,
+        user_id: Uuid,
+        email: &str,
+    ) -> Result<String, AppError> {
         let now = Utc::now();
         let exp = now + Duration::hours(1);
 
@@ -208,33 +216,31 @@ impl TokenService {
         // Explicitly set algorithm to prevent algorithm confusion attacks
         validation.set_required_spec_claims(&["exp", "iat", "sub"]);
 
-        decode::<Claims>(token, &self.decoding_key, &validation).map_err(|e| {
-            match e.kind() {
-                jsonwebtoken::errors::ErrorKind::ExpiredSignature => AppError::TokenExpired,
-                _ => AppError::InvalidToken,
-            }
+        decode::<Claims>(token, &self.decoding_key, &validation).map_err(|e| match e.kind() {
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature => AppError::TokenExpired,
+            _ => AppError::InvalidToken,
         })
     }
 
     /// Validate access token specifically
     pub fn validate_access_token(&self, token: &str) -> Result<Claims, AppError> {
         let token_data = self.validate_token(token)?;
-        
+
         if token_data.claims.token_type != TokenType::Access {
             return Err(AppError::InvalidToken);
         }
-        
+
         Ok(token_data.claims)
     }
 
     /// Validate refresh token specifically
     pub fn validate_refresh_token(&self, token: &str) -> Result<Claims, AppError> {
         let token_data = self.validate_token(token)?;
-        
+
         if token_data.claims.token_type != TokenType::Refresh {
             return Err(AppError::InvalidToken);
         }
-        
+
         Ok(token_data.claims)
     }
 

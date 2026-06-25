@@ -8,9 +8,9 @@ use actix_web::{web, HttpResponse};
 use std::sync::Arc;
 use uuid::Uuid;
 
-use cookest_shared::errors::AppError;
 use crate::middleware::Claims;
 use crate::services::nutrition::{NutritionService, RecipeSuggestRequest, WhatToBuyRequest};
+use cookest_shared::errors::AppError;
 
 pub async fn what_to_buy(
     svc: web::Data<Arc<NutritionService>>,
@@ -32,7 +32,9 @@ pub async fn recipe_suggestions(
 ) -> Result<HttpResponse, AppError> {
     sub_service.require_pro_for_ai_feature(&claims, "ai_recipe_suggestions")?;
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
-    let res = svc.recipe_suggestions(user_id, body.into_inner().count.unwrap_or(5)).await?;
+    let res = svc
+        .recipe_suggestions(user_id, body.into_inner().count.unwrap_or(5))
+        .await?;
     Ok(HttpResponse::Ok().json(res))
 }
 

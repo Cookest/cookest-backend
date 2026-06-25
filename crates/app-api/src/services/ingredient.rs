@@ -1,16 +1,16 @@
 //! Ingredient service — searches ingredients via food-api and caches/details them locally
 
-use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    ActiveModelTrait, Set, TransactionTrait,
-};
 use chrono::Utc;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
+    TransactionTrait,
+};
 
 use crate::entity::{ingredient, ingredient_nutrient, portion_size};
 use crate::handlers::browse::FoodApiClient;
-use cookest_shared::errors::AppError;
 use crate::models::ingredient::*;
 use crate::models::recipe::PaginatedResponse;
+use cookest_shared::errors::AppError;
 
 pub struct IngredientService {
     db: DatabaseConnection,
@@ -19,7 +19,10 @@ pub struct IngredientService {
 
 impl IngredientService {
     pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
-        Self { db, food_api_client }
+        Self {
+            db,
+            food_api_client,
+        }
     }
 
     /// Search ingredients (used for inventory autocomplete) — proxies to food-api
@@ -31,14 +34,25 @@ impl IngredientService {
         let page = query.page.unwrap_or(1);
         let per_page = query.per_page.unwrap_or(20);
 
-        let path = format!("/api/v1/ingredients?q={}&page={}&per_page={}", q, page, per_page);
+        let path = format!(
+            "/api/v1/ingredients?q={}&page={}&per_page={}",
+            q, page, per_page
+        );
         let req = self.food_api_client.get(&path);
-        
-        let resp = req.send().await
-            .map_err(|e| AppError::Internal(format!("Failed to search ingredients via food-api: {}", e)))?;
-            
-        let result = resp.json::<PaginatedResponse<IngredientListItem>>().await
-            .map_err(|e| AppError::Internal(format!("Failed to parse search results from food-api: {}", e)))?;
+
+        let resp = req.send().await.map_err(|e| {
+            AppError::Internal(format!("Failed to search ingredients via food-api: {}", e))
+        })?;
+
+        let result = resp
+            .json::<PaginatedResponse<IngredientListItem>>()
+            .await
+            .map_err(|e| {
+                AppError::Internal(format!(
+                    "Failed to parse search results from food-api: {}",
+                    e
+                ))
+            })?;
 
         Ok(result)
     }
@@ -63,7 +77,11 @@ impl IngredientService {
     /// every reference points at the master catalog (never a free-text junk row).
     /// `NotFound` if the id does not exist in the master catalog.
     pub async fn ensure_local_mirror(&self, food_id: i64) -> Result<i64, AppError> {
-        if ingredient::Entity::find_by_id(food_id).one(&self.db).await?.is_some() {
+        if ingredient::Entity::find_by_id(food_id)
+            .one(&self.db)
+            .await?
+            .is_some()
+        {
             return Ok(food_id);
         }
         let detail = self.fetch_food_api_ingredient(food_id).await?;
@@ -166,11 +184,17 @@ impl IngredientService {
             .map_err(|e| AppError::Internal(format!("Failed to reach food-api: {}", e)))?;
 
         if !resp.status().is_success() {
-            return Err(AppError::NotFound(format!("Ingredient {} not found in catalog", id)));
+            return Err(AppError::NotFound(format!(
+                "Ingredient {} not found in catalog",
+                id
+            )));
         }
 
         resp.json::<IngredientDetail>().await.map_err(|e| {
-            AppError::Internal(format!("Failed to parse ingredient detail from food-api: {}", e))
+            AppError::Internal(format!(
+                "Failed to parse ingredient detail from food-api: {}",
+                e
+            ))
         })
     }
 
@@ -182,7 +206,11 @@ impl IngredientService {
         self.db
             .transaction::<_, (), AppError>(move |txn| {
                 Box::pin(async move {
-                    if ingredient::Entity::find_by_id(detail.id).one(txn).await?.is_some() {
+                    if ingredient::Entity::find_by_id(detail.id)
+                        .one(txn)
+                        .await?
+                        .is_some()
+                    {
                         return Ok(());
                     }
 

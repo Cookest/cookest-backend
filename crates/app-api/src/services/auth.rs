@@ -1,5 +1,5 @@
 //! Authentication service with secure password handling
-//! 
+//!
 //! Security features:
 //! - Argon2id with OWASP-recommended parameters
 //! - Timing-safe password verification
@@ -9,7 +9,7 @@
 
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
-    Argon2, Algorithm, Params, Version,
+    Algorithm, Argon2, Params, Version,
 };
 use chrono::{Duration, Utc};
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
@@ -17,9 +17,9 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::entity::user::{self, ActiveModel, Entity as User, Model as UserModel, UserResponse};
-use cookest_shared::errors::AppError;
 use crate::services::token::{SubscriptionTier, TokenPair, TokenService};
 use crate::validation::{normalize_email, LoginRequest, RegisterRequest};
+use cookest_shared::errors::AppError;
 
 /// Maximum failed login attempts before lockout
 const MAX_FAILED_ATTEMPTS: i32 = 5;
@@ -36,8 +36,8 @@ pub struct AuthService {
 
 impl AuthService {
     pub fn new(
-        db: DatabaseConnection, 
-        token_service: TokenService, 
+        db: DatabaseConnection,
+        token_service: TokenService,
         self_hosted: bool,
         email_service: std::sync::Arc<crate::services::email::EmailService>,
     ) -> Self {
@@ -98,7 +98,11 @@ impl AuthService {
             totp_secret: Set(None),
             failed_login_attempts: Set(0),
             locked_until: Set(None),
-            subscription_tier: Set(if self.self_hosted { "pro".to_string() } else { "free".to_string() }),
+            subscription_tier: Set(if self.self_hosted {
+                "pro".to_string()
+            } else {
+                "free".to_string()
+            }),
             subscription_valid_until: Set(None),
             stripe_customer_id: Set(None),
             cooking_skill_level: Set(None),
@@ -122,18 +126,31 @@ impl AuthService {
         let email_clone = self.email_service.clone();
         let email_addr = email.clone();
         tokio::spawn(async move {
-            if let Err(e) = email_clone.send_welcome_email(email_addr.clone(), "Chef".to_string()).await {
+            if let Err(e) = email_clone
+                .send_welcome_email(email_addr.clone(), "Chef".to_string())
+                .await
+            {
                 tracing::error!("Failed to send welcome email to {}: {}", email_addr, e);
             }
         });
 
         // Send verification email
-        if let Ok(token) = self.token_service.generate_verification_token(user.id, &email) {
+        if let Ok(token) = self
+            .token_service
+            .generate_verification_token(user.id, &email)
+        {
             let email_clone2 = self.email_service.clone();
             let email_addr2 = email.clone();
             tokio::spawn(async move {
-                if let Err(e) = email_clone2.send_verification_email(email_addr2.clone(), token).await {
-                    tracing::error!("Failed to send verification email to {}: {}", email_addr2, e);
+                if let Err(e) = email_clone2
+                    .send_verification_email(email_addr2.clone(), token)
+                    .await
+                {
+                    tracing::error!(
+                        "Failed to send verification email to {}: {}",
+                        email_addr2,
+                        e
+                    );
                 }
             });
         }
@@ -142,7 +159,10 @@ impl AuthService {
     }
 
     /// Authenticate user and return tokens
-    pub async fn login(&self, request: LoginRequest) -> Result<(TokenPair, String, UserModel), AppError> {
+    pub async fn login(
+        &self,
+        request: LoginRequest,
+    ) -> Result<(TokenPair, String, UserModel), AppError> {
         let email = normalize_email(&request.email);
 
         // Find user
@@ -172,8 +192,16 @@ impl AuthService {
         let is_admin = user.is_admin;
 
         // Generate tokens — tier embedded in access token only
-        let access_token = self.token_service.generate_access_token(user.id, &user.email, tier, is_admin, user.onboarding_completed)?;
-        let refresh_token = self.token_service.generate_refresh_token(user.id, &user.email)?;
+        let access_token = self.token_service.generate_access_token(
+            user.id,
+            &user.email,
+            tier,
+            is_admin,
+            user.onboarding_completed,
+        )?;
+        let refresh_token = self
+            .token_service
+            .generate_refresh_token(user.id, &user.email)?;
 
         // Hash and store refresh token for rotation tracking (SHA-256)
         let refresh_token_hash = hash_token_sha256(&refresh_token);
@@ -198,12 +226,14 @@ impl AuthService {
     }
 
     /// Refresh access token using refresh token — always reads tier from DB
-    pub async fn refresh_token(&self, refresh_token: &str) -> Result<(TokenPair, String, UserModel), AppError> {
+    pub async fn refresh_token(
+        &self,
+        refresh_token: &str,
+    ) -> Result<(TokenPair, String, UserModel), AppError> {
         // Validate refresh token structure
         let claims = self.token_service.validate_refresh_token(refresh_token)?;
-        
-        let user_id = Uuid::parse_str(&claims.sub)
-            .map_err(|_| AppError::InvalidToken)?;
+
+        let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
 
         // Find user — tier is always read fresh from DB here
         let user = User::find_by_id(user_id)
@@ -230,8 +260,16 @@ impl AuthService {
         let is_admin = user.is_admin;
 
         // Generate new token pair (token rotation)
-        let new_access_token = self.token_service.generate_access_token(user.id, &user.email, tier, is_admin, user.onboarding_completed)?;
-        let new_refresh_token = self.token_service.generate_refresh_token(user.id, &user.email)?;
+        let new_access_token = self.token_service.generate_access_token(
+            user.id,
+            &user.email,
+            tier,
+            is_admin,
+            user.onboarding_completed,
+        )?;
+        let new_refresh_token = self
+            .token_service
+            .generate_refresh_token(user.id, &user.email)?;
 
         // Store new refresh token hash
         let new_refresh_hash = hash_token_sha256(&new_refresh_token);
@@ -274,7 +312,10 @@ impl AuthService {
         }
         let user_id = Uuid::parse_str(&claims.claims.sub).map_err(|_| AppError::InvalidToken)?;
 
-        let user = User::find_by_id(user_id).one(&self.db).await?.ok_or(AppError::InvalidToken)?;
+        let user = User::find_by_id(user_id)
+            .one(&self.db)
+            .await?
+            .ok_or(AppError::InvalidToken)?;
         let mut active: ActiveModel = user.into();
         active.is_email_verified = Set(true);
         active.update(&self.db).await?;
@@ -283,12 +324,21 @@ impl AuthService {
 
     pub async fn forgot_password(&self, email: &str) -> Result<(), AppError> {
         let email = normalize_email(email);
-        if let Some(user) = User::find().filter(user::Column::Email.eq(&email)).one(&self.db).await? {
-            if let Ok(token) = self.token_service.generate_password_reset_token(user.id, &email) {
+        if let Some(user) = User::find()
+            .filter(user::Column::Email.eq(&email))
+            .one(&self.db)
+            .await?
+        {
+            if let Ok(token) = self
+                .token_service
+                .generate_password_reset_token(user.id, &email)
+            {
                 let email_clone = self.email_service.clone();
                 let email_addr = email.clone();
                 tokio::spawn(async move {
-                    let _ = email_clone.send_password_reset_email(email_addr, token).await;
+                    let _ = email_clone
+                        .send_password_reset_email(email_addr, token)
+                        .await;
                 });
             }
         }
@@ -302,9 +352,12 @@ impl AuthService {
         }
         let user_id = Uuid::parse_str(&claims.claims.sub).map_err(|_| AppError::InvalidToken)?;
 
-        let user = User::find_by_id(user_id).one(&self.db).await?.ok_or(AppError::InvalidToken)?;
+        let user = User::find_by_id(user_id)
+            .one(&self.db)
+            .await?
+            .ok_or(AppError::InvalidToken)?;
         let password_hash = self.hash_password(new_password)?;
-        
+
         let mut active: ActiveModel = user.into();
         active.password_hash = Set(password_hash);
         active.update(&self.db).await?;
@@ -364,7 +417,7 @@ impl AuthService {
     /// Hash password using Argon2id
     fn hash_password(&self, password: &str) -> Result<String, AppError> {
         let salt = SaltString::generate(&mut OsRng);
-        
+
         self.argon2
             .hash_password(password.as_bytes(), &salt)
             .map(|hash| hash.to_string())
@@ -376,25 +429,28 @@ impl AuthService {
         let parsed_hash = PasswordHash::new(hash)
             .map_err(|e| AppError::Internal(format!("Invalid password hash: {}", e)))?;
 
-        Ok(self.argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok())
+        Ok(self
+            .argon2
+            .verify_password(password.as_bytes(), &parsed_hash)
+            .is_ok())
     }
 
     /// Increment failed login attempts and lock if necessary
     async fn increment_failed_attempts(&self, user: &UserModel) -> Result<(), AppError> {
         let new_attempts = user.failed_login_attempts + 1;
-        
+
         let mut active_user: ActiveModel = user.clone().into();
         active_user.failed_login_attempts = Set(new_attempts);
-        
+
         if new_attempts >= MAX_FAILED_ATTEMPTS {
             let lockout_until = Utc::now() + Duration::minutes(LOCKOUT_DURATION_MINUTES);
             active_user.locked_until = Set(Some(lockout_until.fixed_offset()));
             tracing::warn!("Account locked due to failed attempts: {}", user.id);
         }
-        
+
         active_user.updated_at = Set(Utc::now().fixed_offset());
         active_user.update(&self.db).await?;
-        
+
         Ok(())
     }
 }
@@ -405,4 +461,3 @@ pub fn hash_token_sha256(token: &str) -> String {
     hasher.update(token.as_bytes());
     format!("{:x}", hasher.finalize())
 }
-

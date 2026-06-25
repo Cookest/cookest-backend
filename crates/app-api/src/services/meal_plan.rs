@@ -9,19 +9,19 @@
 
 use chrono::{Datelike, Duration, NaiveDate, Utc};
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
-    ActiveModelTrait, Set, PaginatorTrait,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, Set,
 };
 use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::entity::{
-    recipe, recipe_ingredient, recipe_nutrition, inventory_item, cooking_history,
-    user_favorite, meal_plan, meal_plan_slot, user,
+    cooking_history, inventory_item, meal_plan, meal_plan_slot, recipe, recipe_ingredient,
+    recipe_nutrition, user, user_favorite,
 };
-use cookest_shared::errors::AppError;
-use crate::services::{PreferenceService, RecipeService, PricingService};
 use crate::handlers::browse::FoodApiClient;
+use crate::services::{PreferenceService, PricingService, RecipeService};
+use cookest_shared::errors::AppError;
 
 /// Ideal daily nutrition targets (per person)
 const DAILY_CALORIES: f64 = 2000.0;
@@ -68,7 +68,9 @@ impl MealPlanService {
         week_start: NaiveDate,
         theme: Option<String>,
     ) -> Result<meal_plan::Model, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
 
         // ── 1. Load context data ──────────────────────────────────────────────
 
@@ -83,7 +85,11 @@ impl MealPlanService {
         let expiry_threshold = Utc::now().date_naive() + Duration::days(7);
         let expiring_ids: std::collections::HashSet<i64> = inventory
             .iter()
-            .filter(|i| i.expiry_date.map(|d| d <= expiry_threshold).unwrap_or(false))
+            .filter(|i| {
+                i.expiry_date
+                    .map(|d| d <= expiry_threshold)
+                    .unwrap_or(false)
+            })
             .map(|i| i.ingredient_id)
             .collect();
 
@@ -113,9 +119,15 @@ impl MealPlanService {
         if theme.is_some() || all_recipes.len() < 28 {
             let q = theme.as_deref().unwrap_or("");
             let path = format!("/api/v1/recipes?q={}&per_page=30", urlencoding::encode(q));
-            let recipe_service = crate::services::RecipeService::new(self.db.clone(), self.food_api_client.clone());
+            let recipe_service =
+                crate::services::RecipeService::new(self.db.clone(), self.food_api_client.clone());
             if let Ok(resp) = self.food_api_client.get(&path).send().await {
-                if let Ok(paginated) = resp.json::<crate::models::recipe::PaginatedResponse<crate::models::recipe::RecipeListItem>>().await {
+                if let Ok(paginated) =
+                    resp.json::<crate::models::recipe::PaginatedResponse<
+                        crate::models::recipe::RecipeListItem,
+                    >>()
+                    .await
+                {
                     for r in paginated.data {
                         let _ = recipe_service.get_recipe_or_import(r.id).await;
                     }
@@ -255,9 +267,9 @@ impl MealPlanService {
 
         let meal_slots: &[(&str, fn(&Option<String>, &str) -> bool)] = &[
             ("breakfast", |cat, mt| Self::fits_meal_type_static(cat, mt)),
-            ("lunch",     |cat, mt| Self::fits_meal_type_static(cat, mt)),
-            ("dinner",    |cat, mt| Self::fits_meal_type_static(cat, mt)),
-            ("snack",     |cat, mt| Self::fits_meal_type_static(cat, mt)),
+            ("lunch", |cat, mt| Self::fits_meal_type_static(cat, mt)),
+            ("dinner", |cat, mt| Self::fits_meal_type_static(cat, mt)),
+            ("snack", |cat, mt| Self::fits_meal_type_static(cat, mt)),
         ];
 
         // Budget bookkeeping. We aim to land a little *under* the weekly budget,
@@ -274,8 +286,7 @@ impl MealPlanService {
                 let eligible = |r: &&RecipeScore| -> bool {
                     !used_recipe_ids.contains(&r.recipe_id)
                         && fits(&r.category, meal_type)
-                        && !(meal_type == &"dinner"
-                            && avoid_cuisine.as_ref() == r.cuisine.as_ref())
+                        && !(meal_type == &"dinner" && avoid_cuisine.as_ref() == r.cuisine.as_ref())
                 };
 
                 // `scored` is sorted by descending preference, so the first match
@@ -295,9 +306,9 @@ impl MealPlanService {
                             })
                             // 2. Best-scored that still fits the hard budget.
                             .or_else(|| {
-                                scored.iter().find(|r| {
-                                    eligible(r) && running_cost + slot_cost(r) <= budget
-                                })
+                                scored
+                                    .iter()
+                                    .find(|r| eligible(r) && running_cost + slot_cost(r) <= budget)
                             })
                             // 3. Budget exhausted — pick the cheapest eligible
                             //    recipe to minimise the overspend.
@@ -305,9 +316,7 @@ impl MealPlanService {
                                 scored
                                     .iter()
                                     .filter(eligible)
-                                    .min_by(|a, b| {
-                                        slot_cost(a).total_cmp(&slot_cost(b))
-                                    })
+                                    .min_by(|a, b| slot_cost(a).total_cmp(&slot_cost(b)))
                             })
                     }
                 };
@@ -397,7 +406,9 @@ impl MealPlanService {
         &self,
         user_id: Uuid,
     ) -> Result<Option<serde_json::Value>, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let today = Utc::now().date_naive();
         let days_since_monday = today.weekday().num_days_from_monday() as i64;
         let week_start = today - chrono::Duration::days(days_since_monday);
@@ -421,7 +432,9 @@ impl MealPlanService {
         page: u64,
         per_page: u64,
     ) -> Result<serde_json::Value, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let paginator = meal_plan::Entity::find()
             .filter(meal_plan::Column::UserId.eq(user_id))
             .order_by_desc(meal_plan::Column::WeekStart)
@@ -454,7 +467,9 @@ impl MealPlanService {
         user_id: Uuid,
         plan_id: i64,
     ) -> Result<serde_json::Value, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let plan = meal_plan::Entity::find_by_id(plan_id)
             .one(&self.db)
             .await?
@@ -466,7 +481,9 @@ impl MealPlanService {
 
     /// Delete a meal plan and all its slots
     pub async fn delete_plan(&self, user_id: Uuid, plan_id: i64) -> Result<(), AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let plan = meal_plan::Entity::find_by_id(plan_id)
             .one(&self.db)
             .await?
@@ -494,7 +511,9 @@ impl MealPlanService {
         meal_type: String,
         servings: Option<i32>,
     ) -> Result<serde_json::Value, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
         let _ = recipe_service.get_recipe_or_import(recipe_id).await?;
 
@@ -561,7 +580,9 @@ impl MealPlanService {
         flex_type: Option<String>,
         energy_level: Option<String>,
     ) -> Result<serde_json::Value, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         if let Some(r_id) = recipe_id {
             let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
             let _ = recipe_service.get_recipe_or_import(r_id).await?;
@@ -610,8 +631,15 @@ impl MealPlanService {
         flex_type: String,
         energy_level: Option<String>,
     ) -> Result<(), AppError> {
-        self.swap_slot(user_id, plan_id, slot_id, None, Some(flex_type), energy_level)
-            .await?;
+        self.swap_slot(
+            user_id,
+            plan_id,
+            slot_id,
+            None,
+            Some(flex_type),
+            energy_level,
+        )
+        .await?;
         Ok(())
     }
 
@@ -643,7 +671,10 @@ impl MealPlanService {
             .collect();
 
         let recipes: HashMap<i64, recipe::Model> = recipe::Entity::find()
-            .filter(recipe::Column::Id.is_in(slots.iter().filter_map(|s| s.recipe_id).collect::<Vec<_>>()))
+            .filter(
+                recipe::Column::Id
+                    .is_in(slots.iter().filter_map(|s| s.recipe_id).collect::<Vec<_>>()),
+            )
             .all(&self.db)
             .await?
             .into_iter()
@@ -651,7 +682,15 @@ impl MealPlanService {
             .collect();
 
         let mut daily_data = vec![];
-        let day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+        let day_names = [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        ];
 
         for d in 0..7 {
             daily_data.push(serde_json::json!({
@@ -669,7 +708,9 @@ impl MealPlanService {
 
         for slot in &slots {
             let Some(rid) = slot.recipe_id else { continue };
-            let Some(n) = nutrition.get(&rid) else { continue };
+            let Some(n) = nutrition.get(&rid) else {
+                continue;
+            };
             let servings = slot.servings_override.unwrap_or(1);
             let recipe_servings = recipes.get(&rid).map(|r| r.servings).unwrap_or(1).max(1);
             let scale = servings as f64 / recipe_servings as f64;
@@ -679,10 +720,10 @@ impl MealPlanService {
             let carbs = f64::try_from(n.carbs_g.unwrap_or_default()).unwrap_or(0.0) * scale;
             let fat = f64::try_from(n.fat_g.unwrap_or_default()).unwrap_or(0.0) * scale;
 
-            totals.calories  += calories;
+            totals.calories += calories;
             totals.protein_g += protein;
-            totals.carbs_g   += carbs;
-            totals.fat_g     += fat;
+            totals.carbs_g += carbs;
+            totals.fat_g += fat;
 
             let day_idx = slot.day_of_week as usize;
             if day_idx < 7 {
@@ -761,14 +802,13 @@ impl MealPlanService {
             }
         }
 
-        let inventory: HashMap<i64, rust_decimal::Decimal> =
-            inventory_item::Entity::find()
-                .filter(inventory_item::Column::UserId.eq(user_id))
-                .all(&self.db)
-                .await?
-                .into_iter()
-                .map(|i| (i.ingredient_id, i.quantity))
-                .collect();
+        let inventory: HashMap<i64, rust_decimal::Decimal> = inventory_item::Entity::find()
+            .filter(inventory_item::Column::UserId.eq(user_id))
+            .all(&self.db)
+            .await?
+            .into_iter()
+            .map(|i| (i.ingredient_id, i.quantity))
+            .collect();
 
         let ingredient_ids: Vec<i64> = needed.keys().cloned().collect();
         let names: HashMap<i64, String> = ingredient::Entity::find()
@@ -796,7 +836,10 @@ impl MealPlanService {
         }
 
         list.sort_by(|a, b| {
-            a["name"].as_str().unwrap_or("").cmp(b["name"].as_str().unwrap_or(""))
+            a["name"]
+                .as_str()
+                .unwrap_or("")
+                .cmp(b["name"].as_str().unwrap_or(""))
         });
 
         Ok(list)
@@ -1061,4 +1104,3 @@ struct NutritionTotals {
     fat_g: f64,
     fiber_g: f64,
 }
-

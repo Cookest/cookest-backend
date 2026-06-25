@@ -14,7 +14,9 @@ use actix_web::{web, HttpResponse};
 use std::sync::Arc;
 
 use crate::errors::AppError;
-use crate::models::ingredient::{CreateIngredientRequest, IngredientQuery, UpdateIngredientRequest};
+use crate::models::ingredient::{
+    CreateIngredientRequest, IngredientQuery, UpdateIngredientRequest,
+};
 use crate::services::IngredientService;
 
 /// GET /api/v1/ingredients?q=chicken&category=protein
@@ -59,7 +61,9 @@ pub async fn create_ingredient(
     ingredient_service: web::Data<Arc<IngredientService>>,
     body: web::Json<CreateIngredientRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let created = ingredient_service.create_ingredient(body.into_inner()).await?;
+    let created = ingredient_service
+        .create_ingredient(body.into_inner())
+        .await?;
     Ok(HttpResponse::Created().json(created))
 }
 
@@ -80,7 +84,9 @@ pub async fn delete_ingredient(
     ingredient_service: web::Data<Arc<IngredientService>>,
     path: web::Path<i64>,
 ) -> Result<HttpResponse, AppError> {
-    ingredient_service.delete_ingredient(path.into_inner()).await?;
+    ingredient_service
+        .delete_ingredient(path.into_inner())
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

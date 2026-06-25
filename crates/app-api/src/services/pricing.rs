@@ -13,9 +13,7 @@
 
 use std::collections::HashMap;
 
-use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::entity::{ingredient, recipe_ingredient};
 use cookest_shared::errors::AppError;

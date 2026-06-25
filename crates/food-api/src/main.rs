@@ -11,19 +11,21 @@ mod db;
 mod entity;
 mod errors;
 mod handlers;
+mod middleware;
 mod models;
 mod services;
-mod middleware;
 
 use actix_cors::Cors;
-use actix_web::{web, App, HttpServer, middleware::Logger};
+use actix_web::{middleware::Logger, web, App, HttpServer};
 use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
-use crate::handlers::{configure_ingredients, configure_admin_ingredients, configure_recipes, configure_import};
-use crate::services::{IngredientService, RecipeService, FatSecretClient, ImportService};
+use crate::handlers::{
+    configure_admin_ingredients, configure_import, configure_ingredients, configure_recipes,
+};
 use crate::middleware::security_headers::SecurityHeaders;
+use crate::services::{FatSecretClient, ImportService, IngredientService, RecipeService};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -51,7 +53,6 @@ async fn main() -> std::io::Result<()> {
     let migrations: &[&str] = &[
         r#"CREATE EXTENSION IF NOT EXISTS "uuid-ossp""#,
         r#"CREATE EXTENSION IF NOT EXISTS pg_trgm"#,
-
         // Ingredients
         r#"
         CREATE TABLE IF NOT EXISTS ingredients (
@@ -69,7 +70,6 @@ async fn main() -> std::io::Result<()> {
             ON ingredients(category)"#,
         r#"CREATE INDEX IF NOT EXISTS idx_ingredients_fdc_id
             ON ingredients(fdc_id) WHERE fdc_id IS NOT NULL"#,
-
         // Ingredient Nutrients
         r#"
         CREATE TABLE IF NOT EXISTS ingredient_nutrients (
@@ -90,7 +90,6 @@ async fn main() -> std::io::Result<()> {
         "#,
         r#"CREATE INDEX IF NOT EXISTS idx_ingredient_nutrients_ingredient
             ON ingredient_nutrients(ingredient_id)"#,
-
         // Ingredient Allergens
         r#"
         CREATE TABLE IF NOT EXISTS ingredient_allergens (
@@ -105,7 +104,6 @@ async fn main() -> std::io::Result<()> {
             ON ingredient_allergens(ingredient_id)"#,
         r#"CREATE INDEX IF NOT EXISTS idx_ingredient_allergens_allergen
             ON ingredient_allergens(allergen)"#,
-
         // Portion Sizes
         r#"
         CREATE TABLE IF NOT EXISTS portion_sizes (
@@ -118,7 +116,6 @@ async fn main() -> std::io::Result<()> {
         "#,
         r#"CREATE INDEX IF NOT EXISTS idx_portion_sizes_ingredient
             ON portion_sizes(ingredient_id)"#,
-
         // Recipes
         r#"
         CREATE TABLE IF NOT EXISTS recipes (
@@ -154,7 +151,6 @@ async fn main() -> std::io::Result<()> {
         r#"CREATE INDEX IF NOT EXISTS idx_recipes_difficulty ON recipes(difficulty)"#,
         r#"CREATE INDEX IF NOT EXISTS idx_recipes_dietary
             ON recipes(is_vegetarian, is_vegan, is_gluten_free, is_dairy_free, is_nut_free)"#,
-
         // Recipe Ingredients
         r#"
         CREATE TABLE IF NOT EXISTS recipe_ingredients (
@@ -172,7 +168,6 @@ async fn main() -> std::io::Result<()> {
             ON recipe_ingredients(recipe_id)"#,
         r#"CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_ingredient
             ON recipe_ingredients(ingredient_id)"#,
-
         // Recipe Steps
         r#"
         CREATE TABLE IF NOT EXISTS recipe_steps (
@@ -188,7 +183,6 @@ async fn main() -> std::io::Result<()> {
         "#,
         r#"CREATE INDEX IF NOT EXISTS idx_recipe_steps_recipe
             ON recipe_steps(recipe_id)"#,
-
         // Recipe Images
         r#"
         CREATE TABLE IF NOT EXISTS recipe_images (
@@ -207,7 +201,6 @@ async fn main() -> std::io::Result<()> {
             ON recipe_images(recipe_id)"#,
         r#"CREATE INDEX IF NOT EXISTS idx_recipe_images_primary
             ON recipe_images(recipe_id, is_primary) WHERE is_primary = TRUE"#,
-
         // Recipe Nutrition
         r#"
         CREATE TABLE IF NOT EXISTS recipe_nutrition (
@@ -230,7 +223,6 @@ async fn main() -> std::io::Result<()> {
         "#,
         r#"CREATE INDEX IF NOT EXISTS idx_recipe_nutrition_recipe
             ON recipe_nutrition(recipe_id)"#,
-
         // API Keys
         r#"
         CREATE TABLE IF NOT EXISTS api_keys (
@@ -247,7 +239,6 @@ async fn main() -> std::io::Result<()> {
         )
         "#,
         r#"CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)"#,
-
         // ── FatSecret linkage (catalog cache keys) ────────────────────────────
         r#"ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS fs_food_id BIGINT"#,
         r#"CREATE UNIQUE INDEX IF NOT EXISTS idx_ingredients_fs_food_id ON ingredients(fs_food_id) WHERE fs_food_id IS NOT NULL"#,
@@ -283,12 +274,17 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Initialize services
-    let fatsecret_client: Option<Arc<FatSecretClient>> =
-        config.fs_client_id.as_ref().zip(config.fs_client_secret.as_ref()).map(|(id, secret)| {
-            Arc::new(FatSecretClient::new(id.clone(), secret.clone()))
-        });
+    let fatsecret_client: Option<Arc<FatSecretClient>> = config
+        .fs_client_id
+        .as_ref()
+        .zip(config.fs_client_secret.as_ref())
+        .map(|(id, secret)| Arc::new(FatSecretClient::new(id.clone(), secret.clone())));
     let source = config.food_data_source.clone();
-    let recipe_service = Arc::new(RecipeService::new(db.clone(), source.clone(), fatsecret_client.clone()));
+    let recipe_service = Arc::new(RecipeService::new(
+        db.clone(),
+        source.clone(),
+        fatsecret_client.clone(),
+    ));
     let ingredient_service = Arc::new(IngredientService::new(db.clone(), source, fatsecret_client));
     let import_service = Arc::new(ImportService::new(db.clone()));
 
@@ -328,16 +324,13 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(import_service.clone()))
             .app_data(web::Data::new(db.clone()))
             // Health check
-            .service(
-                web::resource("/health")
-                    .route(web::get().to(|| async {
-                        actix_web::HttpResponse::Ok().json(serde_json::json!({
-                            "status": "healthy",
-                            "service": "cookest-food-api",
-                            "version": "0.1.0"
-                        }))
-                    }))
-            )
+            .service(web::resource("/health").route(web::get().to(|| async {
+                actix_web::HttpResponse::Ok().json(serde_json::json!({
+                    "status": "healthy",
+                    "service": "cookest-food-api",
+                    "version": "0.1.0"
+                }))
+            })))
             // API v1 routes
             .configure(configure_ingredients)
             .configure(configure_admin_ingredients)

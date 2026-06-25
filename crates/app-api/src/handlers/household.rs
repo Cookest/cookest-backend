@@ -84,6 +84,8 @@ async fn transfer_ownership(
     service: web::Data<Arc<HouseholdService>>,
     body: web::Json<TransferOwnershipRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let view = service.transfer_ownership(user.id, body.into_inner().new_owner_id).await?;
+    let view = service
+        .transfer_ownership(user.id, body.into_inner().new_owner_id)
+        .await?;
     Ok(HttpResponse::Ok().json(view))
 }

@@ -11,10 +11,10 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::entity::user::Entity as User;
-use cookest_shared::errors::AppError;
 use crate::middleware::auth::AuthenticatedUser;
 use crate::services::store::{CreateStoreRequest, NearbyQuery, StoreService};
 use crate::services::token::SubscriptionTier;
+use cookest_shared::errors::AppError;
 
 /// Register all store-related routes onto `cfg`.
 ///
@@ -32,29 +32,42 @@ pub fn configure_stores(cfg: &mut web::ServiceConfig) {
     // Public list + nearby discovery + per-store promotions
     cfg.route("/api/stores", web::get().to(list_stores));
     cfg.route("/api/stores/nearby", web::get().to(nearby_stores));
-    cfg.route("/api/stores/{id}/promotions", web::get().to(store_promotions));
+    cfg.route(
+        "/api/stores/{id}/promotions",
+        web::get().to(store_promotions),
+    );
 
     // Admin routes — require is_admin from DB
     cfg.service(
         web::scope("/api/admin")
             .route("/stores", web::post().to(create_store))
-            .route("/stores/{store_id}/promotions/upload", web::post().to(upload_pdf))
+            .route(
+                "/stores/{store_id}/promotions/upload",
+                web::post().to(upload_pdf),
+            )
             .route("/stores/{store_id}/jobs", web::get().to(list_jobs))
-            .route("/stores/{store_id}/candidates", web::get().to(list_candidates))
-            .route("/candidates/{id}/approve", web::post().to(approve_candidate))
+            .route(
+                "/stores/{store_id}/candidates",
+                web::get().to(list_candidates),
+            )
+            .route(
+                "/candidates/{id}/approve",
+                web::post().to(approve_candidate),
+            )
             .route("/candidates/{id}/reject", web::post().to(reject_candidate)),
     );
 
     // Pro-gated price routes
-    cfg.route("/api/ingredients/{id}/prices", web::get().to(get_prices_for_ingredient));
+    cfg.route(
+        "/api/ingredients/{id}/prices",
+        web::get().to(get_prices_for_ingredient),
+    );
 }
 
 /// `GET /api/stores` — list all stores.
 ///
 /// Public endpoint; no authentication required.
-async fn list_stores(
-    service: web::Data<Arc<StoreService>>,
-) -> Result<HttpResponse, AppError> {
+async fn list_stores(service: web::Data<Arc<StoreService>>) -> Result<HttpResponse, AppError> {
     let stores = service.list_stores().await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "stores": stores })))
 }
@@ -67,7 +80,9 @@ async fn nearby_stores(
     query: web::Query<NearbyQuery>,
 ) -> Result<HttpResponse, AppError> {
     let q = query.into_inner();
-    let stores = service.nearby(q.lat, q.lng, q.radius_km.unwrap_or(5.0)).await?;
+    let stores = service
+        .nearby(q.lat, q.lng, q.radius_km.unwrap_or(5.0))
+        .await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "stores": stores })))
 }
 
@@ -126,8 +141,7 @@ async fn upload_pdf(
 
     // Read multipart field (first file field only)
     while let Some(field) = payload.next().await {
-        let mut field = field
-            .map_err(|e| AppError::Internal(format!("Multipart error: {}", e)))?;
+        let mut field = field.map_err(|e| AppError::Internal(format!("Multipart error: {}", e)))?;
 
         if let Some(cd) = field.content_disposition() {
             if cd.get_name() == Some("file") {
@@ -135,8 +149,8 @@ async fn upload_pdf(
                     filename = name.to_string();
                 }
                 while let Some(chunk) = field.next().await {
-                    let chunk = chunk
-                        .map_err(|e| AppError::Internal(format!("Chunk error: {}", e)))?;
+                    let chunk =
+                        chunk.map_err(|e| AppError::Internal(format!("Chunk error: {}", e)))?;
                     pdf_bytes.extend_from_slice(&chunk);
                     // 50 MB hard cap
                     if pdf_bytes.len() > 50 * 1024 * 1024 {
@@ -153,7 +167,9 @@ async fn upload_pdf(
     }
 
     // Create the job and immediately spawn processing in background
-    let job = service.create_pdf_job(store_id, pdf_bytes, &filename).await?;
+    let job = service
+        .create_pdf_job(store_id, pdf_bytes, &filename)
+        .await?;
     service.spawn_pdf_processing(job.id);
 
     Ok(HttpResponse::Accepted().json(serde_json::json!({
@@ -204,7 +220,9 @@ async fn approve_candidate(
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
     verify_admin(user.id, db.get_ref()).await?;
-    let promotion = service.approve_candidate(path.into_inner(), user.id).await?;
+    let promotion = service
+        .approve_candidate(path.into_inner(), user.id)
+        .await?;
     Ok(HttpResponse::Created().json(promotion))
 }
 
@@ -236,6 +254,8 @@ pub async fn get_prices_for_ingredient(
         });
     }
 
-    let promotions = service.get_promotions_for_ingredient(path.into_inner()).await?;
+    let promotions = service
+        .get_promotions_for_ingredient(path.into_inner())
+        .await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "promotions": promotions })))
 }

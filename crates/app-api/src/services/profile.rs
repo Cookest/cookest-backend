@@ -5,8 +5,8 @@ use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set};
 use uuid::Uuid;
 
 use crate::entity::user;
-use cookest_shared::errors::AppError;
 use crate::models::profile::*;
+use cookest_shared::errors::AppError;
 
 pub struct ProfileService {
     db: DatabaseConnection,

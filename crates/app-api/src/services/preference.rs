@@ -12,15 +12,11 @@
 //!   -0.3  = skipped suggestion
 
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
-use crate::entity::{
-    user_preference, recipe, recipe_ingredient, ingredient, recipe_nutrition,
-};
+use crate::entity::{ingredient, recipe, recipe_ingredient, recipe_nutrition, user_preference};
 use cookest_shared::errors::AppError;
 
 /// How quickly the model adapts (0.0 = never updates, 1.0 = instant overwrite)
@@ -29,10 +25,10 @@ const LEARNING_RATE: f64 = 0.1;
 /// Signals that drive learning
 #[derive(Debug, Clone, Copy)]
 pub enum PreferenceSignal {
-    Rated(i16),     // 1–5 star rating
-    Cooked,         // User completed cooking this recipe
-    Favourited,     // Added to favourites
-    Skipped,        // User skipped a suggestion for this recipe
+    Rated(i16), // 1–5 star rating
+    Cooked,     // User completed cooking this recipe
+    Favourited, // Added to favourites
+    Skipped,    // User skipped a suggestion for this recipe
 }
 
 impl PreferenceSignal {
@@ -84,7 +80,10 @@ impl PreferenceService {
             .all(&self.db)
             .await?;
 
-        let ingredient_ids: Vec<i64> = recipe_ingredients.iter().map(|ri| ri.ingredient_id).collect();
+        let ingredient_ids: Vec<i64> = recipe_ingredients
+            .iter()
+            .map(|ri| ri.ingredient_id)
+            .collect();
         let ingredients = ingredient::Entity::find()
             .filter(ingredient::Column::Id.is_in(ingredient_ids))
             .all(&self.db)
@@ -132,11 +131,27 @@ impl PreferenceService {
                 let f_ratio = (fat * 9.0) / tc;
 
                 // Update macro bias towards the recipe's ratios, weighted by signal
-                let bias_signal_p = if signal_value > 0.0 { p_ratio } else { -p_ratio };
-                let bias_signal_c = if signal_value > 0.0 { c_ratio } else { -c_ratio };
-                let bias_signal_f = if signal_value > 0.0 { f_ratio } else { -f_ratio };
+                let bias_signal_p = if signal_value > 0.0 {
+                    p_ratio
+                } else {
+                    -p_ratio
+                };
+                let bias_signal_c = if signal_value > 0.0 {
+                    c_ratio
+                } else {
+                    -c_ratio
+                };
+                let bias_signal_f = if signal_value > 0.0 {
+                    f_ratio
+                } else {
+                    -f_ratio
+                };
 
-                update_weight(&mut macro_bias, "protein", bias_signal_p * signal_value.abs());
+                update_weight(
+                    &mut macro_bias,
+                    "protein",
+                    bias_signal_p * signal_value.abs(),
+                );
                 update_weight(&mut macro_bias, "carbs", bias_signal_c * signal_value.abs());
                 update_weight(&mut macro_bias, "fat", bias_signal_f * signal_value.abs());
             }
@@ -229,22 +244,31 @@ impl PreferenceService {
             .await?;
 
         if !recipe_ingredients.is_empty() {
-            let ingredient_ids: Vec<i64> = recipe_ingredients.iter().map(|ri| ri.ingredient_id).collect();
+            let ingredient_ids: Vec<i64> = recipe_ingredients
+                .iter()
+                .map(|ri| ri.ingredient_id)
+                .collect();
             let ingredients = ingredient::Entity::find()
                 .filter(ingredient::Column::Id.is_in(ingredient_ids))
                 .all(&self.db)
                 .await?;
 
-            let ing_score: f64 = ingredients.iter()
+            let ing_score: f64 = ingredients
+                .iter()
                 .filter_map(|ing| ingredient_weights.get(&ing.name)?.as_f64())
-                .sum::<f64>() / ingredients.len().max(1) as f64;
+                .sum::<f64>()
+                / ingredients.len().max(1) as f64;
 
             score += ing_score;
             components += 1;
         }
 
         // Normalise to 0.0–1.0
-        let raw = if components > 0 { score / components as f64 } else { 0.0 };
+        let raw = if components > 0 {
+            score / components as f64
+        } else {
+            0.0
+        };
         Ok(raw.clamp(0.0, 1.0))
     }
 
@@ -287,10 +311,7 @@ impl PreferenceService {
         Ok(())
     }
 
-    pub async fn get_or_create(
-        &self,
-        user_id: Uuid,
-    ) -> Result<user_preference::Model, AppError> {
+    pub async fn get_or_create(&self, user_id: Uuid) -> Result<user_preference::Model, AppError> {
         if let Some(pref) = user_preference::Entity::find_by_id(user_id)
             .one(&self.db)
             .await?
@@ -323,9 +344,12 @@ fn update_weight(map: &mut Map<String, Value>, key: &str, signal: f64) {
     let new = old + LEARNING_RATE * (signal - old);
     // Clamp to [-1.0, 1.0]
     let clamped = new.clamp(-1.0, 1.0);
-    map.insert(key.to_string(), Value::from(
-        (clamped * 1000.0).round() / 1000.0 // round to 3 decimal places
-    ));
+    map.insert(
+        key.to_string(),
+        Value::from(
+            (clamped * 1000.0).round() / 1000.0, // round to 3 decimal places
+        ),
+    );
 }
 
 fn json_to_map(val: &Value) -> Map<String, Value> {

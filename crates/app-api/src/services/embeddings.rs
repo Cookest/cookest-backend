@@ -31,7 +31,12 @@ pub struct KnowledgeChunk {
 
 impl EmbeddingService {
     pub fn new(db: DatabaseConnection, ollama_url: String, embed_model: String) -> Self {
-        Self { db, http: Client::new(), ollama_url, embed_model }
+        Self {
+            db,
+            http: Client::new(),
+            ollama_url,
+            embed_model,
+        }
     }
 
     /// Embed text via Ollama's `/api/embeddings` endpoint.
@@ -45,7 +50,10 @@ impl EmbeddingService {
             .await
             .map_err(|e| AppError::Internal(format!("embedding request failed: {}", e)))?;
         if !resp.status().is_success() {
-            return Err(AppError::Internal(format!("embedding status {}", resp.status())));
+            return Err(AppError::Internal(format!(
+                "embedding status {}",
+                resp.status()
+            )));
         }
         let json: serde_json::Value = resp
             .json()
@@ -54,7 +62,10 @@ impl EmbeddingService {
         let arr = json["embedding"]
             .as_array()
             .ok_or_else(|| AppError::Internal("embedding field missing".into()))?;
-        Ok(arr.iter().filter_map(|v| v.as_f64().map(|f| f as f32)).collect())
+        Ok(arr
+            .iter()
+            .filter_map(|v| v.as_f64().map(|f| f as f32))
+            .collect())
     }
 
     /// Top-k most similar nutrition-knowledge chunks for a query.
@@ -74,7 +85,10 @@ impl EmbeddingService {
         );
         let rows = match self
             .db
-            .query_all(Statement::from_string(sea_orm::DatabaseBackend::Postgres, sql))
+            .query_all(Statement::from_string(
+                sea_orm::DatabaseBackend::Postgres,
+                sql,
+            ))
             .await
         {
             Ok(r) => r,

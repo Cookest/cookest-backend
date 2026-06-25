@@ -1,20 +1,22 @@
 //! Inventory Service — CRUD for user food stock with expiry tracking
 
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
-    QueryOrder, QuerySelect,
-};
-use uuid::Uuid;
 use rust_decimal::Decimal;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, Set,
+};
 use std::str::FromStr;
+use uuid::Uuid;
 
-use crate::entity::{inventory_item, inventory_deduction, ingredient, recipe_ingredient, recipe, user};
-use cookest_shared::errors::AppError;
+use crate::entity::{
+    ingredient, inventory_deduction, inventory_item, recipe, recipe_ingredient, user,
+};
+use crate::handlers::browse::FoodApiClient;
 use crate::models::inventory::*;
 use crate::services::scan::BulkAddItem;
 use crate::services::IngredientService;
-use crate::handlers::browse::FoodApiClient;
+use cookest_shared::errors::AppError;
 
 pub struct InventoryService {
     db: DatabaseConnection,
@@ -23,7 +25,10 @@ pub struct InventoryService {
 
 impl InventoryService {
     pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
-        Self { db, food_api_client }
+        Self {
+            db,
+            food_api_client,
+        }
     }
 
     /// Ingredient resolver used to mirror catalog ingredients into app-db.
@@ -35,7 +40,9 @@ impl InventoryService {
 
     /// List all inventory items for a user with expiry metadata
     pub async fn list(&self, user_id: Uuid) -> Result<Vec<InventoryItemResponse>, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let items = inventory_item::Entity::find()
             .filter(inventory_item::Column::UserId.eq(user_id))
             .all(&self.db)
@@ -43,14 +50,13 @@ impl InventoryService {
 
         // Bulk load ingredient names
         let ingredient_ids: Vec<i64> = items.iter().map(|i| i.ingredient_id).collect();
-        let ingredients: std::collections::HashMap<i64, String> =
-            ingredient::Entity::find()
-                .filter(ingredient::Column::Id.is_in(ingredient_ids))
-                .all(&self.db)
-                .await?
-                .into_iter()
-                .map(|ing| (ing.id, ing.name))
-                .collect();
+        let ingredients: std::collections::HashMap<i64, String> = ingredient::Entity::find()
+            .filter(ingredient::Column::Id.is_in(ingredient_ids))
+            .all(&self.db)
+            .await?
+            .into_iter()
+            .map(|ing| (ing.id, ing.name))
+            .collect();
 
         let today = Utc::now().date_naive();
 
@@ -88,10 +94,14 @@ impl InventoryService {
         user_id: Uuid,
         req: AddInventoryItem,
     ) -> Result<InventoryItemResponse, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         // Resolve against the master catalog, mirroring it locally if needed.
         // Rejects ids that are not in the preset catalog.
-        self.ingredient_service().ensure_local_mirror(req.ingredient_id).await?;
+        self.ingredient_service()
+            .ensure_local_mirror(req.ingredient_id)
+            .await?;
         let ing = ingredient::Entity::find_by_id(req.ingredient_id)
             .one(&self.db)
             .await?
@@ -183,7 +193,9 @@ impl InventoryService {
         item_id: i64,
         req: UpdateInventoryItem,
     ) -> Result<InventoryItemResponse, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let item = inventory_item::Entity::find_by_id(item_id)
             .one(&self.db)
             .await?
@@ -238,7 +250,9 @@ impl InventoryService {
 
     /// Remove an item from inventory
     pub async fn delete(&self, user_id: Uuid, item_id: i64) -> Result<(), AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let item = inventory_item::Entity::find_by_id(item_id)
             .one(&self.db)
             .await?
@@ -304,7 +318,9 @@ impl InventoryService {
         let now = Utc::now().fixed_offset();
 
         for ri in recipe_ings {
-            let Some(grams) = ri.quantity_grams else { continue };
+            let Some(grams) = ri.quantity_grams else {
+                continue;
+            };
             let mut needed = grams * Decimal::from(eff_servings) / denom;
             if needed <= Decimal::ZERO {
                 continue;
@@ -409,8 +425,14 @@ impl InventoryService {
         .await?;
 
         if was_deleted {
-            inventory_item::Entity::delete_by_id(item_id).exec(&self.db).await?;
-            Ok(ConsumeResponse { deleted: true, consumed: take, item: None })
+            inventory_item::Entity::delete_by_id(item_id)
+                .exec(&self.db)
+                .await?;
+            Ok(ConsumeResponse {
+                deleted: true,
+                consumed: take,
+                item: None,
+            })
         } else {
             let mut active: inventory_item::ActiveModel = item.into();
             active.quantity = Set(new_quantity);
@@ -443,7 +465,9 @@ impl InventoryService {
         user_id: Uuid,
         cooking_history_id: i64,
     ) -> Result<(), AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let deductions = inventory_deduction::Entity::find()
             .filter(inventory_deduction::Column::CookingHistoryId.eq(cooking_history_id))
             .filter(inventory_deduction::Column::UserId.eq(user_id))
@@ -467,7 +491,11 @@ impl InventoryService {
                     active.update(&self.db).await?;
                 }
                 None => {
-                    let qty = if d.was_deleted { d.qty_before } else { d.qty_deducted };
+                    let qty = if d.was_deleted {
+                        d.qty_before
+                    } else {
+                        d.qty_deducted
+                    };
                     inventory_item::ActiveModel {
                         user_id: Set(user_id),
                         ingredient_id: Set(d.ingredient_id),
@@ -501,7 +529,9 @@ impl InventoryService {
         user_id: Uuid,
         limit: u64,
     ) -> Result<Vec<inventory_deduction::Model>, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let rows = inventory_deduction::Entity::find()
             .filter(inventory_deduction::Column::UserId.eq(user_id))
             .order_by_desc(inventory_deduction::Column::CreatedAt)
@@ -529,7 +559,10 @@ impl InventoryService {
             .resolve_by_name(&name)
             .await?
             .ok_or_else(|| {
-                AppError::NotFound(format!("\"{}\" is not in the ingredient catalog", name.trim()))
+                AppError::NotFound(format!(
+                    "\"{}\" is not in the ingredient catalog",
+                    name.trim()
+                ))
             })?;
 
         let dec_qty = Decimal::from_str(&quantity.to_string()).unwrap_or(Decimal::ONE);
@@ -556,16 +589,21 @@ impl InventoryService {
     ) -> Result<Vec<InventoryItemResponse>, AppError> {
         let mut results = Vec::with_capacity(items.len());
         for item in items {
-            let expiry = item.expiry_date.as_deref()
+            let expiry = item
+                .expiry_date
+                .as_deref()
                 .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
-            match self.quick_add(
-                user_id,
-                item.name,
-                item.quantity,
-                item.unit,
-                item.storage_location,
-                expiry,
-            ).await {
+            match self
+                .quick_add(
+                    user_id,
+                    item.name,
+                    item.quantity,
+                    item.unit,
+                    item.storage_location,
+                    expiry,
+                )
+                .await
+            {
                 Ok(inv) => results.push(inv),
                 Err(e) => tracing::warn!("bulk_add: skipping item due to error: {}", e),
             }
@@ -597,9 +635,7 @@ impl InventoryService {
             inv_items.iter().map(|i| i.ingredient_id).collect();
 
         // 2. Load all recipe ingredients grouped by recipe_id (limit to first 500 recipes for perf)
-        let recipe_ings = recipe_ingredient::Entity::find()
-            .all(&self.db)
-            .await?;
+        let recipe_ings = recipe_ingredient::Entity::find().all(&self.db).await?;
 
         let mut recipe_ing_map: HashMap<i64, Vec<i64>> = HashMap::new();
         for ri in &recipe_ings {
@@ -631,7 +667,9 @@ impl InventoryService {
         scored.sort_by(|a, b| {
             let score_a = a.1 as f64 / a.2 as f64;
             let score_b = b.1 as f64 / b.2 as f64;
-            score_b.partial_cmp(&score_a).unwrap_or(std::cmp::Ordering::Equal)
+            score_b
+                .partial_cmp(&score_a)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         scored.truncate(limit as usize);

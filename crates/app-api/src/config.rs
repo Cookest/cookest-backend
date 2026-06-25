@@ -4,8 +4,8 @@
 //! Required variables cause a hard startup failure so misconfiguration is
 //! caught at launch time rather than at the first request.
 
-use secrecy::{ExposeSecret, SecretString};
 use cookest_shared::config::ConfigError;
+use secrecy::{ExposeSecret, SecretString};
 use std::env;
 
 /// Validated, immutable snapshot of every env-var this service needs.
@@ -68,8 +68,7 @@ impl Config {
             .or_else(|_| env::var("DATABASE_URL"))
             .map_err(|_| ConfigError::Missing("DATABASE_URL"))?;
 
-        let jwt_secret = env::var("JWT_SECRET")
-            .map_err(|_| ConfigError::Missing("JWT_SECRET"))?;
+        let jwt_secret = env::var("JWT_SECRET").map_err(|_| ConfigError::Missing("JWT_SECRET"))?;
 
         if jwt_secret.len() < 32 {
             return Err(ConfigError::InvalidValue(
@@ -85,7 +84,9 @@ impl Config {
         let jwt_refresh_expiry_seconds: i64 = env::var("JWT_REFRESH_EXPIRY_SECONDS")
             .unwrap_or_else(|_| "604800".to_string())
             .parse()
-            .map_err(|_| ConfigError::InvalidValue("JWT_REFRESH_EXPIRY_SECONDS must be a number"))?;
+            .map_err(|_| {
+                ConfigError::InvalidValue("JWT_REFRESH_EXPIRY_SECONDS must be a number")
+            })?;
 
         let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
 
@@ -94,34 +95,31 @@ impl Config {
             .parse()
             .map_err(|_| ConfigError::InvalidValue("PORT must be a valid port number"))?;
 
-        let cors_origin = env::var("CORS_ORIGIN")
-            .unwrap_or_else(|_| "http://localhost:3000".to_string());
+        let cors_origin =
+            env::var("CORS_ORIGIN").unwrap_or_else(|_| "http://localhost:3000".to_string());
 
-        let ollama_url = env::var("OLLAMA_URL")
-            .unwrap_or_else(|_| "http://localhost:11434".to_string());
+        let ollama_url =
+            env::var("OLLAMA_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
 
-        let ollama_model = env::var("OLLAMA_MODEL")
-            .unwrap_or_else(|_| "llava".to_string());
+        let ollama_model = env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llava".to_string());
 
-        let ollama_embed_model = env::var("OLLAMA_EMBED_MODEL")
-            .unwrap_or_else(|_| "nomic-embed-text".to_string());
+        let ollama_embed_model =
+            env::var("OLLAMA_EMBED_MODEL").unwrap_or_else(|_| "nomic-embed-text".to_string());
 
-        let pdf_upload_dir = env::var("PDF_UPLOAD_DIR")
-            .unwrap_or_else(|_| "./cookest_pdfs".to_string());
+        let pdf_upload_dir =
+            env::var("PDF_UPLOAD_DIR").unwrap_or_else(|_| "./cookest_pdfs".to_string());
 
         let stripe_webhook_secret = env::var("STRIPE_WEBHOOK_SECRET").ok();
 
-        let food_api_url = env::var("FOOD_API_URL")
-            .unwrap_or_else(|_| "http://localhost:8081".to_string());
+        let food_api_url =
+            env::var("FOOD_API_URL").unwrap_or_else(|_| "http://localhost:8081".to_string());
 
         let food_api_key = env::var("FOOD_API_KEY").ok();
 
-        let resend_api_key = env::var("RESEND_API_KEY")
-            .map(SecretString::from)
-            .ok();
+        let resend_api_key = env::var("RESEND_API_KEY").map(SecretString::from).ok();
 
-        let resend_from_email = env::var("RESEND_FROM_EMAIL")
-            .unwrap_or_else(|_| "noreply@m.cookest.app".to_string());
+        let resend_from_email =
+            env::var("RESEND_FROM_EMAIL").unwrap_or_else(|_| "noreply@m.cookest.app".to_string());
 
         let overpass_url = env::var("OVERPASS_URL")
             .unwrap_or_else(|_| "https://overpass-api.de/api/interpreter".to_string());
@@ -135,21 +133,19 @@ impl Config {
             .map(|v| v.to_lowercase() == "true")
             .unwrap_or(false);
 
-        let s3_endpoint = env::var("S3_ENDPOINT")
-            .unwrap_or_else(|_| "http://localhost:9000".to_string());
-            
-        let s3_access_key = env::var("S3_ACCESS_KEY")
-            .unwrap_or_else(|_| "minioadmin".to_string());
-            
-        let s3_secret_key = SecretString::from(env::var("S3_SECRET_KEY")
-            .unwrap_or_else(|_| "minioadmin".to_string()));
-            
-        let s3_bucket = env::var("S3_BUCKET")
-            .unwrap_or_else(|_| "cookest-images".to_string());
-            
-        let s3_region = env::var("S3_REGION")
-            .unwrap_or_else(|_| "us-east-1".to_string());
-            
+        let s3_endpoint =
+            env::var("S3_ENDPOINT").unwrap_or_else(|_| "http://localhost:9000".to_string());
+
+        let s3_access_key = env::var("S3_ACCESS_KEY").unwrap_or_else(|_| "minioadmin".to_string());
+
+        let s3_secret_key = SecretString::from(
+            env::var("S3_SECRET_KEY").unwrap_or_else(|_| "minioadmin".to_string()),
+        );
+
+        let s3_bucket = env::var("S3_BUCKET").unwrap_or_else(|_| "cookest-images".to_string());
+
+        let s3_region = env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".to_string());
+
         let s3_public_url = env::var("S3_PUBLIC_URL").ok();
 
         Ok(Self {

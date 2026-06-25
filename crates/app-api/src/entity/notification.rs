@@ -14,7 +14,7 @@ pub struct Model {
 
     pub title: String,
     pub message: String,
-    
+
     /// e.g. 'suggestion_created', 'suggestion_approved', 'suggestion_rejected'
     pub r#type: String,
 

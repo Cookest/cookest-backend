@@ -186,8 +186,7 @@ impl RecipeGenService {
             http,
             ollama_url: std::env::var("OLLAMA_URL")
                 .unwrap_or_else(|_| "http://localhost:11434".to_string()),
-            model: std::env::var("OLLAMA_MODEL")
-                .unwrap_or_else(|_| "llama3.1:8b".to_string()),
+            model: std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama3.1:8b".to_string()),
         }
     }
 
@@ -326,10 +325,9 @@ impl RecipeGenService {
             .await
             .map_err(|e| AppError::Internal(format!("Ollama generate request failed: {e}")))?;
 
-        let body: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| AppError::Internal(format!("Ollama generate response parse failed: {e}")))?;
+        let body: serde_json::Value = resp.json().await.map_err(|e| {
+            AppError::Internal(format!("Ollama generate response parse failed: {e}"))
+        })?;
 
         let raw = body["response"]
             .as_str()
@@ -388,10 +386,7 @@ impl RecipeGenService {
         let mut skill = "intermediate".to_string();
         let mut household_size = 2u32;
 
-        if let Some(user) = user::Entity::find_by_id(user_id)
-            .one(&self.db)
-            .await?
-        {
+        if let Some(user) = user::Entity::find_by_id(user_id).one(&self.db).await? {
             dietary_restrictions = user.dietary_restrictions.unwrap_or_default();
             allergies = user.allergies.unwrap_or_default();
             if let Some(s) = &user.cooking_skill_level {
@@ -661,10 +656,13 @@ fn compute_preference_score(
     }
 
     let tags_lower: Vec<String> = tags.iter().map(|t| t.to_lowercase()).collect();
-    let matched = restrictions.iter().filter(|r| {
-        let r = r.to_lowercase();
-        tags_lower.iter().any(|t| t.contains(&r))
-    }).count();
+    let matched = restrictions
+        .iter()
+        .filter(|r| {
+            let r = r.to_lowercase();
+            tags_lower.iter().any(|t| t.contains(&r))
+        })
+        .count();
 
     let ratio = matched as f32 / restrictions.len() as f32;
     (5.0 + ratio * 5.0).clamp(0.0, 10.0)

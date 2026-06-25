@@ -15,7 +15,7 @@ use actix_web::{web, HttpResponse};
 use std::sync::Arc;
 
 use crate::errors::AppError;
-use crate::models::recipe::{RecipeQuery, CreateRecipeRequest, UpdateRecipeRequest};
+use crate::models::recipe::{CreateRecipeRequest, RecipeQuery, UpdateRecipeRequest};
 use crate::services::RecipeService;
 
 /// GET /api/v1/recipes
@@ -41,7 +41,9 @@ pub async fn get_recipe_by_slug(
     recipe_service: web::Data<Arc<RecipeService>>,
     path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
-    let recipe = recipe_service.get_recipe_by_slug(&path.into_inner()).await?;
+    let recipe = recipe_service
+        .get_recipe_by_slug(&path.into_inner())
+        .await?;
     Ok(HttpResponse::Ok().json(recipe))
 }
 
@@ -60,7 +62,9 @@ pub async fn update_recipe(
     path: web::Path<i64>,
     body: web::Json<UpdateRecipeRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let result = recipe_service.update_recipe(path.into_inner(), body.into_inner()).await?;
+    let result = recipe_service
+        .update_recipe(path.into_inner(), body.into_inner())
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 

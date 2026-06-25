@@ -60,7 +60,10 @@ async fn nearby(
         .map_err(|e| AppError::Internal(format!("Overpass parse failed: {e}")))?;
 
     let empty = vec![];
-    let elements = data.get("elements").and_then(|e| e.as_array()).unwrap_or(&empty);
+    let elements = data
+        .get("elements")
+        .and_then(|e| e.as_array())
+        .unwrap_or(&empty);
 
     let places: Vec<serde_json::Value> = elements
         .iter()

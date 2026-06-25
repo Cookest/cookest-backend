@@ -12,16 +12,17 @@ use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
 use rust_decimal::Decimal;
-use sea_orm::{
-    ConnectionTrait, DatabaseConnection, Statement,
-};
+use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 use slug::slugify;
 use std::collections::HashMap;
 use std::str::FromStr;
 use tracing::{info, warn};
 
 #[derive(Parser, Debug)]
-#[command(name = "dataset-importer", about = "Import MM-Food-100K.csv into the Cookest food database")]
+#[command(
+    name = "dataset-importer",
+    about = "Import MM-Food-100K.csv into the Cookest food database"
+)]
 struct Args {
     #[arg(short, long)]
     csv: String,
@@ -80,93 +81,243 @@ struct NutritionData {
 
 fn parse_py_list(s: &str) -> Vec<String> {
     let s = s.trim();
-    if s.is_empty() || s == "[]" { return vec![]; }
+    if s.is_empty() || s == "[]" {
+        return vec![];
+    }
     let inner = s.trim_start_matches('[').trim_end_matches(']');
     let re = Regex::new(r"'((?:[^'\\]|\\.)*)'").unwrap();
     re.captures_iter(inner)
-        .map(|cap| cap[1].replace("\\'", "'").replace("\\\\", "\\").trim().to_string())
+        .map(|cap| {
+            cap[1]
+                .replace("\\'", "'")
+                .replace("\\\\", "\\")
+                .trim()
+                .to_string()
+        })
         .filter(|s| !s.is_empty())
         .collect()
 }
 
 fn parse_nutrition(s: &str) -> Option<NutritionData> {
     let s = s.trim().trim_start_matches('[').trim_end_matches(']');
-    let parts: Vec<f64> = s.split(',').filter_map(|p| p.trim().parse::<f64>().ok()).collect();
-    if parts.len() < 7 { return None; }
-    fn d(f: f64) -> Option<Decimal> { Decimal::from_str(&format!("{:.4}", f)).ok() }
+    let parts: Vec<f64> = s
+        .split(',')
+        .filter_map(|p| p.trim().parse::<f64>().ok())
+        .collect();
+    if parts.len() < 7 {
+        return None;
+    }
+    fn d(f: f64) -> Option<Decimal> {
+        Decimal::from_str(&format!("{:.4}", f)).ok()
+    }
     Some(NutritionData {
-        calories:        d(parts[0]),
-        fat_g:           d(parts[1] * 78.0 / 100.0),
-        sugar_g:         d(parts[2] * 50.0 / 100.0),
-        sodium_mg:       d(parts[3] * 2300.0 / 100.0),
-        protein_g:       d(parts[4] * 50.0 / 100.0),
+        calories: d(parts[0]),
+        fat_g: d(parts[1] * 78.0 / 100.0),
+        sugar_g: d(parts[2] * 50.0 / 100.0),
+        sodium_mg: d(parts[3] * 2300.0 / 100.0),
+        protein_g: d(parts[4] * 50.0 / 100.0),
         saturated_fat_g: d(parts[5] * 20.0 / 100.0),
-        carbs_g:         d(parts[6] * 275.0 / 100.0),
+        carbs_g: d(parts[6] * 275.0 / 100.0),
     })
 }
 
 fn infer_difficulty(t: Option<i32>, steps: Option<i32>, ings: Option<i32>) -> String {
     let score = t.unwrap_or(30) / 15 + steps.unwrap_or(5) + ings.unwrap_or(5);
-    if score <= 10 { "easy" } else if score <= 20 { "medium" } else { "hard" }.to_string()
+    if score <= 10 {
+        "easy"
+    } else if score <= 20 {
+        "medium"
+    } else {
+        "hard"
+    }
+    .to_string()
 }
 
 fn detect_flags(ings: &[String]) -> (bool, bool, bool, bool, bool) {
     let all = ings.join(" ").to_lowercase();
     let has = |kw: &str| all.contains(kw);
-    let not_veg = ["chicken","beef","pork","lamb","turkey","duck","fish","salmon","tuna",
-                   "shrimp","prawn","lobster","anchov","gelatin","lard","bacon","ham","sausage"];
-    let not_vegan_extra = ["milk","cream","butter","cheese","yogurt","egg","honey","whey","ghee"];
-    let gluten = ["flour","wheat","barley","rye","bread","pasta","noodle","spaghetti","breadcrumb","soy sauce"];
-    let dairy  = ["milk","cream","butter","cheese","yogurt","whey","casein","ghee","mozzarella","parmesan"];
-    let nuts   = ["almond","walnut","cashew","pecan","hazelnut","pistachio","macadamia","pine nut","brazil nut"];
+    let not_veg = [
+        "chicken", "beef", "pork", "lamb", "turkey", "duck", "fish", "salmon", "tuna", "shrimp",
+        "prawn", "lobster", "anchov", "gelatin", "lard", "bacon", "ham", "sausage",
+    ];
+    let not_vegan_extra = [
+        "milk", "cream", "butter", "cheese", "yogurt", "egg", "honey", "whey", "ghee",
+    ];
+    let gluten = [
+        "flour",
+        "wheat",
+        "barley",
+        "rye",
+        "bread",
+        "pasta",
+        "noodle",
+        "spaghetti",
+        "breadcrumb",
+        "soy sauce",
+    ];
+    let dairy = [
+        "milk",
+        "cream",
+        "butter",
+        "cheese",
+        "yogurt",
+        "whey",
+        "casein",
+        "ghee",
+        "mozzarella",
+        "parmesan",
+    ];
+    let nuts = [
+        "almond",
+        "walnut",
+        "cashew",
+        "pecan",
+        "hazelnut",
+        "pistachio",
+        "macadamia",
+        "pine nut",
+        "brazil nut",
+    ];
     let is_veg = !not_veg.iter().any(|k| has(k));
     let is_vegan = is_veg && !not_vegan_extra.iter().any(|k| has(k));
-    (!not_veg.iter().any(|k| has(k)), is_vegan,
-     !gluten.iter().any(|k| has(k)), !dairy.iter().any(|k| has(k)), !nuts.iter().any(|k| has(k)))
+    (
+        !not_veg.iter().any(|k| has(k)),
+        is_vegan,
+        !gluten.iter().any(|k| has(k)),
+        !dairy.iter().any(|k| has(k)),
+        !nuts.iter().any(|k| has(k)),
+    )
 }
 
 fn categorize_ingredient(name: &str) -> &'static str {
     let n = name.to_lowercase();
     let has = |kw: &str| n.contains(kw);
-    if ["chicken","beef","pork","fish","shrimp","salmon","tuna","lamb","turkey","tofu","lentil","bean","chickpea"].iter().any(|k| has(k)) { "protein" }
-    else if ["milk","cream","butter","cheese","yogurt","whey","ghee"].iter().any(|k| has(k)) { "dairy" }
-    else if ["flour","rice","pasta","bread","wheat","oat","barley","couscous","quinoa","noodle"].iter().any(|k| has(k)) { "grain" }
-    else if ["tomato","onion","garlic","pepper","carrot","broccoli","spinach","cucumber","mushroom","potato","celery"].iter().any(|k| has(k)) { "vegetable" }
-    else if ["apple","banana","lemon","lime","orange","strawberry","blueberry","mango","pineapple","grape","cherry"].iter().any(|k| has(k)) { "fruit" }
-    else if ["oil","lard","shortening","margarine"].iter().any(|k| has(k)) { "fat" }
-    else if ["salt","pepper","cumin","paprika","turmeric","cinnamon","oregano","basil","thyme","rosemary","ginger","curry"].iter().any(|k| has(k)) { "spice" }
-    else if ["sugar","honey","maple syrup","molasses"].iter().any(|k| has(k)) { "sweetener" }
-    else { "other" }
+    if [
+        "chicken", "beef", "pork", "fish", "shrimp", "salmon", "tuna", "lamb", "turkey", "tofu",
+        "lentil", "bean", "chickpea",
+    ]
+    .iter()
+    .any(|k| has(k))
+    {
+        "protein"
+    } else if [
+        "milk", "cream", "butter", "cheese", "yogurt", "whey", "ghee",
+    ]
+    .iter()
+    .any(|k| has(k))
+    {
+        "dairy"
+    } else if [
+        "flour", "rice", "pasta", "bread", "wheat", "oat", "barley", "couscous", "quinoa", "noodle",
+    ]
+    .iter()
+    .any(|k| has(k))
+    {
+        "grain"
+    } else if [
+        "tomato", "onion", "garlic", "pepper", "carrot", "broccoli", "spinach", "cucumber",
+        "mushroom", "potato", "celery",
+    ]
+    .iter()
+    .any(|k| has(k))
+    {
+        "vegetable"
+    } else if [
+        "apple",
+        "banana",
+        "lemon",
+        "lime",
+        "orange",
+        "strawberry",
+        "blueberry",
+        "mango",
+        "pineapple",
+        "grape",
+        "cherry",
+    ]
+    .iter()
+    .any(|k| has(k))
+    {
+        "fruit"
+    } else if ["oil", "lard", "shortening", "margarine"]
+        .iter()
+        .any(|k| has(k))
+    {
+        "fat"
+    } else if [
+        "salt", "pepper", "cumin", "paprika", "turmeric", "cinnamon", "oregano", "basil", "thyme",
+        "rosemary", "ginger", "curry",
+    ]
+    .iter()
+    .any(|k| has(k))
+    {
+        "spice"
+    } else if ["sugar", "honey", "maple syrup", "molasses"]
+        .iter()
+        .any(|k| has(k))
+    {
+        "sweetener"
+    } else {
+        "other"
+    }
 }
 
 fn normalise_row(raw: &RawRecipe) -> Option<Recipe> {
     let name = raw.name.trim().to_string();
-    if name.is_empty() { return None; }
+    if name.is_empty() {
+        return None;
+    }
     let tags = raw.tags.as_deref().map(parse_py_list).unwrap_or_default();
     let steps = raw.steps.as_deref().map(parse_py_list).unwrap_or_default();
-    let ingredient_names: Vec<String> = raw.ingredients.as_deref()
-        .map(parse_py_list).unwrap_or_default()
-        .into_iter().map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).collect();
+    let ingredient_names: Vec<String> = raw
+        .ingredients
+        .as_deref()
+        .map(parse_py_list)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect();
     let total_time_min = raw.minutes.filter(|&m| m > 0 && m < 10_000);
-    let (is_vegetarian, is_vegan, is_gluten_free, is_dairy_free, is_nut_free) = detect_flags(&ingredient_names);
+    let (is_vegetarian, is_vegan, is_gluten_free, is_dairy_free, is_nut_free) =
+        detect_flags(&ingredient_names);
     Some(Recipe {
         slug: format!("{}-{}", slugify(&name), raw.id),
         name,
-        description: raw.description.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()),
+        description: raw
+            .description
+            .as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
         total_time_min,
         difficulty: infer_difficulty(total_time_min, raw.n_steps, raw.n_ingredients),
-        is_vegetarian, is_vegan, is_gluten_free, is_dairy_free, is_nut_free,
-        tags, steps, ingredient_names,
+        is_vegetarian,
+        is_vegan,
+        is_gluten_free,
+        is_dairy_free,
+        is_nut_free,
+        tags,
+        steps,
+        ingredient_names,
         nutrition: raw.nutrition.as_deref().and_then(parse_nutrition),
     })
 }
 
-async fn ensure_ingredient(db: &DatabaseConnection, name: &str, cache: &mut HashMap<String, i64>) -> Result<i64> {
-    if let Some(&id) = cache.get(name) { return Ok(id); }
-    let row = db.query_one(Statement::from_sql_and_values(
-        sea_orm::DatabaseBackend::Postgres,
-        "SELECT id FROM ingredients WHERE name = $1", [name.into()],
-    )).await?;
+async fn ensure_ingredient(
+    db: &DatabaseConnection,
+    name: &str,
+    cache: &mut HashMap<String, i64>,
+) -> Result<i64> {
+    if let Some(&id) = cache.get(name) {
+        return Ok(id);
+    }
+    let row = db
+        .query_one(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "SELECT id FROM ingredients WHERE name = $1",
+            [name.into()],
+        ))
+        .await?;
     if let Some(row) = row {
         let id: i64 = row.try_get("", "id")?;
         cache.insert(name.to_string(), id);
@@ -185,7 +336,11 @@ async fn ensure_ingredient(db: &DatabaseConnection, name: &str, cache: &mut Hash
 
 async fn upsert_recipe(db: &DatabaseConnection, r: &Recipe) -> Result<i64> {
     let now = Utc::now().fixed_offset();
-    let tags_str: Vec<serde_json::Value> = r.tags.iter().map(|t| serde_json::Value::String(t.clone())).collect();
+    let tags_str: Vec<serde_json::Value> = r
+        .tags
+        .iter()
+        .map(|t| serde_json::Value::String(t.clone()))
+        .collect();
     let row = db.query_one(Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
         "INSERT INTO recipes (name, slug, description, total_time_min, difficulty, is_vegetarian, is_vegan, is_gluten_free, is_dairy_free, is_nut_free, tags, language, source_site, servings, rating_count, is_public, created_at, updated_at)
@@ -201,47 +356,82 @@ async fn upsert_recipe(db: &DatabaseConnection, r: &Recipe) -> Result<i64> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    tracing_subscriber::fmt().with_env_filter("info,dataset_importer=debug").init();
+    tracing_subscriber::fmt()
+        .with_env_filter("info,dataset_importer=debug")
+        .init();
     dotenvy::dotenv().ok();
-    let database_url = args.database_url
+    let database_url = args
+        .database_url
         .or_else(|| std::env::var("FOOD_DATABASE_URL").ok())
         .or_else(|| std::env::var("DATABASE_URL").ok())
         .context("Set DATABASE_URL or pass --database-url")?;
 
     info!("Dataset Importer");
     info!("CSV: {}", args.csv);
-    if args.dry_run { info!("DRY RUN — no writes"); }
+    if args.dry_run {
+        info!("DRY RUN — no writes");
+    }
 
     let db = sea_orm::Database::connect(&database_url).await?;
     info!("DB connected");
 
-    let total = std::io::BufRead::lines(std::io::BufReader::new(std::fs::File::open(&args.csv)?)).count().saturating_sub(1);
+    let total = std::io::BufRead::lines(std::io::BufReader::new(std::fs::File::open(&args.csv)?))
+        .count()
+        .saturating_sub(1);
     let pb = ProgressBar::new(total as u64);
-    pb.set_style(ProgressStyle::default_bar()
-        .template("{spinner:.green} [{elapsed_precise}] [{bar:40}] {pos}/{len} ({eta}) {msg}").unwrap()
-        .progress_chars("=>-"));
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("{spinner:.green} [{elapsed_precise}] [{bar:40}] {pos}/{len} ({eta}) {msg}")
+            .unwrap()
+            .progress_chars("=>-"),
+    );
 
     let mut rdr = csv::Reader::from_path(&args.csv)?;
     let mut cache: HashMap<String, i64> = HashMap::new();
-    let mut imported = 0u64; let mut skipped = 0u64; let mut errors = 0u64;
+    let mut imported = 0u64;
+    let mut skipped = 0u64;
+    let mut errors = 0u64;
 
     for result in rdr.deserialize::<RawRecipe>() {
         pb.inc(1);
-        let raw = match result { Ok(r) => r, Err(e) => { warn!("CSV: {}", e); errors += 1; continue; } };
-        let Some(recipe) = normalise_row(&raw) else { skipped += 1; continue; };
-        if args.dry_run { imported += 1; continue; }
+        let raw = match result {
+            Ok(r) => r,
+            Err(e) => {
+                warn!("CSV: {}", e);
+                errors += 1;
+                continue;
+            }
+        };
+        let Some(recipe) = normalise_row(&raw) else {
+            skipped += 1;
+            continue;
+        };
+        if args.dry_run {
+            imported += 1;
+            continue;
+        }
 
         let recipe_id = match upsert_recipe(&db, &recipe).await {
             Ok(id) => id,
-            Err(e) => { warn!("Recipe '{}': {}", recipe.name, e); errors += 1; continue; }
+            Err(e) => {
+                warn!("Recipe '{}': {}", recipe.name, e);
+                errors += 1;
+                continue;
+            }
         };
 
         // Steps
-        let _ = db.execute(Statement::from_sql_and_values(
-            sea_orm::DatabaseBackend::Postgres,
-            "DELETE FROM recipe_steps WHERE recipe_id = $1", [recipe_id.into()])).await;
+        let _ = db
+            .execute(Statement::from_sql_and_values(
+                sea_orm::DatabaseBackend::Postgres,
+                "DELETE FROM recipe_steps WHERE recipe_id = $1",
+                [recipe_id.into()],
+            ))
+            .await;
         for (i, step) in recipe.steps.iter().enumerate() {
-            if step.trim().is_empty() { continue; }
+            if step.trim().is_empty() {
+                continue;
+            }
             let _ = db.execute(Statement::from_sql_and_values(
                 sea_orm::DatabaseBackend::Postgres,
                 "INSERT INTO recipe_steps (recipe_id, step_number, instruction) VALUES ($1, $2, $3)",
@@ -249,9 +439,13 @@ async fn main() -> Result<()> {
         }
 
         // Ingredients
-        let _ = db.execute(Statement::from_sql_and_values(
-            sea_orm::DatabaseBackend::Postgres,
-            "DELETE FROM recipe_ingredients WHERE recipe_id = $1", [recipe_id.into()])).await;
+        let _ = db
+            .execute(Statement::from_sql_and_values(
+                sea_orm::DatabaseBackend::Postgres,
+                "DELETE FROM recipe_ingredients WHERE recipe_id = $1",
+                [recipe_id.into()],
+            ))
+            .await;
         for (ord, name) in recipe.ingredient_names.iter().enumerate() {
             if let Ok(ing_id) = ensure_ingredient(&db, name, &mut cache).await {
                 let _ = db.execute(Statement::from_sql_and_values(
@@ -274,11 +468,23 @@ async fn main() -> Result<()> {
 
         imported += 1;
         if imported % 1000 == 0 {
-            pb.set_message(format!("ok={} skip={} err={} cache={}", imported, skipped, errors, cache.len()));
+            pb.set_message(format!(
+                "ok={} skip={} err={} cache={}",
+                imported,
+                skipped,
+                errors,
+                cache.len()
+            ));
         }
     }
 
     pb.finish_with_message("Done!");
-    info!("Imported: {}  Skipped: {}  Errors: {}  Ingredients: {}", imported, skipped, errors, cache.len());
+    info!(
+        "Imported: {}  Skipped: {}  Errors: {}  Ingredients: {}",
+        imported,
+        skipped,
+        errors,
+        cache.len()
+    );
     Ok(())
 }

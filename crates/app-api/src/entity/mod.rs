@@ -8,19 +8,19 @@ pub mod portion_size;
 
 // Recipe system
 pub mod recipe;
-pub mod recipe_ingredient;
-pub mod recipe_step;
 pub mod recipe_image;
+pub mod recipe_ingredient;
 pub mod recipe_nutrition;
+pub mod recipe_step;
 
 // User ↔ Recipe interactions
-pub mod user_favorite;
-pub mod recipe_rating;
 pub mod cooking_history;
+pub mod recipe_rating;
+pub mod user_favorite;
 
 // Inventory
-pub mod inventory_item;
 pub mod inventory_deduction;
+pub mod inventory_item;
 
 // Meal planning
 pub mod meal_plan;
@@ -33,23 +33,23 @@ pub mod shopping_list_item;
 pub mod user_push_token;
 
 // AI Chat
-pub mod chat_session;
 pub mod chat_message;
+pub mod chat_session;
 
 // ML Preferences
 pub mod user_preference;
 
 // Store & price system
+pub mod osm_store_poi;
+pub mod pdf_processing_job;
 pub mod store;
 pub mod store_promotion;
 pub mod store_promotion_candidate;
-pub mod pdf_processing_job;
-pub mod osm_store_poi;
 
 // Households (family groups)
 pub mod household;
-pub mod household_member;
 pub mod household_invite;
+pub mod household_member;
 pub mod meal_plan_suggestion;
 pub mod notification;
 

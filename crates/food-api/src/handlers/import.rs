@@ -4,11 +4,11 @@
 //!   GET  /api/v1/admin/import/scan?folder=...
 //!   POST /api/v1/admin/import/execute
 
+use crate::errors::AppError;
+use crate::services::ImportService;
 use actix_web::{web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use crate::errors::AppError;
-use crate::services::ImportService;
 
 #[derive(Deserialize)]
 pub struct ScanQuery {
@@ -53,9 +53,15 @@ pub async fn execute_import(
 ) -> Result<HttpResponse, AppError> {
     let folder = body.folder.as_deref().unwrap_or("/data/imports");
     let format = body.format.as_deref().unwrap_or_else(|| {
-        if body.filename.ends_with(".json") { "json" } else { "csv" }
+        if body.filename.ends_with(".json") {
+            "json"
+        } else {
+            "csv"
+        }
     });
-    let result = import_svc.import_file(folder, &body.filename, format).await?;
+    let result = import_svc
+        .import_file(folder, &body.filename, format)
+        .await?;
     Ok(HttpResponse::Ok().json(ExecuteResponse {
         success: true,
         rows_imported: result.rows_imported,
@@ -77,7 +83,9 @@ pub async fn import_ingredients(
     body: web::Json<IngredientImportRequest>,
 ) -> Result<HttpResponse, AppError> {
     let folder = body.folder.as_deref().unwrap_or("/data/imports");
-    let result = import_svc.import_ingredients_file(folder, &body.filename).await?;
+    let result = import_svc
+        .import_ingredients_file(folder, &body.filename)
+        .await?;
     Ok(HttpResponse::Ok().json(ExecuteResponse {
         success: true,
         rows_imported: result.rows_imported,
@@ -106,7 +114,8 @@ pub async fn get_food_source(
     );
     let row = db.query_one(query).await?;
     let source = if let Some(row) = row {
-        row.try_get::<String>("", "value").unwrap_or_else(|_| "local".to_string())
+        row.try_get::<String>("", "value")
+            .unwrap_or_else(|_| "local".to_string())
     } else {
         "local".to_string()
     };
@@ -120,7 +129,9 @@ pub async fn update_food_source(
     use sea_orm::{ConnectionTrait, Statement};
     let source = body.source.to_lowercase();
     if !["local", "fatsecret", "openfoodfacts", "hybrid"].contains(&source.as_str()) {
-        return Err(AppError::BadRequest("Invalid data source value".to_string()));
+        return Err(AppError::BadRequest(
+            "Invalid data source value".to_string(),
+        ));
     }
     let query = Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,

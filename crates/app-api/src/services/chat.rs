@@ -16,12 +16,11 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::entity::{
-    chat_message, chat_session,
-    cooking_history, inventory_item, meal_plan, meal_plan_slot, recipe,
-    user, ingredient,
+    chat_message, chat_session, cooking_history, ingredient, inventory_item, meal_plan,
+    meal_plan_slot, recipe, user,
 };
-use crate::services::chat_tools::{tool_definitions, ToolDispatch};
 use crate::handlers::browse::FoodApiClient;
+use crate::services::chat_tools::{tool_definitions, ToolDispatch};
 use cookest_shared::errors::AppError;
 
 const MAX_TOOL_ROUNDS: usize = 6;
@@ -122,12 +121,11 @@ pub struct ChatService {
 
 impl ChatService {
     pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
-        let ollama_url = std::env::var("OLLAMA_URL")
-            .unwrap_or_else(|_| "http://localhost:11434".to_string());
-        let model = std::env::var("OLLAMA_MODEL")
-            .unwrap_or_else(|_| "llama3.2".to_string());
-        let embed_model = std::env::var("OLLAMA_EMBED_MODEL")
-            .unwrap_or_else(|_| "nomic-embed-text".to_string());
+        let ollama_url =
+            std::env::var("OLLAMA_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
+        let model = std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama3.2".to_string());
+        let embed_model =
+            std::env::var("OLLAMA_EMBED_MODEL").unwrap_or_else(|_| "nomic-embed-text".to_string());
 
         Self {
             embeddings: EmbeddingService::new(db.clone(), ollama_url.clone(), embed_model),
@@ -142,22 +140,16 @@ impl ChatService {
     /// Send a message — creates or continues a session, returns AI reply.
     /// Runs a tool-calling loop (up to MAX_TOOL_ROUNDS) so the AI can read
     /// and modify the user's meal plan, pantry, and recipes via natural language.
-    pub async fn chat(
-        &self,
-        user_id: Uuid,
-        req: ChatRequest,
-    ) -> Result<ChatResponse, AppError> {
+    pub async fn chat(&self, user_id: Uuid, req: ChatRequest) -> Result<ChatResponse, AppError> {
         let now = Utc::now().fixed_offset();
 
         // ── 1. Get or create session ──────────────────────────────────────────
         let session = match req.session_id {
-            Some(id) => {
-                chat_session::Entity::find_by_id(id)
-                    .one(&self.db)
-                    .await?
-                    .filter(|s| s.user_id == user_id)
-                    .ok_or(AppError::NotFound("Chat session".into()))?
-            }
+            Some(id) => chat_session::Entity::find_by_id(id)
+                .one(&self.db)
+                .await?
+                .filter(|s| s.user_id == user_id)
+                .ok_or(AppError::NotFound("Chat session".into()))?,
             None => {
                 let title = self.generate_title(&req.message);
                 let new_session = chat_session::ActiveModel {
@@ -173,7 +165,9 @@ impl ChatService {
         };
 
         // ── 2. Build system prompt from user context ──────────────────────────
-        let mut system_prompt = self.build_system_prompt(user_id, session.current_recipe_id).await?;
+        let mut system_prompt = self
+            .build_system_prompt(user_id, session.current_recipe_id)
+            .await?;
 
         // Ground the assistant in nutrition knowledge (RAG) based on the query.
         let top_k: u64 = std::env::var("RAG_TOP_K")
@@ -380,7 +374,9 @@ impl ChatService {
                                         .send()
                                         .await
                                     {
-                                        if let Ok(final_msg) = final_resp.json::<OllamaResponse>().await {
+                                        if let Ok(final_msg) =
+                                            final_resp.json::<OllamaResponse>().await
+                                        {
                                             reply = final_msg.message.content;
                                         }
                                     }
@@ -399,7 +395,8 @@ impl ChatService {
         reply = clean_hallucinated_json_responses(&reply);
 
         if reply.is_empty() {
-            reply = "I'm sorry, I wasn't able to complete that action. Please try again.".to_string();
+            reply =
+                "I'm sorry, I wasn't able to complete that action. Please try again.".to_string();
         }
 
         // ── 7. Save assistant reply to DB ─────────────────────────────────────
@@ -427,10 +424,7 @@ impl ChatService {
     }
 
     /// List all chat sessions for a user
-    pub async fn list_sessions(
-        &self,
-        user_id: Uuid,
-    ) -> Result<Vec<SessionListItem>, AppError> {
+    pub async fn list_sessions(&self, user_id: Uuid) -> Result<Vec<SessionListItem>, AppError> {
         let sessions = chat_session::Entity::find()
             .filter(chat_session::Column::UserId.eq(user_id))
             .order_by_desc(chat_session::Column::UpdatedAt)
@@ -479,11 +473,7 @@ impl ChatService {
     }
 
     /// Delete a session (and all its messages via cascade)
-    pub async fn delete_session(
-        &self,
-        user_id: Uuid,
-        session_id: i64,
-    ) -> Result<(), AppError> {
+    pub async fn delete_session(&self, user_id: Uuid, session_id: i64) -> Result<(), AppError> {
         let session = chat_session::Entity::find_by_id(session_id)
             .one(&self.db)
             .await?
@@ -509,22 +499,31 @@ impl ChatService {
         ctx.push_str(
             "You are Cookest AI, a personal cooking assistant. \
              You help users plan meals, cook recipes, manage their kitchen inventory, \
-             and make healthy food choices. Be concise, practical, and friendly.\n\n"
+             and make healthy food choices. Be concise, practical, and friendly.\n\n",
         );
 
         // User profile (dietary restrictions, allergies)
         if let Some(user) = user::Entity::find_by_id(user_id).one(&self.db).await? {
             if let Some(list) = user.dietary_restrictions {
                 if !list.is_empty() {
-                    ctx.push_str(&format!("User dietary restrictions: {}.\n", list.join(", ")));
+                    ctx.push_str(&format!(
+                        "User dietary restrictions: {}.\n",
+                        list.join(", ")
+                    ));
                 }
             }
             if let Some(list) = user.allergies {
                 if !list.is_empty() {
-                    ctx.push_str(&format!("User allergies (NEVER suggest these): {}.\n", list.join(", ")));
+                    ctx.push_str(&format!(
+                        "User allergies (NEVER suggest these): {}.\n",
+                        list.join(", ")
+                    ));
                 }
             }
-            ctx.push_str(&format!("Household size: {} people.\n", user.household_size));
+            ctx.push_str(&format!(
+                "Household size: {} people.\n",
+                user.household_size
+            ));
             if let Some(budget) = user.weekly_budget.and_then(|b| f64::try_from(b).ok()) {
                 if budget > 0.0 {
                     ctx.push_str(&format!(
@@ -572,7 +571,9 @@ impl ChatService {
             let expiring: Vec<String> = inventory
                 .iter()
                 .filter(|i| {
-                    i.expiry_date.map(|d| d <= expiry_threshold).unwrap_or(false)
+                    i.expiry_date
+                        .map(|d| d <= expiry_threshold)
+                        .unwrap_or(false)
                 })
                 .map(|i| {
                     ingredients
@@ -624,7 +625,8 @@ impl ChatService {
                     .iter()
                     .map(|s| {
                         let day = day_names[s.day_of_week as usize % 7];
-                        let recipe_name = s.recipe_id
+                        let recipe_name = s
+                            .recipe_id
                             .and_then(|rid| recipes.get(&rid))
                             .cloned()
                             .unwrap_or_else(|| "Flex day".to_string());
@@ -633,7 +635,10 @@ impl ChatService {
                     })
                     .collect();
 
-                ctx.push_str(&format!("\nThis week's meal plan:\n{}\n", plan_lines.join("\n")));
+                ctx.push_str(&format!(
+                    "\nThis week's meal plan:\n{}\n",
+                    plan_lines.join("\n")
+                ));
             }
         }
 
@@ -660,10 +665,7 @@ impl ChatService {
                 .map(|h| names.get(&h.recipe_id).cloned().unwrap_or_default())
                 .collect();
 
-            ctx.push_str(&format!(
-                "\nRecently cooked: {}.\n",
-                history_str.join(", ")
-            ));
+            ctx.push_str(&format!("\nRecently cooked: {}.\n", history_str.join(", ")));
         }
 
         // If pinned to a specific recipe, include its details
@@ -715,7 +717,7 @@ impl ChatService {
              2. THEN call search_recipes with the requested cuisine/type/constraint\n\
              3. Pick the BEST matching recipe (prefer one that matches their pantry)\n\
              4. Tell the user EXACTLY what you're going to change: \"I'll replace [current recipe] on [day] [meal_type] with [new recipe]. Shall I go ahead?\"\n\
-             5. ONLY call update_meal_plan_slot after the user confirms (says \"yes\", \"sure\", \"go ahead\", \"do it\", etc.) OR if their original message was clearly an unambiguous direct command (e.g. \"change Wednesday dinner to pasta\")\n\
+             5. ONLY call update_meal_plan_slot using the EXACT integer `recipe_id` from search_recipes after the user confirms (says \"yes\", \"sure\", \"go ahead\", \"do it\", etc.) OR if their original message was clearly an unambiguous direct command (e.g. \"change Wednesday dinner to pasta\"). DO NOT invent or guess the recipe_id.\n\
              \n\
              ## DAY AND MEAL MAPPING\n\
              - Monday = 0, Tuesday = 1, Wednesday = 2, Thursday = 3, Friday = 4, Saturday = 5, Sunday = 6\n\
@@ -763,16 +765,41 @@ impl ChatService {
     fn reply_claims_action(reply: &str) -> bool {
         let lower = reply.to_lowercase();
         let action_phrases = [
-            "i've cleared", "i've updated", "i've added", "i've removed",
-            "i've deleted", "i've created", "i've changed", "i've replaced",
-            "i've set", "i've scheduled", "i've marked", "i've reset",
-            "i have cleared", "i have updated", "i have added", "i have removed",
-            "i have deleted", "i have created", "i have changed",
-            "all done", "done!", "successfully cleared", "successfully updated",
-            "successfully added", "successfully removed",
-            "your meal plan has been cleared", "your plan has been",
-            "your pantry has been", "i cleared", "i updated", "i deleted",
-            "i removed", "i added", "i replaced", "i changed",
+            "i've cleared",
+            "i've updated",
+            "i've added",
+            "i've removed",
+            "i've deleted",
+            "i've created",
+            "i've changed",
+            "i've replaced",
+            "i've set",
+            "i've scheduled",
+            "i've marked",
+            "i've reset",
+            "i have cleared",
+            "i have updated",
+            "i have added",
+            "i have removed",
+            "i have deleted",
+            "i have created",
+            "i have changed",
+            "all done",
+            "done!",
+            "successfully cleared",
+            "successfully updated",
+            "successfully added",
+            "successfully removed",
+            "your meal plan has been cleared",
+            "your plan has been",
+            "your pantry has been",
+            "i cleared",
+            "i updated",
+            "i deleted",
+            "i removed",
+            "i added",
+            "i replaced",
+            "i changed",
         ];
         action_phrases.iter().any(|p| lower.contains(p))
     }
@@ -830,7 +857,9 @@ capabilities directly."#;
 
         // Case 4: JSON object that is NOT a tool call (e.g. nutrition data example)
         let input_nutrition = r#"{"calories": 250, "protein_g": 20}"#;
-        assert_eq!(clean_hallucinated_json_responses(input_nutrition), input_nutrition);
+        assert_eq!(
+            clean_hallucinated_json_responses(input_nutrition),
+            input_nutrition
+        );
     }
 }
-

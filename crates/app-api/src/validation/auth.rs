@@ -1,5 +1,5 @@
 //! Input validation schemas for authentication endpoints
-//! 
+//!
 //! Security features:
 //! - Email normalization (lowercase, trim)
 //! - Strong password requirements (OWASP guidelines)
@@ -118,16 +118,16 @@ mod tests {
     fn test_password_validation() {
         // Valid password
         assert!(validate_password_strength("SecurePass123!").is_ok());
-        
+
         // Missing uppercase
         assert!(validate_password_strength("securepass123!").is_err());
-        
+
         // Missing lowercase
         assert!(validate_password_strength("SECUREPASS123!").is_err());
-        
+
         // Missing digit
         assert!(validate_password_strength("SecurePass!!!").is_err());
-        
+
         // Missing special char
         assert!(validate_password_strength("SecurePass123").is_err());
     }

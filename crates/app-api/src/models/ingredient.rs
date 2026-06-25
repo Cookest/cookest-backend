@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-
 /// Query params for ingredient search (autocomplete)
 #[derive(Debug, Deserialize)]
 pub struct IngredientQuery {

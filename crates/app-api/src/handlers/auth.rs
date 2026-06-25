@@ -1,22 +1,27 @@
 //! Authentication handlers for register, login, refresh, and logout
-//! 
+//!
 //! Security features:
 //! - Request body size limits
 //! - Input validation before processing
 //! - HttpOnly cookies for refresh tokens
 //! - Generic error messages
 
-use actix_web::{cookie::{Cookie, SameSite}, web, HttpRequest, HttpResponse};
+use actix_web::{
+    cookie::{Cookie, SameSite},
+    web, HttpRequest, HttpResponse,
+};
 use std::sync::Arc;
 use validator::Validate;
 
-use cookest_shared::errors::AppError;
 use crate::middleware::{RateLimit, RateLimitConfig};
 use crate::services::AuthService;
-use crate::validation::{LoginRequest, RegisterRequest, VerifyEmailRequest, ForgotPasswordRequest, ResetPasswordRequest};
+use crate::validation::{
+    ForgotPasswordRequest, LoginRequest, RegisterRequest, ResetPasswordRequest, VerifyEmailRequest,
+};
+use cookest_shared::errors::AppError;
 
 /// POST /api/auth/register
-/// 
+///
 /// Creates a new user account with validated email and password
 pub async fn register(
     auth_service: web::Data<Arc<AuthService>>,
@@ -34,7 +39,7 @@ pub async fn register(
 }
 
 /// POST /api/auth/login
-/// 
+///
 /// Authenticates user and returns access token + refresh token (in cookie)
 pub async fn login(
     auth_service: web::Data<Arc<AuthService>>,
@@ -57,13 +62,11 @@ pub async fn login(
         .max_age(cookie::time::Duration::days(7))
         .finish();
 
-    Ok(HttpResponse::Ok()
-        .cookie(refresh_cookie)
-        .json(token_pair))
+    Ok(HttpResponse::Ok().cookie(refresh_cookie).json(token_pair))
 }
 
 /// POST /api/auth/refresh
-/// 
+///
 /// Refreshes access token using refresh token from cookie
 pub async fn refresh(
     auth_service: web::Data<Arc<AuthService>>,
@@ -88,13 +91,11 @@ pub async fn refresh(
         .max_age(cookie::time::Duration::days(7))
         .finish();
 
-    Ok(HttpResponse::Ok()
-        .cookie(refresh_cookie)
-        .json(token_pair))
+    Ok(HttpResponse::Ok().cookie(refresh_cookie).json(token_pair))
 }
 
 /// POST /api/auth/logout
-/// 
+///
 /// Invalidates refresh token
 pub async fn logout(
     _auth_service: web::Data<Arc<AuthService>>,
@@ -152,7 +153,9 @@ pub async fn reset_password(
     body: web::Json<ResetPasswordRequest>,
 ) -> Result<HttpResponse, AppError> {
     body.validate()?;
-    auth_service.reset_password(&body.token, &body.password).await?;
+    auth_service
+        .reset_password(&body.token, &body.password)
+        .await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "Password reset successfully" })))
 }
 
@@ -168,13 +171,15 @@ fn should_use_secure_cookie(req: &HttpRequest) -> bool {
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api/auth")
-            .wrap(RateLimit::new(RateLimitConfig { requests_per_minute: 300 }))
+            .wrap(RateLimit::new(RateLimitConfig {
+                requests_per_minute: 300,
+            }))
             .route("/register", web::post().to(register))
             .route("/login", web::post().to(login))
             .route("/refresh", web::post().to(refresh))
             .route("/logout", web::post().to(logout))
             .route("/verify", web::post().to(verify_email))
             .route("/forgot-password", web::post().to(forgot_password))
-            .route("/reset-password", web::post().to(reset_password))
+            .route("/reset-password", web::post().to(reset_password)),
     );
 }

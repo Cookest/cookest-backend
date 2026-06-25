@@ -6,10 +6,10 @@ use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::entity::user::Entity as User;
-use cookest_shared::errors::AppError;
 use crate::middleware::auth::AuthenticatedUser;
 use crate::services::subscription::SubscriptionService;
 use crate::services::token::SubscriptionTier;
+use cookest_shared::errors::AppError;
 
 /// Public routes — webhook only (no JWT)
 pub fn configure_subscription(cfg: &mut web::ServiceConfig) {
@@ -54,7 +54,7 @@ async fn get_subscription(
 
 #[derive(Deserialize)]
 struct CheckoutRequest {
-    tier: String,        // "pro" | "family"
+    tier: String, // "pro" | "family"
     success_url: String,
     cancel_url: String,
 }
@@ -73,25 +73,31 @@ async fn create_checkout(
 
     let stripe_key = match std::env::var("STRIPE_SECRET_KEY") {
         Ok(k) => k,
-        Err(_) => return Ok(HttpResponse::Ok().json(serde_json::json!({
-            "message": "Stripe integration pending — configure STRIPE_SECRET_KEY",
-            "tier": tier,
-            "success_url": body.success_url,
-            "cancel_url": body.cancel_url,
-            "checkout_url": null,
-        }))),
+        Err(_) => {
+            return Ok(HttpResponse::Ok().json(serde_json::json!({
+                "message": "Stripe integration pending — configure STRIPE_SECRET_KEY",
+                "tier": tier,
+                "success_url": body.success_url,
+                "cancel_url": body.cancel_url,
+                "checkout_url": null,
+            })))
+        }
     };
 
     // Determine price ID from env based on tier
     let price_id = match tier.as_str() {
-        "pro" => std::env::var("STRIPE_PRO_PRICE_ID").unwrap_or_else(|_| "price_dummy_pro".to_string()),
-        "family" => std::env::var("STRIPE_FAMILY_PRICE_ID").unwrap_or_else(|_| "price_dummy_family".to_string()),
+        "pro" => {
+            std::env::var("STRIPE_PRO_PRICE_ID").unwrap_or_else(|_| "price_dummy_pro".to_string())
+        }
+        "family" => std::env::var("STRIPE_FAMILY_PRICE_ID")
+            .unwrap_or_else(|_| "price_dummy_family".to_string()),
         _ => "price_dummy".to_string(),
     };
 
     // Call Stripe API
     let client = reqwest::Client::new();
-    let res = client.post("https://api.stripe.com/v1/checkout/sessions")
+    let res = client
+        .post("https://api.stripe.com/v1/checkout/sessions")
         .basic_auth(&stripe_key, Some(""))
         .form(&[
             ("success_url", body.success_url.as_str()),
@@ -110,10 +116,14 @@ async fn create_checkout(
     if !res.status().is_success() {
         let err_body = res.text().await.unwrap_or_default();
         tracing::error!("Stripe API error: {}", err_body);
-        return Err(AppError::Internal("Failed to create Stripe checkout session".to_string()));
+        return Err(AppError::Internal(
+            "Failed to create Stripe checkout session".to_string(),
+        ));
     }
 
-    let stripe_res: serde_json::Value = res.json().await
+    let stripe_res: serde_json::Value = res
+        .json()
+        .await
         .map_err(|_| AppError::Internal("Failed to parse Stripe response".to_string()))?;
 
     let checkout_url = stripe_res["url"].as_str().unwrap_or("");
@@ -122,7 +132,6 @@ async fn create_checkout(
         "checkout_url": checkout_url,
     })))
 }
-
 
 /// Stripe webhook — verify signature, then handle subscription events
 async fn stripe_webhook(

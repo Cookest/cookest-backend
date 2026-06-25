@@ -232,4 +232,3 @@ impl From<Model> for UserResponse {
         }
     }
 }
-

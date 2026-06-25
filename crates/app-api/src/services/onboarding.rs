@@ -74,7 +74,9 @@ impl OnboardingService {
             active.health_goals = Set(Some(goals));
         }
         if let Some(budget) = req.weekly_budget {
-            active.weekly_budget = Set(Some(rust_decimal::Decimal::try_from(budget).unwrap_or_default()));
+            active.weekly_budget = Set(Some(
+                rust_decimal::Decimal::try_from(budget).unwrap_or_default(),
+            ));
         }
         if let Some(time) = req.preferred_time_per_meal_min {
             active.preferred_time_per_meal_min = Set(Some(time));
@@ -88,7 +90,10 @@ impl OnboardingService {
         if let Some(liked) = req.liked_recipe_ids {
             if !liked.is_empty() {
                 let mut profile = existing_taste_profile;
-                if !profile.get("liked_recipe_ids").map_or(false, |v| v.is_array()) {
+                if !profile
+                    .get("liked_recipe_ids")
+                    .map_or(false, |v| v.is_array())
+                {
                     profile["liked_recipe_ids"] = serde_json::json!([]);
                 }
                 if !profile.get("swipe_count").map_or(false, |v| v.is_number()) {

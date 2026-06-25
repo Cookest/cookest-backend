@@ -3,13 +3,15 @@ use rust_decimal::Decimal;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use cookest_shared::errors::AppError;
 use crate::middleware::auth::AuthenticatedUser;
 use crate::models::recipe::{
     CreateRecipeIngredientRequest, CreateRecipeRequest, CreateRecipeStepRequest,
 };
-use crate::services::recipe_gen::{GenerateRecipeRequest, RecipeGenService, SaveGeneratedRecipeRequest};
+use crate::services::recipe_gen::{
+    GenerateRecipeRequest, RecipeGenService, SaveGeneratedRecipeRequest,
+};
 use crate::services::RecipeService;
+use cookest_shared::errors::AppError;
 
 /// POST /api/recipe-ai/generate
 ///
@@ -61,7 +63,9 @@ pub async fn save_generated_recipe(
         .filter_map(|i| {
             i.ingredient_id.map(|id| CreateRecipeIngredientRequest {
                 ingredient_id: id,
-                quantity: i.quantity.and_then(|q| Decimal::from_str(&q.to_string()).ok()),
+                quantity: i
+                    .quantity
+                    .and_then(|q| Decimal::from_str(&q.to_string()).ok()),
                 unit: i.unit,
                 notes: None,
             })

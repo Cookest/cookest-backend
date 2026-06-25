@@ -6,7 +6,7 @@
 
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, QueryOrder,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -228,14 +228,15 @@ impl HouseholdService {
                 } else {
                     // Promote the next member who joined
                     let next_owner = &other_members[0];
-                    
+
                     // Update household owner_id
                     let mut hh_active: household::ActiveModel = hh.into();
                     hh_active.owner_id = Set(next_owner.user_id);
                     hh_active.update(&self.db).await?;
 
                     // Update next owner's role to "owner"
-                    let mut member_active: household_member::ActiveModel = next_owner.clone().into();
+                    let mut member_active: household_member::ActiveModel =
+                        next_owner.clone().into();
                     member_active.role = Set("owner".to_string());
                     member_active.update(&self.db).await?;
 

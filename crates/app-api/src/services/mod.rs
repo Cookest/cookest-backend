@@ -1,33 +1,33 @@
 //! Business-logic services; each module owns one domain area.
 pub mod auth;
-pub mod token;
-pub mod recipe;
-pub mod ingredient;
-pub mod preference;
-pub mod meal_plan;
-pub mod inventory;
-pub mod profile;
-pub mod interaction;
 pub mod chat;
 pub mod chat_tools;
-pub mod embeddings;
-pub mod onboarding;
-pub mod shopping_list;
-pub mod subscription;
-pub mod store;
-pub mod push_token;
-pub mod meal_plan_suggestion;
-pub mod notification;
 pub mod email;
-pub mod scan;
-pub mod recipe_gen;
-pub mod nutrition;
-pub mod taste_profile;
-pub mod pricing;
+pub mod embeddings;
 pub mod household;
+pub mod ingredient;
+pub mod interaction;
+pub mod inventory;
+pub mod meal_plan;
+pub mod meal_plan_suggestion;
 pub mod meal_poll;
+pub mod notification;
+pub mod nutrition;
+pub mod onboarding;
+pub mod preference;
+pub mod pricing;
+pub mod profile;
+pub mod push_token;
+pub mod recipe;
+pub mod recipe_gen;
+pub mod scan;
+pub mod shopping_list;
+pub mod store;
+pub mod subscription;
+pub mod taste_profile;
+pub mod token;
 
-use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter, ColumnTrait};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use uuid::Uuid;
 
 /// Returns the effective user ID for data ownership.
@@ -47,7 +47,7 @@ pub async fn get_effective_user_id(db: &DatabaseConnection, user_id: Uuid) -> Re
             .one(db)
             .await
             .map_err(|e| e.to_string())?;
-        
+
         if let Some(household) = h {
             return Ok(household.owner_id);
         }
@@ -57,26 +57,26 @@ pub async fn get_effective_user_id(db: &DatabaseConnection, user_id: Uuid) -> Re
 }
 
 pub use auth::AuthService;
-pub use token::TokenService;
-pub use recipe::RecipeService;
-pub use ingredient::IngredientService;
-pub use preference::PreferenceService;
-pub use meal_plan::MealPlanService;
-pub use inventory::InventoryService;
-pub use profile::ProfileService;
-pub use interaction::InteractionService;
 pub use chat::ChatService;
-pub use onboarding::OnboardingService;
-pub use shopping_list::ShoppingListService;
-pub use subscription::SubscriptionService;
-pub use store::StoreService;
-pub use push_token::PushTokenService;
-pub use notification::NotificationService;
-pub use meal_plan_suggestion::MealPlanSuggestionService;
 pub use email::EmailService;
-pub use scan::ScanService;
-pub use recipe_gen::RecipeGenService;
-pub use nutrition::NutritionService;
-pub use pricing::PricingService;
 pub use household::HouseholdService;
+pub use ingredient::IngredientService;
+pub use interaction::InteractionService;
+pub use inventory::InventoryService;
+pub use meal_plan::MealPlanService;
+pub use meal_plan_suggestion::MealPlanSuggestionService;
 pub use meal_poll::MealPollService;
+pub use notification::NotificationService;
+pub use nutrition::NutritionService;
+pub use onboarding::OnboardingService;
+pub use preference::PreferenceService;
+pub use pricing::PricingService;
+pub use profile::ProfileService;
+pub use push_token::PushTokenService;
+pub use recipe::RecipeService;
+pub use recipe_gen::RecipeGenService;
+pub use scan::ScanService;
+pub use shopping_list::ShoppingListService;
+pub use store::StoreService;
+pub use subscription::SubscriptionService;
+pub use token::TokenService;

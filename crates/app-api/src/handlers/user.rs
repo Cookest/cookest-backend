@@ -1,21 +1,27 @@
 //! Inventory, Profile, Interaction, and Meal Plan handlers
 
-use actix_web::{web, HttpResponse};
 use actix_multipart::Multipart;
+use actix_web::{web, HttpResponse};
 use futures::StreamExt;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use cookest_shared::errors::AppError;
-use crate::models::inventory::{AddInventoryItem, UpdateInventoryItem, QuickAddItem, BarcodeAddItem, FoodApiIngredientDetail, ConsumeRequest};
-use crate::models::profile::UpdateProfileRequest;
-use crate::models::interaction::RateRecipeRequest;
-use crate::models::meal_plan::GenerateMealPlanRequest;
-use crate::services::{InventoryService, ProfileService, InteractionService, MealPlanService, PushTokenService, PreferenceService, ScanService, SubscriptionService};
-use crate::services::scan::BulkAddItem;
 use crate::handlers::browse::FoodApiClient;
+use crate::handlers::onboarding::{change_password, complete_onboarding, delete_account};
 use crate::middleware::Claims;
-use crate::handlers::onboarding::{complete_onboarding, change_password, delete_account};
+use crate::models::interaction::RateRecipeRequest;
+use crate::models::inventory::{
+    AddInventoryItem, BarcodeAddItem, ConsumeRequest, FoodApiIngredientDetail, QuickAddItem,
+    UpdateInventoryItem,
+};
+use crate::models::meal_plan::GenerateMealPlanRequest;
+use crate::models::profile::UpdateProfileRequest;
+use crate::services::scan::BulkAddItem;
+use crate::services::{
+    InteractionService, InventoryService, MealPlanService, PreferenceService, ProfileService,
+    PushTokenService, ScanService, SubscriptionService,
+};
+use cookest_shared::errors::AppError;
 
 // ── Inventory ────────────────────────────────────────────────────────────────
 
@@ -58,7 +64,9 @@ pub async fn update_inventory_item(
     body: web::Json<UpdateInventoryItem>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
-    let item = inv.update(user_id, path.into_inner(), body.into_inner()).await?;
+    let item = inv
+        .update(user_id, path.into_inner(), body.into_inner())
+        .await?;
     Ok(HttpResponse::Ok().json(item))
 }
 
@@ -97,9 +105,20 @@ pub async fn quick_add_item(
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
     let b = body.into_inner();
-    let expiry = b.expiry_date.as_deref()
+    let expiry = b
+        .expiry_date
+        .as_deref()
         .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
-    let item = inv.quick_add(user_id, b.name, b.quantity, b.unit, b.storage_location, expiry).await?;
+    let item = inv
+        .quick_add(
+            user_id,
+            b.name,
+            b.quantity,
+            b.unit,
+            b.storage_location,
+            expiry,
+        )
+        .await?;
     Ok(HttpResponse::Created().json(item))
 }
 
@@ -120,19 +139,29 @@ pub async fn add_by_barcode(
         .await
         .map_err(|e| AppError::Internal(format!("food-api unreachable: {}", e)))?;
     if !resp.status().is_success() {
-        return Err(AppError::NotFound(format!("No food found for barcode {}", b.barcode)));
+        return Err(AppError::NotFound(format!(
+            "No food found for barcode {}",
+            b.barcode
+        )));
     }
     let detail: FoodApiIngredientDetail = resp
         .json()
         .await
         .map_err(|e| AppError::Internal(format!("food-api decode error: {}", e)))?;
 
-    let expiry = b.expiry_date.as_deref()
+    let expiry = b
+        .expiry_date
+        .as_deref()
         .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
 
     let item = inv
         .add_by_food_id(
-            user_id, detail.id, b.quantity, b.unit, b.storage_location, expiry,
+            user_id,
+            detail.id,
+            b.quantity,
+            b.unit,
+            b.storage_location,
+            expiry,
         )
         .await?;
     Ok(HttpResponse::Created().json(item))
@@ -167,7 +196,9 @@ pub async fn consume_inventory_item(
     body: web::Json<ConsumeRequest>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
-    let res = inv.consume(user_id, path.into_inner(), body.into_inner().quantity).await?;
+    let res = inv
+        .consume(user_id, path.into_inner(), body.into_inner().quantity)
+        .await?;
     Ok(HttpResponse::Ok().json(res))
 }
 
@@ -229,13 +260,15 @@ pub async fn scan_groceries(
         }
     }
 
-    let bytes = image_bytes.ok_or_else(|| AppError::Validation({
-        let mut errors = validator::ValidationErrors::new();
-        let mut e = validator::ValidationError::new("missing");
-        e.message = Some("Image field is required".into());
-        errors.add("image", e);
-        errors
-    }))?;
+    let bytes = image_bytes.ok_or_else(|| {
+        AppError::Validation({
+            let mut errors = validator::ValidationErrors::new();
+            let mut e = validator::ValidationError::new("missing");
+            e.message = Some("Image field is required".into());
+            errors.add("image", e);
+            errors
+        })
+    })?;
 
     let result = scan_svc.scan_groceries(bytes).await?;
     Ok(HttpResponse::Ok().json(result))
@@ -272,7 +305,9 @@ pub async fn rate_recipe(
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
     let req = body.into_inner();
-    let res = interaction.rate_recipe(user_id, path.into_inner(), req.rating, req.comment).await?;
+    let res = interaction
+        .rate_recipe(user_id, path.into_inner(), req.rating, req.comment)
+        .await?;
     Ok(HttpResponse::Ok().json(res))
 }
 
@@ -282,7 +317,9 @@ pub async fn toggle_favourite(
     path: web::Path<i64>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
-    let res = interaction.toggle_favourite(user_id, path.into_inner()).await?;
+    let res = interaction
+        .toggle_favourite(user_id, path.into_inner())
+        .await?;
     Ok(HttpResponse::Ok().json(res))
 }
 
@@ -303,7 +340,9 @@ pub async fn mark_cooked(
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
     let household_size = profile.get_profile(user_id).await?.household_size;
-    let res = interaction.mark_cooked(user_id, path.into_inner(), household_size).await?;
+    let res = interaction
+        .mark_cooked(user_id, path.into_inner(), household_size)
+        .await?;
     Ok(HttpResponse::Ok().json(res))
 }
 
@@ -326,7 +365,9 @@ pub async fn generate_meal_plan(
     body: web::Json<GenerateMealPlanRequest>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
-    sub_service.check_ai_meal_plan_limit(&claims, user_id).await?;
+    sub_service
+        .check_ai_meal_plan_limit(&claims, user_id)
+        .await?;
     let profile = profile_svc.get_profile(user_id).await?;
     let plan = meal_svc
         .generate_week_plan(user_id, profile.household_size, body.week_start, None)
@@ -398,7 +439,9 @@ where
     }
 
     match Option::<StringOrInt>::deserialize(deserializer)? {
-        Some(StringOrInt::String(s)) => s.parse::<i64>().map(Some).map_err(serde::de::Error::custom),
+        Some(StringOrInt::String(s)) => {
+            s.parse::<i64>().map(Some).map_err(serde::de::Error::custom)
+        }
         Some(StringOrInt::Int(i)) => Ok(Some(i)),
         Some(StringOrInt::Null) | None => Ok(None),
     }
@@ -417,7 +460,9 @@ pub async fn mark_slot_complete(
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
     let p = path.into_inner();
-    meal_svc.mark_slot_complete(user_id, p.plan_id, p.slot_id).await?;
+    meal_svc
+        .mark_slot_complete(user_id, p.plan_id, p.slot_id)
+        .await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "Slot marked as completed" })))
 }
 
@@ -478,7 +523,14 @@ pub async fn add_slot(
     let plan_id = path.into_inner();
     let body = body.into_inner();
     let result = meal_svc
-        .add_recipe_to_slot(user_id, plan_id, body.recipe_id, body.day_of_week, body.meal_type.clone(), body.servings)
+        .add_recipe_to_slot(
+            user_id,
+            plan_id,
+            body.recipe_id,
+            body.day_of_week,
+            body.meal_type.clone(),
+            body.servings,
+        )
         .await?;
     Ok(HttpResponse::Created().json(result))
 }
@@ -503,7 +555,14 @@ pub async fn swap_slot(
     let p = path.into_inner();
     let body = body.into_inner();
     let result = meal_svc
-        .swap_slot(user_id, p.plan_id, p.slot_id, body.recipe_id, body.flex_type, body.energy_level)
+        .swap_slot(
+            user_id,
+            p.plan_id,
+            p.slot_id,
+            body.recipe_id,
+            body.flex_type,
+            body.energy_level,
+        )
         .await?;
     Ok(HttpResponse::Ok().json(result))
 }
@@ -524,7 +583,13 @@ pub async fn mark_slot_flex(
     let p = path.into_inner();
     let body = body.into_inner();
     meal_svc
-        .mark_slot_flex(user_id, p.plan_id, p.slot_id, body.flex_type, body.energy_level)
+        .mark_slot_flex(
+            user_id,
+            p.plan_id,
+            p.slot_id,
+            body.flex_type,
+            body.energy_level,
+        )
         .await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "Slot marked as flex day" })))
 }
@@ -535,7 +600,9 @@ pub async fn get_nutrition_summary(
     path: web::Path<i64>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
-    let result = meal_svc.get_nutrition_summary(user_id, path.into_inner()).await?;
+    let result = meal_svc
+        .get_nutrition_summary(user_id, path.into_inner())
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -615,10 +682,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .route("/{id}", web::delete().to(delete_inventory_item)),
         )
         // Cooking history — undo a cook and restore inventory
-        .service(
-            web::scope("/api/cooking-history")
-                .route("/{id}/undo", web::post().to(undo_cook)),
-        )
+        .service(web::scope("/api/cooking-history").route("/{id}/undo", web::post().to(undo_cook)))
         // Profile + history + favourites + push tokens + preferences
         .service(
             web::scope("/api/me")
@@ -654,7 +718,13 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .route("/{id}/nutrition", web::get().to(get_nutrition_summary))
                 .route("/{id}/slots", web::post().to(add_slot))
                 .route("/{plan_id}/slots/{slot_id}", web::put().to(swap_slot))
-                .route("/{plan_id}/slots/{slot_id}/complete", web::put().to(mark_slot_complete))
-                .route("/{plan_id}/slots/{slot_id}/flex", web::put().to(mark_slot_flex)),
+                .route(
+                    "/{plan_id}/slots/{slot_id}/complete",
+                    web::put().to(mark_slot_complete),
+                )
+                .route(
+                    "/{plan_id}/slots/{slot_id}/flex",
+                    web::put().to(mark_slot_flex),
+                ),
         );
 }

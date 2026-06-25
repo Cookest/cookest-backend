@@ -22,7 +22,9 @@ where
     T::Err: std::fmt::Display,
 {
     match env::var(name) {
-        Ok(val) => val.parse::<T>().map_err(|_| ConfigError::InvalidValue(name)),
+        Ok(val) => val
+            .parse::<T>()
+            .map_err(|_| ConfigError::InvalidValue(name)),
         Err(_) => Ok(default),
     }
 }

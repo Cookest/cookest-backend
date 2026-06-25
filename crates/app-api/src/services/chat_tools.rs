@@ -9,8 +9,8 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::entity::{ingredient, recipe, recipe_ingredient, recipe_nutrition, recipe_step};
-use crate::services::{InventoryService, MealPlanService, RecipeService};
 use crate::handlers::browse::FoodApiClient;
+use crate::services::{InventoryService, MealPlanService, RecipeService};
 use cookest_shared::errors::AppError;
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
@@ -68,13 +68,13 @@ pub fn tool_definitions() -> Vec<Value> {
             "type": "function",
             "function": {
                 "name": "update_meal_plan_slot",
-                "description": "Replace the recipe in a specific meal plan slot with a new recipe. Use search_recipes first to find a suitable recipe_id.",
+                "description": "Replace the recipe in a specific meal plan slot with a new recipe. You MUST use search_recipes first to find a suitable recipe_id. Do NOT guess or hallucinate the recipe_id.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "day_of_week": { "type": "integer", "description": "0=Monday, 1=Tuesday, 2=Wednesday, 3=Thursday, 4=Friday, 5=Saturday, 6=Sunday" },
                         "meal_type":   { "type": "string",  "description": "breakfast, lunch, dinner, or snack" },
-                        "recipe_id":   { "type": "integer", "description": "The ID of the recipe to assign" }
+                        "recipe_id":   { "type": "integer", "description": "The exact integer ID of the recipe to assign. You MUST get this ID from the search_recipes tool." }
                     },
                     "required": ["day_of_week", "meal_type", "recipe_id"]
                 }
@@ -169,21 +169,24 @@ pub struct ToolDispatch {
 
 impl ToolDispatch {
     pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
-        Self { db, food_api_client }
+        Self {
+            db,
+            food_api_client,
+        }
     }
 
     pub async fn execute(&self, user_id: Uuid, name: &str, args: Value) -> String {
         match name {
-            "search_recipes"       => self.search_recipes(args).await,
-            "get_meal_plan"        => self.get_meal_plan(user_id).await,
-            "generate_meal_plan"   => self.generate_meal_plan(user_id, args).await,
-            "update_meal_plan_slot"=> self.update_meal_plan_slot(user_id, args).await,
-            "mark_meal_completed"  => self.mark_meal_completed(user_id, args).await,
-            "get_pantry"           => self.get_pantry(user_id).await,
-            "add_to_pantry"        => self.add_to_pantry(user_id, args).await,
-            "remove_from_pantry"   => self.remove_from_pantry(user_id, args).await,
-            "clear_meal_plan"      => self.clear_meal_plan(user_id).await,
-            "get_recipe_details"   => self.get_recipe_details(args).await,
+            "search_recipes" => self.search_recipes(args).await,
+            "get_meal_plan" => self.get_meal_plan(user_id).await,
+            "generate_meal_plan" => self.generate_meal_plan(user_id, args).await,
+            "update_meal_plan_slot" => self.update_meal_plan_slot(user_id, args).await,
+            "mark_meal_completed" => self.mark_meal_completed(user_id, args).await,
+            "get_pantry" => self.get_pantry(user_id).await,
+            "add_to_pantry" => self.add_to_pantry(user_id, args).await,
+            "remove_from_pantry" => self.remove_from_pantry(user_id, args).await,
+            "clear_meal_plan" => self.clear_meal_plan(user_id).await,
+            "get_recipe_details" => self.get_recipe_details(args).await,
             _ => format!("{{\"error\": \"Unknown tool: {}\"}}", name),
         }
     }
@@ -250,7 +253,12 @@ impl ToolDispatch {
             let path = format!("/api/v1/recipes?q={}&per_page={}", q, limit);
             let req = self.food_api_client.get(&path);
             if let Ok(resp) = req.send().await {
-                if let Ok(paginated) = resp.json::<crate::models::recipe::PaginatedResponse<crate::models::recipe::RecipeListItem>>().await {
+                if let Ok(paginated) =
+                    resp.json::<crate::models::recipe::PaginatedResponse<
+                        crate::models::recipe::RecipeListItem,
+                    >>()
+                    .await
+                {
                     for r in paginated.data {
                         if !results.iter().any(|existing| existing["id"] == r.id) {
                             results.push(json!({
@@ -294,7 +302,10 @@ impl ToolDispatch {
         let days_since_monday = today.weekday().num_days_from_monday() as i64;
         let week_start = today - chrono::Duration::days(days_since_monday);
 
-        let household_size = match crate::entity::user::Entity::find_by_id(user_id).one(&self.db).await {
+        let household_size = match crate::entity::user::Entity::find_by_id(user_id)
+            .one(&self.db)
+            .await
+        {
             Ok(Some(u)) => u.household_size,
             _ => 2,
         };
@@ -302,7 +313,10 @@ impl ToolDispatch {
         let theme = args["theme"].as_str().map(|s| s.to_string());
 
         let svc = MealPlanService::new(self.db.clone(), self.food_api_client.clone());
-        match svc.generate_week_plan(user_id, household_size, week_start, theme).await {
+        match svc
+            .generate_week_plan(user_id, household_size, week_start, theme)
+            .await
+        {
             Ok(_) => {
                 if let Ok(Some(plan_json)) = svc.get_current_plan(user_id).await {
                     json!({
@@ -312,12 +326,14 @@ impl ToolDispatch {
                     })
                     .to_string()
                 } else {
-                    json!({"status": "error", "message": "Failed to load generated plan"}).to_string()
+                    json!({"status": "error", "message": "Failed to load generated plan"})
+                        .to_string()
                 }
             }
             Err(e) => {
                 tracing::error!("generate_meal_plan tool error: {}", e);
-                json!({"status": "error", "message": format!("Failed to generate plan: {}", e)}).to_string()
+                json!({"status": "error", "message": format!("Failed to generate plan: {}", e)})
+                    .to_string()
             }
         }
     }
@@ -325,7 +341,9 @@ impl ToolDispatch {
     async fn update_meal_plan_slot(&self, user_id: Uuid, args: Value) -> String {
         let day_of_week = match args["day_of_week"].as_i64() {
             Some(d) => d as i16,
-            None => return json!({"status": "error", "message": "Missing day_of_week"}).to_string(),
+            None => {
+                return json!({"status": "error", "message": "Missing day_of_week"}).to_string()
+            }
         };
         let meal_type = match args["meal_type"].as_str() {
             Some(m) => m.to_string(),
@@ -333,14 +351,24 @@ impl ToolDispatch {
         };
         let recipe_id = match args["recipe_id"].as_i64() {
             Some(r) => r,
-            None => return json!({"status": "error", "message": "Missing recipe_id"}).to_string(),
+            None => return json!({"status": "error", "message": "Missing recipe_id. You MUST use the search_recipes tool to find a valid integer recipe_id before calling this tool."}).to_string(),
         };
 
-        const DAY_NAMES: [&str; 7] =
-            ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+        const DAY_NAMES: [&str; 7] = [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        ];
 
         let svc = MealPlanService::new(self.db.clone(), self.food_api_client.clone());
-        match svc.update_slot_recipe(user_id, day_of_week, &meal_type, recipe_id).await {
+        match svc
+            .update_slot_recipe(user_id, day_of_week, &meal_type, recipe_id)
+            .await
+        {
             Ok(recipe_name) => json!({
                 "status": "success",
                 "message": format!(
@@ -367,7 +395,9 @@ impl ToolDispatch {
     async fn mark_meal_completed(&self, user_id: Uuid, args: Value) -> String {
         let day_of_week = match args["day_of_week"].as_i64() {
             Some(d) => d as i16,
-            None => return json!({"status": "error", "message": "Missing day_of_week"}).to_string(),
+            None => {
+                return json!({"status": "error", "message": "Missing day_of_week"}).to_string()
+            }
         };
         let meal_type = match args["meal_type"].as_str() {
             Some(m) => m.to_string(),
@@ -375,8 +405,13 @@ impl ToolDispatch {
         };
 
         let svc = MealPlanService::new(self.db.clone(), self.food_api_client.clone());
-        match svc.mark_slot_completed(user_id, day_of_week, &meal_type).await {
-            Ok(()) => json!({"status": "success", "message": "Meal marked as completed"}).to_string(),
+        match svc
+            .mark_slot_completed(user_id, day_of_week, &meal_type)
+            .await
+        {
+            Ok(()) => {
+                json!({"status": "success", "message": "Meal marked as completed"}).to_string()
+            }
             Err(AppError::NotFound(ref msg)) if msg.contains("week") => json!({
                 "status": "error",
                 "message": "No meal plan for this week."
@@ -402,10 +437,8 @@ impl ToolDispatch {
                 let result: Vec<Value> = items
                     .iter()
                     .map(|item| {
-                        let display_name = item
-                            .custom_name
-                            .as_deref()
-                            .unwrap_or(&item.ingredient_name);
+                        let display_name =
+                            item.custom_name.as_deref().unwrap_or(&item.ingredient_name);
                         json!({
                             "id": item.id,
                             "name": display_name,
@@ -446,7 +479,14 @@ impl ToolDispatch {
 
         let svc = InventoryService::new(self.db.clone(), self.food_api_client.clone());
         match svc
-            .quick_add(user_id, name.clone(), quantity, unit.clone(), storage_location, expiry_date)
+            .quick_add(
+                user_id,
+                name.clone(),
+                quantity,
+                unit.clone(),
+                storage_location,
+                expiry_date,
+            )
             .await
         {
             Ok(item) => json!({
@@ -470,7 +510,9 @@ impl ToolDispatch {
 
         let svc = InventoryService::new(self.db.clone(), self.food_api_client.clone());
         match svc.delete(user_id, item_id).await {
-            Ok(()) => json!({"status": "success", "message": "Item removed from pantry"}).to_string(),
+            Ok(()) => {
+                json!({"status": "success", "message": "Item removed from pantry"}).to_string()
+            }
             Err(AppError::NotFound(_)) => {
                 json!({"status": "error", "message": "Item not found in your pantry"}).to_string()
             }
@@ -508,7 +550,8 @@ impl ToolDispatch {
         };
 
         let ingredient_ids: Vec<i64> = recipe_ings.iter().map(|ri| ri.ingredient_id).collect();
-        let ingredient_names: std::collections::HashMap<i64, String> = if ingredient_ids.is_empty() {
+        let ingredient_names: std::collections::HashMap<i64, String> = if ingredient_ids.is_empty()
+        {
             std::collections::HashMap::new()
         } else {
             match ingredient::Entity::find()
@@ -591,9 +634,9 @@ impl ToolDispatch {
     }
 
     async fn clear_meal_plan(&self, user_id: Uuid) -> String {
+        use crate::entity::{meal_plan, meal_plan_slot};
         use chrono::{Datelike, Duration, Utc};
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-        use crate::entity::{meal_plan, meal_plan_slot};
 
         let today = Utc::now().date_naive();
         let days_since_monday = today.weekday().num_days_from_monday() as i64;

@@ -41,7 +41,9 @@ impl FromRequest for AuthenticatedUser {
         }
 
         // Fallback: validate JWT directly from Authorization header (for routes outside JWT scope)
-        let token_service = req.app_data::<actix_web::web::Data<Arc<TokenService>>>().cloned();
+        let token_service = req
+            .app_data::<actix_web::web::Data<Arc<TokenService>>>()
+            .cloned();
         let raw_token = req
             .headers()
             .get("Authorization")
@@ -57,7 +59,8 @@ impl FromRequest for AuthenticatedUser {
             };
             match ts.validate_access_token(&token) {
                 Ok(claims) => {
-                    let id = uuid::Uuid::parse_str(&claims.sub).unwrap_or_else(|_| uuid::Uuid::nil());
+                    let id =
+                        uuid::Uuid::parse_str(&claims.sub).unwrap_or_else(|_| uuid::Uuid::nil());
                     Ok(AuthenticatedUser { id, claims })
                 }
                 Err(_) => Err(actix_web::error::ErrorUnauthorized(
@@ -79,7 +82,7 @@ impl FromRequest for OptionalUser {
     fn from_request(req: &HttpRequest, payload: &mut actix_web::dev::Payload) -> Self::Future {
         let has_auth = req.headers().contains_key("Authorization");
         let fut = AuthenticatedUser::from_request(req, payload);
-        
+
         Box::pin(async move {
             if has_auth {
                 match fut.await {
@@ -155,7 +158,12 @@ where
             // Constant-time comparison approach: always parse same code path
             let raw_token = match auth_header {
                 Some(h) if h.len() > 7 && h[..7].eq_ignore_ascii_case("bearer ") => &h[7..],
-                _ => return Ok(unauthorized(req, "Missing or malformed Authorization header")),
+                _ => {
+                    return Ok(unauthorized(
+                        req,
+                        "Missing or malformed Authorization header",
+                    ))
+                }
             };
 
             // ── Validate token (signature + expiry + type) ───────────────────

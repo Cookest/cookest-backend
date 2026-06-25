@@ -33,8 +33,7 @@ impl Config {
             .unwrap_or_else(|_| "8081".to_string())
             .parse()
             .map_err(|_| ConfigError::InvalidValue("FOOD_PORT must be a valid port number"))?;
-        let cors_origin = env::var("FOOD_CORS_ORIGIN")
-            .unwrap_or_else(|_| "*".to_string());
+        let cors_origin = env::var("FOOD_CORS_ORIGIN").unwrap_or_else(|_| "*".to_string());
 
         let fs_client_id = env::var("FS_CLIENT_ID").ok();
         let fs_client_secret = env::var("FS_CLIENT_SECRET").map(SecretString::from).ok();
@@ -42,19 +41,27 @@ impl Config {
         let food_data_source = match env::var("FOOD_DATA_SOURCE").as_deref() {
             Ok("fatsecret") => {
                 if fs_client_id.is_none() {
-                    return Err(ConfigError::InvalidValue("FOOD_DATA_SOURCE=fatsecret requires FS_CLIENT_ID and FS_CLIENT_SECRET"));
+                    return Err(ConfigError::InvalidValue(
+                        "FOOD_DATA_SOURCE=fatsecret requires FS_CLIENT_ID and FS_CLIENT_SECRET",
+                    ));
                 }
                 FoodDataSource::FatSecret
             }
             Ok("hybrid") => {
                 if fs_client_id.is_none() {
-                    return Err(ConfigError::InvalidValue("FOOD_DATA_SOURCE=hybrid requires FS_CLIENT_ID and FS_CLIENT_SECRET"));
+                    return Err(ConfigError::InvalidValue(
+                        "FOOD_DATA_SOURCE=hybrid requires FS_CLIENT_ID and FS_CLIENT_SECRET",
+                    ));
                 }
                 FoodDataSource::Hybrid
             }
             Ok("openfoodfacts") => FoodDataSource::OpenFoodFacts,
             _ => {
-                if fs_client_id.is_some() { FoodDataSource::Hybrid } else { FoodDataSource::Local }
+                if fs_client_id.is_some() {
+                    FoodDataSource::Hybrid
+                } else {
+                    FoodDataSource::Local
+                }
             }
         };
 

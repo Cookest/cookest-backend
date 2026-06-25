@@ -7,9 +7,9 @@
 use actix_web::{web, HttpResponse};
 use std::sync::Arc;
 
-use cookest_shared::errors::AppError;
 use crate::models::ingredient::IngredientQuery;
 use crate::services::IngredientService;
+use cookest_shared::errors::AppError;
 
 /// GET /api/ingredients?q=chicken&category=protein
 /// Search ingredients — used for inventory autocomplete

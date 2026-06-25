@@ -40,11 +40,7 @@ impl TasteProfileService {
     ///   "swipe_count": 10
     /// }
     /// ```
-    pub async fn record_swipe(
-        &self,
-        user_id: Uuid,
-        req: SwipeRequest,
-    ) -> Result<(), AppError> {
+    pub async fn record_swipe(&self, user_id: Uuid, req: SwipeRequest) -> Result<(), AppError> {
         let user = User::find_by_id(user_id)
             .one(&self.db)
             .await?

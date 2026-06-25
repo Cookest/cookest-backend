@@ -12,13 +12,13 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use chrono::Utc;
 use rust_decimal::Decimal;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
-    QueryFilter, Set,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, QueryFilter,
+    Set,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::time::Duration;
-use std::collections::HashSet;
 use uuid::Uuid;
 
 use crate::entity::{
@@ -172,7 +172,13 @@ impl StoreService {
         ollama_model: String,
         overpass_url: String,
     ) -> Self {
-        Self { db, pdf_upload_dir, ollama_url, ollama_model, overpass_url }
+        Self {
+            db,
+            pdf_upload_dir,
+            ollama_url,
+            ollama_model,
+            overpass_url,
+        }
     }
 
     // ── Stores ──────────────────────────────────────────────────────────────
@@ -223,9 +229,7 @@ impl StoreService {
             .and_then(|e| e.to_str())
             .unwrap_or("pdf");
         if !["pdf"].contains(&ext.to_lowercase().as_str()) {
-            return Err(AppError::Validation(
-                validator::ValidationErrors::new(),
-            ));
+            return Err(AppError::Validation(validator::ValidationErrors::new()));
         }
 
         let file_name = format!("{}.pdf", Uuid::new_v4());
@@ -281,7 +285,10 @@ impl StoreService {
         Ok(jobs.into_iter().map(JobStatusResponse::from).collect())
     }
 
-    pub async fn list_candidates(&self, store_id: Uuid) -> Result<Vec<store_promotion_candidate::Model>, AppError> {
+    pub async fn list_candidates(
+        &self,
+        store_id: Uuid,
+    ) -> Result<Vec<store_promotion_candidate::Model>, AppError> {
         let candidates = Candidate::find()
             .filter(store_promotion_candidate::Column::StoreId.eq(store_id))
             .filter(store_promotion_candidate::Column::ReviewStatus.eq("pending"))
@@ -340,7 +347,11 @@ impl StoreService {
     }
 
     /// Reject a candidate
-    pub async fn reject_candidate(&self, candidate_id: Uuid, reviewer_id: Uuid) -> Result<(), AppError> {
+    pub async fn reject_candidate(
+        &self,
+        candidate_id: Uuid,
+        reviewer_id: Uuid,
+    ) -> Result<(), AppError> {
         let candidate = Candidate::find_by_id(candidate_id)
             .one(&self.db)
             .await?
@@ -373,29 +384,51 @@ impl StoreService {
             ORDER BY sp.discounted_price ASC
         "#;
 
-        let rows = self.db.query_all(Statement::from_sql_and_values(
-            sea_orm::DatabaseBackend::Postgres,
-            sql,
-            [sea_orm::Value::BigInt(Some(ingredient_id))],
-        )).await?;
+        let rows = self
+            .db
+            .query_all(Statement::from_sql_and_values(
+                sea_orm::DatabaseBackend::Postgres,
+                sql,
+                [sea_orm::Value::BigInt(Some(ingredient_id))],
+            ))
+            .await?;
 
         let mut result = vec![];
         for row in rows {
-            let id: Uuid = row.try_get("", "id").map_err(|e| AppError::Internal(e.to_string()))?;
-            let store_id: Uuid = row.try_get("", "store_id").map_err(|e| AppError::Internal(e.to_string()))?;
-            let product_name: String = row.try_get("", "product_name").map_err(|e| AppError::Internal(e.to_string()))?;
+            let id: Uuid = row
+                .try_get("", "id")
+                .map_err(|e| AppError::Internal(e.to_string()))?;
+            let store_id: Uuid = row
+                .try_get("", "store_id")
+                .map_err(|e| AppError::Internal(e.to_string()))?;
+            let product_name: String = row
+                .try_get("", "product_name")
+                .map_err(|e| AppError::Internal(e.to_string()))?;
             let brand: Option<String> = row.try_get("", "brand").unwrap_or(None);
             let original_price: Option<Decimal> = row.try_get("", "original_price").unwrap_or(None);
-            let discounted_price: Decimal = row.try_get("", "discounted_price").map_err(|e| AppError::Internal(e.to_string()))?;
+            let discounted_price: Decimal = row
+                .try_get("", "discounted_price")
+                .map_err(|e| AppError::Internal(e.to_string()))?;
             let discount_pct: Option<Decimal> = row.try_get("", "discount_pct").unwrap_or(None);
             let unit: Option<String> = row.try_get("", "unit").unwrap_or(None);
-            let valid_from: Option<chrono::DateTime<chrono::FixedOffset>> = row.try_get("", "valid_from").unwrap_or(None);
-            let valid_until: Option<chrono::DateTime<chrono::FixedOffset>> = row.try_get("", "valid_until").unwrap_or(None);
+            let valid_from: Option<chrono::DateTime<chrono::FixedOffset>> =
+                row.try_get("", "valid_from").unwrap_or(None);
+            let valid_until: Option<chrono::DateTime<chrono::FixedOffset>> =
+                row.try_get("", "valid_until").unwrap_or(None);
             let confidence: Option<Decimal> = row.try_get("", "confidence").unwrap_or(None);
 
             result.push(PromotionResponse {
-                id, store_id, product_name, brand, original_price,
-                discounted_price, discount_pct, unit, valid_from, valid_until, confidence,
+                id,
+                store_id,
+                product_name,
+                brand,
+                original_price,
+                discounted_price,
+                discount_pct,
+                unit,
+                valid_from,
+                valid_until,
+                confidence,
             });
         }
         Ok(result)
@@ -424,9 +457,17 @@ impl StoreService {
             .filter(osm_store_poi::Column::Lng.between(min_lng, max_lng))
             .all(&self.db)
             .await?;
-        let fresh = pois.iter().map(|p| p.fetched_at).max().map(|f| f > cutoff).unwrap_or(false);
+        let fresh = pois
+            .iter()
+            .map(|p| p.fetched_at)
+            .max()
+            .map(|f| f > cutoff)
+            .unwrap_or(false);
         if !fresh {
-            if let Err(e) = self.refresh_osm_pois(lat, lng, (radius_km * 1000.0) as i64).await {
+            if let Err(e) = self
+                .refresh_osm_pois(lat, lng, (radius_km * 1000.0) as i64)
+                .await
+            {
                 tracing::warn!("Overpass refresh failed (serving cached/curated): {:?}", e);
             }
             pois = osm_store_poi::Entity::find()
@@ -483,7 +524,11 @@ impl StoreService {
             result.push(NearbyStore {
                 id: None,
                 osm_id: Some(p.osm_id),
-                name: if pname.is_empty() { "Supermarket".to_string() } else { pname },
+                name: if pname.is_empty() {
+                    "Supermarket".to_string()
+                } else {
+                    pname
+                },
                 brand: p.brand,
                 lat: p.lat,
                 lng: p.lng,
@@ -495,14 +540,21 @@ impl StoreService {
         }
 
         result.sort_by(|a, b| {
-            a.distance_km.partial_cmp(&b.distance_km).unwrap_or(std::cmp::Ordering::Equal)
+            a.distance_km
+                .partial_cmp(&b.distance_km)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
         Ok(result)
     }
 
     /// Fetch supermarket POIs around a point from the Overpass API and upsert
     /// them into the cache. Best-effort; callers tolerate failure.
-    pub async fn refresh_osm_pois(&self, lat: f64, lng: f64, radius_m: i64) -> Result<(), AppError> {
+    pub async fn refresh_osm_pois(
+        &self,
+        lat: f64,
+        lng: f64,
+        radius_m: i64,
+    ) -> Result<(), AppError> {
         let radius_m = radius_m.clamp(500, 50_000);
         let query = format!(
             "[out:json][timeout:25];(node[\"shop\"=\"supermarket\"](around:{r},{lat},{lng});way[\"shop\"=\"supermarket\"](around:{r},{lat},{lng}););out center tags;",
@@ -522,7 +574,10 @@ impl StoreService {
             .await
             .map_err(|e| AppError::Internal(format!("Overpass request failed: {}", e)))?;
         if !resp.status().is_success() {
-            return Err(AppError::Internal(format!("Overpass status {}", resp.status())));
+            return Err(AppError::Internal(format!(
+                "Overpass status {}",
+                resp.status()
+            )));
         }
         let data: serde_json::Value = resp
             .json()
@@ -537,13 +592,16 @@ impl StoreService {
                     continue;
                 }
                 let osm_type = el["type"].as_str().unwrap_or("node").to_string();
-                let (plat, plng) = if let (Some(la), Some(lo)) = (el["lat"].as_f64(), el["lon"].as_f64()) {
-                    (la, lo)
-                } else if let (Some(la), Some(lo)) = (el["center"]["lat"].as_f64(), el["center"]["lon"].as_f64()) {
-                    (la, lo)
-                } else {
-                    continue;
-                };
+                let (plat, plng) =
+                    if let (Some(la), Some(lo)) = (el["lat"].as_f64(), el["lon"].as_f64()) {
+                        (la, lo)
+                    } else if let (Some(la), Some(lo)) =
+                        (el["center"]["lat"].as_f64(), el["center"]["lon"].as_f64())
+                    {
+                        (la, lo)
+                    } else {
+                        continue;
+                    };
                 let tags = &el["tags"];
                 let model = osm_store_poi::ActiveModel {
                     osm_id: Set(osm_id),
@@ -553,7 +611,11 @@ impl StoreService {
                     lat: Set(plat),
                     lng: Set(plng),
                     matched_store_id: Set(None),
-                    raw_tags: Set(if tags.is_object() { Some(tags.clone()) } else { None }),
+                    raw_tags: Set(if tags.is_object() {
+                        Some(tags.clone())
+                    } else {
+                        None
+                    }),
                     fetched_at: Set(now),
                     ..Default::default()
                 };
@@ -597,7 +659,10 @@ impl StoreService {
     }
 
     /// Active promotions for a store (public).
-    pub async fn list_store_promotions(&self, store_id: Uuid) -> Result<Vec<PromotionResponse>, AppError> {
+    pub async fn list_store_promotions(
+        &self,
+        store_id: Uuid,
+    ) -> Result<Vec<PromotionResponse>, AppError> {
         let now = Utc::now().fixed_offset();
         let promos = StorePromotion::find()
             .filter(store_promotion::Column::StoreId.eq(store_id))
@@ -673,7 +738,8 @@ async fn process_pdf_job(
         .parent()
         .unwrap_or(std::path::Path::new("/tmp"))
         .join(format!("pages_{}", job_id));
-    tokio::fs::create_dir_all(&output_dir).await
+    tokio::fs::create_dir_all(&output_dir)
+        .await
         .map_err(|e| AppError::Internal(format!("mkdir failed: {}", e)))?;
 
     let prefix = output_dir.join("page").to_string_lossy().to_string();
@@ -691,9 +757,12 @@ async fn process_pdf_job(
 
     // Collect generated PNG files
     let mut png_files: Vec<PathBuf> = vec![];
-    let mut dir = tokio::fs::read_dir(&output_dir).await
+    let mut dir = tokio::fs::read_dir(&output_dir)
+        .await
         .map_err(|e| AppError::Internal(format!("read_dir failed: {}", e)))?;
-    while let Some(entry) = dir.next_entry().await
+    while let Some(entry) = dir
+        .next_entry()
+        .await
         .map_err(|e| AppError::Internal(format!("dir entry failed: {}", e)))?
     {
         let path = entry.path();
@@ -706,7 +775,8 @@ async fn process_pdf_job(
     let client = reqwest::Client::new();
 
     for png_path in &png_files {
-        let png_bytes = tokio::fs::read(png_path).await
+        let png_bytes = tokio::fs::read(png_path)
+            .await
             .map_err(|e| AppError::Internal(format!("read PNG failed: {}", e)))?;
         let b64 = BASE64.encode(&png_bytes);
 
@@ -752,7 +822,9 @@ Return ONLY the JSON array, no other text.
             continue;
         }
 
-        let resp_json: serde_json::Value = resp.json().await
+        let resp_json: serde_json::Value = resp
+            .json()
+            .await
             .map_err(|e| AppError::Internal(format!("Ollama JSON parse failed: {}", e)))?;
 
         let raw_text = resp_json["response"].as_str().unwrap_or("");
@@ -798,22 +870,37 @@ async fn insert_candidate(
         _ => return,
     };
 
-    let original_price = item["original_price"].as_f64()
+    let original_price = item["original_price"]
+        .as_f64()
         .and_then(|p| Decimal::try_from(p).ok());
-    let discount_pct = item["discount_pct"].as_f64()
+    let discount_pct = item["discount_pct"]
+        .as_f64()
         .and_then(|p| Decimal::try_from(p).ok());
-    let confidence = item["confidence"].as_f64()
+    let confidence = item["confidence"]
+        .as_f64()
         .and_then(|c| Decimal::try_from(c).ok());
 
-    let valid_from = item["valid_from"].as_str()
+    let valid_from = item["valid_from"]
+        .as_str()
         .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
         // 0,0,0 is always a valid time — expect() is safe here
-        .map(|d| d.and_hms_opt(0, 0, 0).expect("midnight (0,0,0) is always valid").and_utc().fixed_offset());
+        .map(|d| {
+            d.and_hms_opt(0, 0, 0)
+                .expect("midnight (0,0,0) is always valid")
+                .and_utc()
+                .fixed_offset()
+        });
 
-    let valid_until = item["valid_until"].as_str()
+    let valid_until = item["valid_until"]
+        .as_str()
         .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
         // 23,59,59 is always a valid time — expect() is safe here
-        .map(|d| d.and_hms_opt(23, 59, 59).expect("end-of-day (23,59,59) is always valid").and_utc().fixed_offset());
+        .map(|d| {
+            d.and_hms_opt(23, 59, 59)
+                .expect("end-of-day (23,59,59) is always valid")
+                .and_utc()
+                .fixed_offset()
+        });
 
     let candidate = CandidateActiveModel {
         id: Set(Uuid::new_v4()),

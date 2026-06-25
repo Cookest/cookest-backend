@@ -44,7 +44,9 @@ pub fn estimate_time(
         let cook = total_matched;
         (cook, prep_time_min + cook)
     } else {
-        let is_salad = category.map(|c| c.to_lowercase() == "salad").unwrap_or(false);
+        let is_salad = category
+            .map(|c| c.to_lowercase() == "salad")
+            .unwrap_or(false);
         let cook = if is_salad {
             0
         } else {
@@ -71,11 +73,43 @@ pub fn estimate_time(
 /// Returns the region with the most keyword matches, or "International" if tied/none.
 pub fn classify_region(ingredient_names: &[&str], tags: &[&str]) -> String {
     let cuisine_map: &[(&str, &[&str])] = &[
-        ("Asian", &["soy sauce", "ginger", "mirin", "sesame oil", "rice vinegar", "molho de soja", "gengibre"]),
-        ("Italian", &["olive oil", "oregano", "basil", "mozzarella", "parmesan", "pasta", "azeite", "manjericao"]),
-        ("Mexican", &["cilantro", "tortilla", "jalapeno", "coentro", "taco"]),
-        ("Indian", &["curry", "garam masala", "turmeric", "cardamomo", "caril"]),
-        ("Portuguese", &["cod", "bacalhau", "chourico", "coentro", "batata"]),
+        (
+            "Asian",
+            &[
+                "soy sauce",
+                "ginger",
+                "mirin",
+                "sesame oil",
+                "rice vinegar",
+                "molho de soja",
+                "gengibre",
+            ],
+        ),
+        (
+            "Italian",
+            &[
+                "olive oil",
+                "oregano",
+                "basil",
+                "mozzarella",
+                "parmesan",
+                "pasta",
+                "azeite",
+                "manjericao",
+            ],
+        ),
+        (
+            "Mexican",
+            &["cilantro", "tortilla", "jalapeno", "coentro", "taco"],
+        ),
+        (
+            "Indian",
+            &["curry", "garam masala", "turmeric", "cardamomo", "caril"],
+        ),
+        (
+            "Portuguese",
+            &["cod", "bacalhau", "chourico", "coentro", "batata"],
+        ),
     ];
 
     let all_text: Vec<String> = ingredient_names
@@ -88,9 +122,10 @@ pub fn classify_region(ingredient_names: &[&str], tags: &[&str]) -> String {
     let mut best_count = 0usize;
 
     for (region, keywords) in cuisine_map {
-        let count = keywords.iter().filter(|&&kw| {
-            all_text.iter().any(|t| t.contains(kw))
-        }).count();
+        let count = keywords
+            .iter()
+            .filter(|&&kw| all_text.iter().any(|t| t.contains(kw)))
+            .count();
         if count > best_count {
             best_count = count;
             best_region = region.to_string();

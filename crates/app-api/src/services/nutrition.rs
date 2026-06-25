@@ -66,8 +66,8 @@ pub struct NutritionService {
 
 impl NutritionService {
     pub fn new(db: DatabaseConnection) -> Self {
-        let ollama_url = std::env::var("OLLAMA_URL")
-            .unwrap_or_else(|_| "http://localhost:11434".to_string());
+        let ollama_url =
+            std::env::var("OLLAMA_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
         let model = std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama3.1:8b".to_string());
         let embed_model =
             std::env::var("OLLAMA_EMBED_MODEL").unwrap_or_else(|_| "nomic-embed-text".to_string());
@@ -161,7 +161,9 @@ impl NutritionService {
     ) -> Result<WhatToBuyResponse, AppError> {
         let (pantry, dietary, allergies, goals) = self.profile_and_pantry(user_id).await?;
         let goal_text = goal.unwrap_or_else(|| "balanced, nutritious eating".to_string());
-        let knowledge = self.knowledge_block(&format!("what foods to buy for {goal_text}")).await;
+        let knowledge = self
+            .knowledge_block(&format!("what foods to buy for {goal_text}"))
+            .await;
         let prompt = format!(
             "You are a registered-dietitian-style shopping advisor.\n\
              Pantry already has: {pantry}.\n\
@@ -190,7 +192,9 @@ impl NutritionService {
     ) -> Result<RecipeSuggestionsResponse, AppError> {
         let (pantry, dietary, allergies, goals) = self.profile_and_pantry(user_id).await?;
         let count = count.clamp(1, 8);
-        let knowledge = self.knowledge_block("healthy balanced recipes nutrient variety").await;
+        let knowledge = self
+            .knowledge_block("healthy balanced recipes nutrient variety")
+            .await;
         let prompt = format!(
             "You are a creative chef and nutritionist.\n\
              Pantry: {pantry}.\n\

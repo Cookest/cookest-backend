@@ -2,17 +2,15 @@
 //! Also triggers PreferenceService to update ML weights on every interaction
 
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use uuid::Uuid;
 
-use crate::entity::{recipe, recipe_rating, user_favorite, cooking_history};
-use cookest_shared::errors::AppError;
-use crate::models::interaction::*;
-use crate::services::{InventoryService, PreferenceService, RecipeService};
-use crate::services::preference::PreferenceSignal;
+use crate::entity::{cooking_history, recipe, recipe_rating, user_favorite};
 use crate::handlers::browse::FoodApiClient;
+use crate::models::interaction::*;
+use crate::services::preference::PreferenceSignal;
+use crate::services::{InventoryService, PreferenceService, RecipeService};
+use cookest_shared::errors::AppError;
 
 pub struct InteractionService {
     db: DatabaseConnection,
@@ -42,7 +40,11 @@ impl InteractionService {
         comment: Option<String>,
     ) -> Result<InteractionResponse, AppError> {
         // Verify recipe exists, importing it if missing
-        if recipe::Entity::find_by_id(recipe_id).one(&self.db).await?.is_none() {
+        if recipe::Entity::find_by_id(recipe_id)
+            .one(&self.db)
+            .await?
+            .is_none()
+        {
             let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
             recipe_service.get_recipe_or_import(recipe_id).await?;
         }
@@ -87,7 +89,11 @@ impl InteractionService {
         recipe_id: i64,
     ) -> Result<FavouriteResponse, AppError> {
         // Verify recipe exists, importing it if missing
-        if recipe::Entity::find_by_id(recipe_id).one(&self.db).await?.is_none() {
+        if recipe::Entity::find_by_id(recipe_id)
+            .one(&self.db)
+            .await?
+            .is_none()
+        {
             let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
             recipe_service.get_recipe_or_import(recipe_id).await?;
         }
@@ -140,7 +146,8 @@ impl InteractionService {
         let recipe = match recipe::Entity::find_by_id(recipe_id).one(&self.db).await? {
             Some(r) => r,
             None => {
-                let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
+                let recipe_service =
+                    RecipeService::new(self.db.clone(), self.food_api_client.clone());
                 recipe_service.get_recipe_or_import(recipe_id).await?
             }
         };
@@ -193,7 +200,9 @@ impl InteractionService {
         }
 
         // Restore inventory from the audit rows (also clears them), then drop the event.
-        self.inventory_service.undo_deduction(user_id, history_id).await?;
+        self.inventory_service
+            .undo_deduction(user_id, history_id)
+            .await?;
         cooking_history::Entity::delete_by_id(history_id)
             .exec(&self.db)
             .await?;
@@ -214,14 +223,13 @@ impl InteractionService {
             .await?;
 
         let recipe_ids: Vec<i64> = history.iter().map(|h| h.recipe_id).collect();
-        let recipes: std::collections::HashMap<i64, String> =
-            recipe::Entity::find()
-                .filter(recipe::Column::Id.is_in(recipe_ids))
-                .all(&self.db)
-                .await?
-                .into_iter()
-                .map(|r| (r.id, r.name))
-                .collect();
+        let recipes: std::collections::HashMap<i64, String> = recipe::Entity::find()
+            .filter(recipe::Column::Id.is_in(recipe_ids))
+            .all(&self.db)
+            .await?
+            .into_iter()
+            .map(|r| (r.id, r.name))
+            .collect();
 
         Ok(history
             .into_iter()
@@ -238,7 +246,6 @@ impl InteractionService {
 
     /// Recalculate and update a recipe's average rating
     async fn update_recipe_avg_rating(&self, recipe_id: i64) -> Result<(), AppError> {
-
         let ratings = recipe_rating::Entity::find()
             .filter(recipe_rating::Column::RecipeId.eq(recipe_id))
             .all(&self.db)
@@ -268,10 +275,7 @@ impl InteractionService {
     }
 
     /// Get all recipes the user has favourited
-    pub async fn get_favourites(
-        &self,
-        user_id: Uuid,
-    ) -> Result<Vec<serde_json::Value>, AppError> {
+    pub async fn get_favourites(&self, user_id: Uuid) -> Result<Vec<serde_json::Value>, AppError> {
         let favourites = user_favorite::Entity::find()
             .filter(user_favorite::Column::UserId.eq(user_id))
             .all(&self.db)

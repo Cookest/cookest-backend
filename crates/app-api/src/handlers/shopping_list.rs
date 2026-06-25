@@ -5,10 +5,10 @@ use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use cookest_shared::errors::AppError;
 use crate::handlers::store::get_prices_for_ingredient;
 use crate::middleware::auth::AuthenticatedUser;
 use crate::services::shopping_list::{AddItemRequest, ShoppingListService, SyncItem};
+use cookest_shared::errors::AppError;
 
 pub fn configure_shopping_list(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -19,7 +19,10 @@ pub fn configure_shopping_list(cfg: &mut web::ServiceConfig) {
             .route("/items/{id}", web::delete().to(delete_item))
             .route("/sync", web::post().to(sync_from_plan))
             .route("/clear-checked", web::delete().to(clear_checked))
-            .route("/prices/{ingredient_id}", web::get().to(get_prices_for_ingredient)),
+            .route(
+                "/prices/{ingredient_id}",
+                web::get().to(get_prices_for_ingredient),
+            ),
     );
 }
 
@@ -68,7 +71,9 @@ async fn sync_from_plan(
     service: web::Data<Arc<ShoppingListService>>,
     body: web::Json<SyncRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let items = service.sync_from_meal_plan(user.id, body.into_inner().items).await?;
+    let items = service
+        .sync_from_meal_plan(user.id, body.into_inner().items)
+        .await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({ "items": items })))
 }
 

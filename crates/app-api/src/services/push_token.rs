@@ -1,10 +1,7 @@
 //! Push token service — register and remove device push tokens
 
 use chrono::Utc;
-use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    ActiveModelTrait, Set,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use uuid::Uuid;
 
 use crate::entity::user_push_token;
@@ -59,11 +56,13 @@ impl PushTokenService {
 
         Ok(tokens
             .into_iter()
-            .map(|t| serde_json::json!({
-                "id": t.id,
-                "platform": t.platform,
-                "created_at": t.created_at,
-            }))
+            .map(|t| {
+                serde_json::json!({
+                    "id": t.id,
+                    "platform": t.platform,
+                    "created_at": t.created_at,
+                })
+            })
             .collect())
     }
 

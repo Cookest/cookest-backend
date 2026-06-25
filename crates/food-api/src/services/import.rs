@@ -1,11 +1,11 @@
 //! Dataset import service — scans folders, parses CSV/JSON, inserts into local DB
 
-use std::path::{Path, PathBuf};
-use sea_orm::{DatabaseConnection, ActiveModelTrait, Set, TransactionTrait, ConnectionTrait};
-use serde::Deserialize;
-use crate::errors::AppError;
 use crate::entity::recipe;
-use crate::services::time_region::{estimate_time, classify_region};
+use crate::errors::AppError;
+use crate::services::time_region::{classify_region, estimate_time};
+use sea_orm::{ActiveModelTrait, ConnectionTrait, DatabaseConnection, Set, TransactionTrait};
+use serde::Deserialize;
+use std::path::{Path, PathBuf};
 
 /// A single importable recipe row (flexible — many fields optional)
 #[derive(Debug, Deserialize, Default)]
@@ -54,10 +54,16 @@ impl ImportService {
             return Err(AppError::Forbidden);
         }
         if !path.exists() {
-            return Err(AppError::NotFound(format!("Folder '{}' does not exist", folder)));
+            return Err(AppError::NotFound(format!(
+                "Folder '{}' does not exist",
+                folder
+            )));
         }
         if !path.is_dir() {
-            return Err(AppError::NotFound(format!("'{}' is not a directory", folder)));
+            return Err(AppError::NotFound(format!(
+                "'{}' is not a directory",
+                folder
+            )));
         }
 
         let mut files = Vec::new();
@@ -111,14 +117,16 @@ impl ImportService {
             }
 
             // Run time inference if times are missing
-            let ingredient_list: Vec<String> = row.ingredients_csv
+            let ingredient_list: Vec<String> = row
+                .ingredients_csv
                 .as_deref()
                 .unwrap_or("")
                 .split(',')
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect();
-            let step_instructions: Vec<String> = row.steps_text
+            let step_instructions: Vec<String> = row
+                .steps_text
                 .as_deref()
                 .unwrap_or("")
                 .split(" | ")
@@ -128,23 +136,45 @@ impl ImportService {
             let step_refs: Vec<&str> = step_instructions.iter().map(|s| s.as_str()).collect();
             let ing_refs: Vec<&str> = ingredient_list.iter().map(|s| s.as_str()).collect();
 
-            let (prep_time, cook_time, total_time) = if row.prep_time_min.is_none() && row.cook_time_min.is_none() {
-                let est = estimate_time(&step_refs, ingredient_list.len(), step_instructions.len(), row.category.as_deref());
-                (Some(est.prep_time_min), Some(est.cook_time_min), Some(est.total_time_min))
-            } else {
-                (row.prep_time_min, row.cook_time_min, row.total_time_min)
-            };
+            let (prep_time, cook_time, total_time) =
+                if row.prep_time_min.is_none() && row.cook_time_min.is_none() {
+                    let est = estimate_time(
+                        &step_refs,
+                        ingredient_list.len(),
+                        step_instructions.len(),
+                        row.category.as_deref(),
+                    );
+                    (
+                        Some(est.prep_time_min),
+                        Some(est.cook_time_min),
+                        Some(est.total_time_min),
+                    )
+                } else {
+                    (row.prep_time_min, row.cook_time_min, row.total_time_min)
+                };
 
             let cuisine = if row.cuisine.is_none() {
                 let region = classify_region(&ing_refs, &[]);
-                if region == "International" { None } else { Some(region) }
+                if region == "International" {
+                    None
+                } else {
+                    Some(region)
+                }
             } else {
                 row.cuisine.clone()
             };
 
             let slug = {
                 let base = slug::slugify(&row.name);
-                format!("{}-{}", base, uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("x"))
+                format!(
+                    "{}-{}",
+                    base,
+                    uuid::Uuid::new_v4()
+                        .to_string()
+                        .split('-')
+                        .next()
+                        .unwrap_or("x")
+                )
             };
 
             let now = chrono::Utc::now().fixed_offset();
@@ -301,9 +331,9 @@ impl ImportService {
         folder: &str,
         filename: &str,
     ) -> Result<ImportResult, AppError> {
+        use flate2::read::GzDecoder;
         use std::fs::File;
         use std::io::BufReader;
-        use flate2::read::GzDecoder;
         use std::str::FromStr;
 
         let path = PathBuf::from(folder).join(filename);
@@ -327,16 +357,17 @@ impl ImportService {
             .flexible(true)
             .from_reader(input);
 
-        let headers = rdr.headers()
+        let headers = rdr
+            .headers()
             .map_err(|e| AppError::Internal(format!("Failed to read CSV headers: {}", e)))?;
-        
+
         let get_idx = |name: &str| headers.iter().position(|h| h == name);
 
         let code_idx = get_idx("code");
         let name_idx = get_idx("product_name");
         let cat_idx = get_idx("categories");
         let img_idx = get_idx("image_url");
-        
+
         let kcal_idx = get_idx("energy-kcal_100g");
         let protein_idx = get_idx("proteins_100g");
         let carbs_idx = get_idx("carbohydrates_100g");
@@ -355,37 +386,67 @@ impl ImportService {
         let mut record = csv::StringRecord::new();
         let mut batch = Vec::new();
 
-        while rdr.read_record(&mut record).map_err(|e| AppError::Internal(format!("CSV read record error: {}", e)))? {
+        while rdr
+            .read_record(&mut record)
+            .map_err(|e| AppError::Internal(format!("CSV read record error: {}", e)))?
+        {
             if imported >= max_rows {
                 break;
             }
 
-            let code = code_idx.and_then(|idx| record.get(idx)).unwrap_or("").trim().to_string();
-            let name = name_idx.and_then(|idx| record.get(idx)).unwrap_or("").trim().to_string();
+            let code = code_idx
+                .and_then(|idx| record.get(idx))
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            let name = name_idx
+                .and_then(|idx| record.get(idx))
+                .unwrap_or("")
+                .trim()
+                .to_string();
             if code.is_empty() || name.is_empty() {
                 skipped += 1;
                 continue;
             }
 
-            let categories = cat_idx.and_then(|idx| record.get(idx))
+            let categories = cat_idx
+                .and_then(|idx| record.get(idx))
                 .map(|c| c.split(',').next().unwrap_or("").trim().to_string());
-            let image_url = img_idx.and_then(|idx| record.get(idx)).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+            let image_url = img_idx
+                .and_then(|idx| record.get(idx))
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
 
-            let parse_dec = |idx: Option<usize>, record: &csv::StringRecord| -> Option<rust_decimal::Decimal> {
-                idx.and_then(|i| record.get(i))
-                    .and_then(|val| rust_decimal::Decimal::from_str(val).ok())
-            };
-            
+            let parse_dec =
+                |idx: Option<usize>, record: &csv::StringRecord| -> Option<rust_decimal::Decimal> {
+                    idx.and_then(|i| record.get(i))
+                        .and_then(|val| rust_decimal::Decimal::from_str(val).ok())
+                };
+
             let calories = parse_dec(kcal_idx, &record);
             let protein = parse_dec(protein_idx, &record);
             let carbs = parse_dec(carbs_idx, &record);
             let fat = parse_dec(fat_idx, &record);
             let fiber = parse_dec(fiber_idx, &record);
             let sugar = parse_dec(sugar_idx, &record);
-            let sodium = parse_dec(sodium_idx, &record).map(|s| s * rust_decimal::Decimal::from(1000));
+            let sodium =
+                parse_dec(sodium_idx, &record).map(|s| s * rust_decimal::Decimal::from(1000));
             let saturated_fat = parse_dec(sat_fat_idx, &record);
 
-            batch.push((code, name, categories, image_url, calories, protein, carbs, fat, fiber, sugar, sodium, saturated_fat));
+            batch.push((
+                code,
+                name,
+                categories,
+                image_url,
+                calories,
+                protein,
+                carbs,
+                fat,
+                fiber,
+                sugar,
+                sodium,
+                saturated_fat,
+            ));
 
             if batch.len() >= 500 {
                 self.flush_batch_off(&batch).await?;
@@ -402,15 +463,36 @@ impl ImportService {
         Ok(ImportResult {
             rows_imported: imported,
             rows_skipped: skipped,
-            message: format!("Successfully imported {} OpenFoodFacts products (skipped {})", imported, skipped),
+            message: format!(
+                "Successfully imported {} OpenFoodFacts products (skipped {})",
+                imported, skipped
+            ),
         })
     }
 
-    async fn flush_batch_off(&self, batch: &[(String, String, Option<String>, Option<String>, Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>)]) -> Result<(), AppError> {
+    async fn flush_batch_off(
+        &self,
+        batch: &[(
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<rust_decimal::Decimal>,
+            Option<rust_decimal::Decimal>,
+            Option<rust_decimal::Decimal>,
+            Option<rust_decimal::Decimal>,
+            Option<rust_decimal::Decimal>,
+            Option<rust_decimal::Decimal>,
+            Option<rust_decimal::Decimal>,
+            Option<rust_decimal::Decimal>,
+        )],
+    ) -> Result<(), AppError> {
         use sea_orm::TransactionTrait;
         let txn = self.db.begin().await?;
 
-        for (code, name, cat, img, calories, protein, carbs, fat, fiber, sugar, sodium, sat_fat) in batch {
+        for (code, name, cat, img, calories, protein, carbs, fat, fiber, sugar, sodium, sat_fat) in
+            batch
+        {
             let now = chrono::Utc::now().fixed_offset();
             let ing_row = txn.query_one(sea_orm::Statement::from_sql_and_values(
                 sea_orm::DatabaseBackend::Postgres,

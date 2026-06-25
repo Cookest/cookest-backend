@@ -3,7 +3,8 @@
 use chrono::Utc;
 use rust_decimal::Decimal;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
+    TransactionTrait,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -65,17 +66,25 @@ pub struct ShoppingListService {
 
 impl ShoppingListService {
     pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
-        Self { db, food_api_client }
+        Self {
+            db,
+            food_api_client,
+        }
     }
 
     /// Get all shopping list items for a user
     pub async fn get_list(&self, user_id: Uuid) -> Result<Vec<ShoppingListItemResponse>, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let items = ShoppingListItem::find()
             .filter(shopping_list_item::Column::UserId.eq(user_id))
             .all(&self.db)
             .await?;
-        Ok(items.into_iter().map(ShoppingListItemResponse::from).collect())
+        Ok(items
+            .into_iter()
+            .map(ShoppingListItemResponse::from)
+            .collect())
     }
 
     /// Add a manual item to the shopping list
@@ -84,7 +93,9 @@ impl ShoppingListService {
         user_id: Uuid,
         req: AddItemRequest,
     ) -> Result<ShoppingListItemResponse, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let now = Utc::now().fixed_offset();
         let item = ActiveModel {
             id: Set(Uuid::new_v4()),
@@ -109,7 +120,9 @@ impl ShoppingListService {
         user_id: Uuid,
         item_id: Uuid,
     ) -> Result<ShoppingListItemResponse, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let item = ShoppingListItem::find_by_id(item_id)
             .filter(shopping_list_item::Column::UserId.eq(user_id))
             .one(&self.db)
@@ -123,12 +136,16 @@ impl ShoppingListService {
         let updated = active.update(&self.db).await?;
 
         if new_checked {
-            let qty_f64 = updated.quantity
+            let qty_f64 = updated
+                .quantity
                 .and_then(|q| q.to_string().parse::<f64>().ok())
                 .unwrap_or(1.0);
             let unit_str = updated.unit.clone().unwrap_or_else(|| "piece".to_string());
 
-            let inventory_service = crate::services::InventoryService::new(self.db.clone(), self.food_api_client.clone());
+            let inventory_service = crate::services::InventoryService::new(
+                self.db.clone(),
+                self.food_api_client.clone(),
+            );
 
             if let Some(ing_id) = updated.ingredient_id {
                 let exists = crate::entity::ingredient::Entity::find_by_id(ing_id)
@@ -149,27 +166,39 @@ impl ShoppingListService {
                         tracing::error!("Failed to auto-add checked item to pantry: {:?}", e);
                     }
                 } else {
-                    if let Err(e) = inventory_service.quick_add(
+                    if let Err(e) = inventory_service
+                        .quick_add(
+                            user_id,
+                            updated.name.clone(),
+                            qty_f64,
+                            unit_str,
+                            Some("pantry".to_string()),
+                            None,
+                        )
+                        .await
+                    {
+                        tracing::error!(
+                            "Failed to auto-add checked item to pantry (quick_add): {:?}",
+                            e
+                        );
+                    }
+                }
+            } else {
+                if let Err(e) = inventory_service
+                    .quick_add(
                         user_id,
                         updated.name.clone(),
                         qty_f64,
                         unit_str,
                         Some("pantry".to_string()),
                         None,
-                    ).await {
-                        tracing::error!("Failed to auto-add checked item to pantry (quick_add): {:?}", e);
-                    }
-                }
-            } else {
-                if let Err(e) = inventory_service.quick_add(
-                    user_id,
-                    updated.name.clone(),
-                    qty_f64,
-                    unit_str,
-                    Some("pantry".to_string()),
-                    None,
-                ).await {
-                    tracing::error!("Failed to auto-add checked item to pantry (quick_add): {:?}", e);
+                    )
+                    .await
+                {
+                    tracing::error!(
+                        "Failed to auto-add checked item to pantry (quick_add): {:?}",
+                        e
+                    );
                 }
             }
         }
@@ -179,7 +208,9 @@ impl ShoppingListService {
 
     /// Remove an item
     pub async fn delete_item(&self, user_id: Uuid, item_id: Uuid) -> Result<(), AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let item = ShoppingListItem::find_by_id(item_id)
             .filter(shopping_list_item::Column::UserId.eq(user_id))
             .one(&self.db)
@@ -198,7 +229,9 @@ impl ShoppingListService {
         user_id: Uuid,
         items: Vec<SyncItem>,
     ) -> Result<Vec<ShoppingListItemResponse>, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let txn = self.db.begin().await?;
 
         // Delete all previously-synced (non-manual) items
@@ -235,7 +268,9 @@ impl ShoppingListService {
 
     /// Clear all checked items
     pub async fn clear_checked(&self, user_id: Uuid) -> Result<u64, AppError> {
-        let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
+        let user_id = crate::services::get_effective_user_id(&self.db, user_id)
+            .await
+            .unwrap_or(user_id);
         let res = ShoppingListItem::delete_many()
             .filter(shopping_list_item::Column::UserId.eq(user_id))
             .filter(shopping_list_item::Column::IsChecked.eq(true))

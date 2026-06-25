@@ -8,7 +8,7 @@
 //!   OLLAMA_VISION_MODEL      — Vision model to use (default: qwen2.5vl:7b)
 //!   OLLAMA_VISION_TIMEOUT_SECS — HTTP timeout in seconds (default: 120)
 
-use base64::{Engine, engine::general_purpose::STANDARD as B64};
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -83,8 +83,8 @@ pub struct ScanService {
 
 impl ScanService {
     pub fn new() -> Self {
-        let ollama_url = std::env::var("OLLAMA_URL")
-            .unwrap_or_else(|_| "http://localhost:11434".to_string());
+        let ollama_url =
+            std::env::var("OLLAMA_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
         // Prefer a dedicated vision model env var, fall back to OLLAMA_MODEL, then qwen2.5vl
         let model = std::env::var("OLLAMA_VISION_MODEL")
             .or_else(|_| std::env::var("OLLAMA_MODEL"))
@@ -150,7 +150,9 @@ impl ScanService {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
             tracing::error!("Ollama vision returned {}: {}", status, body);
-            return Err(AppError::Internal("AI scan service returned an error".into()));
+            return Err(AppError::Internal(
+                "AI scan service returned an error".into(),
+            ));
         }
 
         let ollama_resp: OllamaVisionResponse = resp.json().await.map_err(|e| {

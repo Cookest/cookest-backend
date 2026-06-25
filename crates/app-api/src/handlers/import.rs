@@ -4,14 +4,14 @@
 //!   GET  /api/admin/database/import/scan?folder=...
 //!   POST /api/admin/database/import/execute
 
-use actix_web::{web, HttpResponse};
-use serde::Deserialize;
-use uuid::Uuid;
-use cookest_shared::errors::AppError;
+use crate::entity::user::Entity as User;
 use crate::handlers::browse::FoodApiClient;
 use crate::middleware::Claims;
-use crate::entity::user::Entity as User;
+use actix_web::{web, HttpResponse};
+use cookest_shared::errors::AppError;
 use sea_orm::EntityTrait;
+use serde::Deserialize;
+use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct ScanQuery {
@@ -26,12 +26,8 @@ pub struct ExecuteBody {
 }
 
 /// Verify that the authenticated user is an admin by checking DB.
-async fn require_admin(
-    db: &sea_orm::DatabaseConnection,
-    claims: &Claims,
-) -> Result<(), AppError> {
-    let user_id = Uuid::parse_str(&claims.sub)
-        .map_err(|_| AppError::Forbidden)?;
+async fn require_admin(db: &sea_orm::DatabaseConnection, claims: &Claims) -> Result<(), AppError> {
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::Forbidden)?;
     let user = User::find_by_id(user_id)
         .one(db)
         .await?
@@ -118,7 +114,10 @@ pub async fn get_proxy_food_source(
     require_admin(&db, &claims).await?;
     let resp = food
         .client
-        .get(format!("{}/api/v1/admin/settings/food-source", food.base_url))
+        .get(format!(
+            "{}/api/v1/admin/settings/food-source",
+            food.base_url
+        ))
         .header("X-API-Key", food.api_key.as_deref().unwrap_or(""))
         .send()
         .await
@@ -144,7 +143,10 @@ pub async fn update_proxy_food_source(
     require_admin(&db, &claims).await?;
     let resp = food
         .client
-        .post(format!("{}/api/v1/admin/settings/food-source", food.base_url))
+        .post(format!(
+            "{}/api/v1/admin/settings/food-source",
+            food.base_url
+        ))
         .header("Content-Type", "application/json")
         .header("X-API-Key", food.api_key.as_deref().unwrap_or(""))
         .json(&body.into_inner())

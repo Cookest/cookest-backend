@@ -1,10 +1,14 @@
-use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set, ColumnTrait, QueryFilter, QueryOrder};
-use uuid::Uuid;
 use chrono::Utc;
-use tracing::info;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
+};
 use std::sync::Arc;
+use tracing::info;
+use uuid::Uuid;
 
-use crate::entity::notification::{self, Entity as NotificationEntity, ActiveModel as NotificationActiveModel};
+use crate::entity::notification::{
+    self, ActiveModel as NotificationActiveModel, Entity as NotificationEntity,
+};
 use crate::services::email::EmailService;
 
 #[derive(Clone)]
@@ -37,16 +41,25 @@ impl NotificationService {
             created_at: Set(Utc::now().into()),
         };
 
-        let notification = active_model.insert(self.db.as_ref()).await.map_err(|e| e.to_string())?;
+        let notification = active_model
+            .insert(self.db.as_ref())
+            .await
+            .map_err(|e| e.to_string())?;
 
         // Note: For actual push notifications (APNS/FCM), we would look up user_push_tokens for user_id
         // and dispatch an HTTP request to FCM/APNS here.
-        info!("Sending push notification to user {}: {} - {}", user_id, title, message);
+        info!(
+            "Sending push notification to user {}: {} - {}",
+            user_id, title, message
+        );
 
         Ok(notification)
     }
 
-    pub async fn get_user_notifications(&self, user_id: Uuid) -> Result<Vec<notification::Model>, String> {
+    pub async fn get_user_notifications(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<notification::Model>, String> {
         NotificationEntity::find()
             .filter(notification::Column::UserId.eq(user_id))
             .order_by_desc(notification::Column::CreatedAt)
@@ -65,9 +78,12 @@ impl NotificationService {
         if let Some(notification) = notification {
             let mut active_model: NotificationActiveModel = notification.into();
             active_model.is_read = Set(true);
-            active_model.update(self.db.as_ref()).await.map_err(|e| e.to_string())?;
+            active_model
+                .update(self.db.as_ref())
+                .await
+                .map_err(|e| e.to_string())?;
         }
-        
+
         Ok(())
     }
 }

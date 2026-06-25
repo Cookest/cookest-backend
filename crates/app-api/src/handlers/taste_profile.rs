@@ -3,15 +3,12 @@
 use actix_web::{web, HttpResponse};
 use std::sync::Arc;
 
-use cookest_shared::errors::AppError;
 use crate::middleware::auth::AuthenticatedUser;
 use crate::services::taste_profile::{SwipeRequest, TasteProfileService};
+use cookest_shared::errors::AppError;
 
 pub fn configure_taste_profile(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/api/me")
-            .route("/swipe", web::post().to(record_swipe)),
-    );
+    cfg.service(web::scope("/api/me").route("/swipe", web::post().to(record_swipe)));
 }
 
 /// `POST /api/me/swipe` — record a recipe swipe event.

@@ -2,15 +2,18 @@
 
 use chrono::Utc;
 use hmac::{Hmac, Mac};
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, PaginatorTrait};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
+    Set,
+};
 use sha2::Sha256;
 use uuid::Uuid;
 
 use crate::entity::stripe_processed_event;
 use crate::entity::user::{self, ActiveModel as UserActiveModel, Entity as User};
 use crate::entity::{meal_plan, recipe};
-use cookest_shared::errors::AppError;
 use crate::services::token::SubscriptionTier;
+use cookest_shared::errors::AppError;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -27,8 +30,16 @@ pub struct SubscriptionService {
 }
 
 impl SubscriptionService {
-    pub fn new(db: DatabaseConnection, stripe_webhook_secret: Option<String>, self_hosted: bool) -> Self {
-        Self { db, stripe_webhook_secret, self_hosted }
+    pub fn new(
+        db: DatabaseConnection,
+        stripe_webhook_secret: Option<String>,
+        self_hosted: bool,
+    ) -> Self {
+        Self {
+            db,
+            stripe_webhook_secret,
+            self_hosted,
+        }
     }
 
     /// Return the feature list for a given tier
@@ -45,7 +56,11 @@ impl SubscriptionService {
     }
 
     /// Verify Stripe webhook signature (HMAC-SHA256 over raw body)
-    pub fn verify_stripe_signature(&self, payload: &[u8], sig_header: &str) -> Result<(), AppError> {
+    pub fn verify_stripe_signature(
+        &self,
+        payload: &[u8],
+        sig_header: &str,
+    ) -> Result<(), AppError> {
         let secret = self.stripe_webhook_secret.as_deref().ok_or_else(|| {
             AppError::Internal("Stripe webhook secret not configured".to_string())
         })?;
@@ -143,7 +158,11 @@ impl SubscriptionService {
     }
 
     /// Require Pro or Family tier; returns HTTP 402 if the user is on Free tier.
-    pub fn require_pro(&self, claims: &crate::middleware::Claims, feature: &str) -> Result<(), AppError> {
+    pub fn require_pro(
+        &self,
+        claims: &crate::middleware::Claims,
+        feature: &str,
+    ) -> Result<(), AppError> {
         if self.self_hosted {
             return Ok(());
         }
@@ -157,13 +176,26 @@ impl SubscriptionService {
     }
 
     /// Block Free users from specific AI features entirely
-    pub fn require_pro_for_ai_feature(&self, claims: &crate::middleware::Claims, feature: &str) -> Result<(), AppError> {
+    pub fn require_pro_for_ai_feature(
+        &self,
+        claims: &crate::middleware::Claims,
+        feature: &str,
+    ) -> Result<(), AppError> {
         self.require_pro(claims, feature)
     }
 
     /// Check if the user has reached their 1 AI meal plan per week limit
-    pub async fn check_ai_meal_plan_limit(&self, claims: &crate::middleware::Claims, user_id: Uuid) -> Result<(), AppError> {
-        if self.self_hosted || matches!(claims.tier.as_ref().unwrap_or(&SubscriptionTier::Free), SubscriptionTier::Pro | SubscriptionTier::Family) {
+    pub async fn check_ai_meal_plan_limit(
+        &self,
+        claims: &crate::middleware::Claims,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        if self.self_hosted
+            || matches!(
+                claims.tier.as_ref().unwrap_or(&SubscriptionTier::Free),
+                SubscriptionTier::Pro | SubscriptionTier::Family
+            )
+        {
             return Ok(());
         }
 
@@ -184,8 +216,17 @@ impl SubscriptionService {
     }
 
     /// Check if the user has reached their 3 published community recipes limit
-    pub async fn check_published_recipes_limit(&self, claims: &crate::middleware::Claims, user_id: Uuid) -> Result<(), AppError> {
-        if self.self_hosted || matches!(claims.tier.as_ref().unwrap_or(&SubscriptionTier::Free), SubscriptionTier::Pro | SubscriptionTier::Family) {
+    pub async fn check_published_recipes_limit(
+        &self,
+        claims: &crate::middleware::Claims,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        if self.self_hosted
+            || matches!(
+                claims.tier.as_ref().unwrap_or(&SubscriptionTier::Free),
+                SubscriptionTier::Pro | SubscriptionTier::Family
+            )
+        {
             return Ok(());
         }
 

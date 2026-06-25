@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
+use reqwest::Client;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Deserializer};
-use reqwest::Client;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Debug, Deserialize)]
 struct TokenResponse {
@@ -48,7 +48,8 @@ impl FatSecretClient {
             match make_request().await {
                 Ok(resp) => {
                     let status = resp.status();
-                    if (status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS)
+                    if (status.is_server_error()
+                        || status == reqwest::StatusCode::TOO_MANY_REQUESTS)
                         && attempts < max_attempts
                     {
                         tracing::warn!(
@@ -103,17 +104,15 @@ impl FatSecretClient {
         }
 
         tracing::info!("Requesting new FatSecret OAuth2 token");
-        let resp: TokenResponse = self.send_with_retry(|| {
-            self.client
-                .post("https://oauth.fatsecret.com/connect/token")
-                .basic_auth(&self.client_id, Some(self.client_secret.expose_secret()))
-                .form(&[
-                    ("grant_type", "client_credentials"),
-                    ("scope", "basic"),
-                ])
-                .send()
-        })
-        .await?;
+        let resp: TokenResponse = self
+            .send_with_retry(|| {
+                self.client
+                    .post("https://oauth.fatsecret.com/connect/token")
+                    .basic_auth(&self.client_id, Some(self.client_secret.expose_secret()))
+                    .form(&[("grant_type", "client_credentials"), ("scope", "basic")])
+                    .send()
+            })
+            .await?;
 
         let expiry = Utc::now() + Duration::seconds(resp.expires_in);
         *cache = Some((resp.access_token.clone(), expiry));
@@ -128,7 +127,9 @@ impl FatSecretClient {
     ) -> Result<FSRecipeSearchWrapper, reqwest::Error> {
         let token = self.get_token().await?;
         self.send_with_retry(|| {
-            let mut req = self.client.get("https://platform.fatsecret.com/rest/server.api")
+            let mut req = self
+                .client
+                .get("https://platform.fatsecret.com/rest/server.api")
                 .bearer_auth(&token)
                 .query(&[
                     ("method", "recipes.search.v3"),
@@ -146,10 +147,14 @@ impl FatSecretClient {
         .await
     }
 
-    pub async fn get_recipe(&self, recipe_id: i64) -> Result<FSRecipeDetailWrapper, reqwest::Error> {
+    pub async fn get_recipe(
+        &self,
+        recipe_id: i64,
+    ) -> Result<FSRecipeDetailWrapper, reqwest::Error> {
         let token = self.get_token().await?;
         self.send_with_retry(|| {
-            self.client.get("https://platform.fatsecret.com/rest/server.api")
+            self.client
+                .get("https://platform.fatsecret.com/rest/server.api")
                 .bearer_auth(&token)
                 .query(&[
                     ("method", "recipe.get.v2"),
@@ -169,7 +174,9 @@ impl FatSecretClient {
     ) -> Result<FSFoodsSearchWrapper, reqwest::Error> {
         let token = self.get_token().await?;
         self.send_with_retry(|| {
-            let mut req = self.client.get("https://platform.fatsecret.com/rest/server.api")
+            let mut req = self
+                .client
+                .get("https://platform.fatsecret.com/rest/server.api")
                 .bearer_auth(&token)
                 .query(&[
                     ("method", "foods.search"),
@@ -187,10 +194,14 @@ impl FatSecretClient {
         .await
     }
 
-    pub async fn get_ingredient(&self, food_id: i64) -> Result<FSFoodDetailWrapper, reqwest::Error> {
+    pub async fn get_ingredient(
+        &self,
+        food_id: i64,
+    ) -> Result<FSFoodDetailWrapper, reqwest::Error> {
         let token = self.get_token().await?;
         self.send_with_retry(|| {
-            self.client.get("https://platform.fatsecret.com/rest/server.api")
+            self.client
+                .get("https://platform.fatsecret.com/rest/server.api")
                 .bearer_auth(&token)
                 .query(&[
                     ("method", "food.get.v2"),
@@ -204,19 +215,24 @@ impl FatSecretClient {
 
     /// Resolve a product barcode (GTIN-13) to a FatSecret food id.
     /// Returns `None` when FatSecret reports no match (value "0").
-    pub async fn find_food_id_by_barcode(&self, barcode: &str) -> Result<Option<i64>, reqwest::Error> {
+    pub async fn find_food_id_by_barcode(
+        &self,
+        barcode: &str,
+    ) -> Result<Option<i64>, reqwest::Error> {
         let token = self.get_token().await?;
-        let json: serde_json::Value = self.send_with_retry(|| {
-            self.client.get("https://platform.fatsecret.com/rest/server.api")
-                .bearer_auth(&token)
-                .query(&[
-                    ("method", "food.find_id_for_barcode"),
-                    ("format", "json"),
-                    ("barcode", barcode),
-                ])
-                .send()
-        })
-        .await?;
+        let json: serde_json::Value = self
+            .send_with_retry(|| {
+                self.client
+                    .get("https://platform.fatsecret.com/rest/server.api")
+                    .bearer_auth(&token)
+                    .query(&[
+                        ("method", "food.find_id_for_barcode"),
+                        ("format", "json"),
+                        ("barcode", barcode),
+                    ])
+                    .send()
+            })
+            .await?;
 
         if let Some(food_id_obj) = json.get("food_id") {
             if let Some(val_str) = food_id_obj.get("value").and_then(|v| v.as_str()) {
@@ -240,13 +256,15 @@ where
     match value {
         serde_json::Value::Null => Ok(None),
         serde_json::Value::Array(arr) => {
-            let vec: Result<Vec<T>, _> = arr.into_iter()
+            let vec: Result<Vec<T>, _> = arr
+                .into_iter()
                 .map(|val| T::deserialize(val.into_deserializer()))
                 .collect();
             vec.map(Some).map_err(serde::de::Error::custom)
         }
         other => {
-            let single = T::deserialize(other.into_deserializer()).map_err(serde::de::Error::custom)?;
+            let single =
+                T::deserialize(other.into_deserializer()).map_err(serde::de::Error::custom)?;
             Ok(Some(vec![single]))
         }
     }

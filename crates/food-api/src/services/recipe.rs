@@ -1,21 +1,21 @@
 //! Recipe service — supports Local (SeaORM), FatSecret, and Hybrid data sources
 
-use std::sync::Arc;
-use std::str::FromStr;
 use rust_decimal::Decimal;
+use std::str::FromStr;
+use std::sync::Arc;
 
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, IntoActiveModel,
-    ModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+    ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, IntoActiveModel, ModelTrait,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 
 use crate::config::FoodDataSource;
+use crate::entity::ingredient::Entity as IngEntity;
+use crate::entity::recipe::Entity as RecipeEntity;
+use crate::entity::{recipe, recipe_image, recipe_ingredient, recipe_nutrition, recipe_step};
 use crate::errors::AppError;
 use crate::models::recipe::*;
 use crate::services::FatSecretClient;
-use crate::entity::{recipe, recipe_ingredient, recipe_step, recipe_image, recipe_nutrition};
-use crate::entity::recipe::Entity as RecipeEntity;
-use crate::entity::ingredient::Entity as IngEntity;
 
 pub struct RecipeService {
     db: sea_orm::DatabaseConnection,
@@ -29,7 +29,11 @@ impl RecipeService {
         source: FoodDataSource,
         fs_client: Option<Arc<FatSecretClient>>,
     ) -> Self {
-        Self { db, source, fs_client }
+        Self {
+            db,
+            source,
+            fs_client,
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -48,9 +52,7 @@ impl RecipeService {
             FoodDataSource::Local | FoodDataSource::OpenFoodFacts => {
                 self.list_recipes_local(&query, page, per_page).await
             }
-            FoodDataSource::FatSecret => {
-                self.list_recipes_fatsecret(&query, page, per_page).await
-            }
+            FoodDataSource::FatSecret => self.list_recipes_fatsecret(&query, page, per_page).await,
             FoodDataSource::Hybrid => {
                 let local = self.list_recipes_local(&query, page, per_page).await?;
                 if local.total > 0 {
@@ -74,10 +76,7 @@ impl RecipeService {
 
         if let Some(search) = query.q.as_deref() {
             if !search.is_empty() {
-                q = q.filter(
-                    sea_orm::Condition::any()
-                        .add(RecipeCol::Name.contains(search))
-                );
+                q = q.filter(sea_orm::Condition::any().add(RecipeCol::Name.contains(search)));
             }
         }
 
@@ -167,9 +166,10 @@ impl RecipeService {
         page: u64,
         per_page: u64,
     ) -> Result<PaginatedResponse<RecipeListItem>, AppError> {
-        let fs = self.fs_client.as_ref().ok_or_else(|| {
-            AppError::Internal("FatSecret client not configured".to_string())
-        })?;
+        let fs = self
+            .fs_client
+            .as_ref()
+            .ok_or_else(|| AppError::Internal("FatSecret client not configured".to_string()))?;
 
         let fs_res = fs
             .search_recipes(query.q.as_deref(), page - 1, per_page)
@@ -203,7 +203,8 @@ impl RecipeService {
                     });
                 }
             }
-            total = body.total_results
+            total = body
+                .total_results
                 .and_then(|t| t.parse::<u64>().ok())
                 .unwrap_or(items.len() as u64);
         }
@@ -224,15 +225,15 @@ impl RecipeService {
     /// Get full recipe detail by ID
     pub async fn get_recipe(&self, id: i64) -> Result<RecipeDetail, AppError> {
         match &self.source {
-            FoodDataSource::Local | FoodDataSource::OpenFoodFacts => self.get_recipe_local(id).await,
-            FoodDataSource::FatSecret => self.get_recipe_fatsecret(id).await,
-            FoodDataSource::Hybrid => {
-                match self.get_recipe_local(id).await {
-                    Ok(detail) => Ok(detail),
-                    Err(AppError::NotFound(_)) => self.get_recipe_fatsecret(id).await,
-                    Err(e) => Err(e),
-                }
+            FoodDataSource::Local | FoodDataSource::OpenFoodFacts => {
+                self.get_recipe_local(id).await
             }
+            FoodDataSource::FatSecret => self.get_recipe_fatsecret(id).await,
+            FoodDataSource::Hybrid => match self.get_recipe_local(id).await {
+                Ok(detail) => Ok(detail),
+                Err(AppError::NotFound(_)) => self.get_recipe_fatsecret(id).await,
+                Err(e) => Err(e),
+            },
         }
     }
 
@@ -354,22 +355,32 @@ impl RecipeService {
     }
 
     async fn get_recipe_fatsecret(&self, id: i64) -> Result<RecipeDetail, AppError> {
-        let fs = self.fs_client.as_ref().ok_or_else(|| {
-            AppError::Internal("FatSecret client not configured".to_string())
-        })?;
+        let fs = self
+            .fs_client
+            .as_ref()
+            .ok_or_else(|| AppError::Internal("FatSecret client not configured".to_string()))?;
 
-        let fs_res = fs
-            .get_recipe(id)
-            .await
-            .map_err(|e| AppError::NotFound(format!("Recipe ID {} not found in FatSecret: {}", id, e)))?;
+        let fs_res = fs.get_recipe(id).await.map_err(|e| {
+            AppError::NotFound(format!("Recipe ID {} not found in FatSecret: {}", id, e))
+        })?;
 
         let r = fs_res.recipe;
         let recipe_id = r.recipe_id.parse::<i64>().unwrap_or(id);
         let slug = format!("{}-{}", slug::slugify(&r.recipe_name), recipe_id);
-        let servings = r.servings.as_deref().and_then(|s| s.parse::<i32>().ok()).unwrap_or(2);
+        let servings = r
+            .servings
+            .as_deref()
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(2);
 
-        let prep_time_min = r.prep_time_min.as_deref().and_then(|s| s.parse::<i32>().ok());
-        let cook_time_min = r.cook_time_min.as_deref().and_then(|s| s.parse::<i32>().ok());
+        let prep_time_min = r
+            .prep_time_min
+            .as_deref()
+            .and_then(|s| s.parse::<i32>().ok());
+        let cook_time_min = r
+            .cook_time_min
+            .as_deref()
+            .and_then(|s| s.parse::<i32>().ok());
         let total_time_min = prep_time_min.zip(cook_time_min).map(|(p, c)| p + c);
 
         let mut ingredients = Vec::new();
@@ -377,7 +388,10 @@ impl RecipeService {
             if let Some(ing_list) = ings_wrapper.ingredient {
                 for (idx, ing) in ing_list.into_iter().enumerate() {
                     let food_id = ing.food_id.parse::<i64>().unwrap_or(0);
-                    let quantity = ing.number_of_units.as_deref().and_then(|s| Decimal::from_str(s).ok());
+                    let quantity = ing
+                        .number_of_units
+                        .as_deref()
+                        .and_then(|s| Decimal::from_str(s).ok());
                     ingredients.push(RecipeIngredientDetail {
                         id: (idx as i64) + 1,
                         ingredient_id: food_id,
@@ -424,14 +438,29 @@ impl RecipeService {
         let mut nutrition = None;
         if let Some(nut) = r.recipe_nutrition {
             nutrition = Some(RecipeNutritionDetail {
-                calories: nut.calories.as_deref().and_then(|s| Decimal::from_str(s).ok()),
-                protein_g: nut.protein.as_deref().and_then(|s| Decimal::from_str(s).ok()),
-                carbs_g: nut.carbohydrate.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                calories: nut
+                    .calories
+                    .as_deref()
+                    .and_then(|s| Decimal::from_str(s).ok()),
+                protein_g: nut
+                    .protein
+                    .as_deref()
+                    .and_then(|s| Decimal::from_str(s).ok()),
+                carbs_g: nut
+                    .carbohydrate
+                    .as_deref()
+                    .and_then(|s| Decimal::from_str(s).ok()),
                 fat_g: nut.fat.as_deref().and_then(|s| Decimal::from_str(s).ok()),
                 fiber_g: nut.fiber.as_deref().and_then(|s| Decimal::from_str(s).ok()),
                 sugar_g: nut.sugar.as_deref().and_then(|s| Decimal::from_str(s).ok()),
-                sodium_mg: nut.sodium.as_deref().and_then(|s| Decimal::from_str(s).ok()),
-                saturated_fat_g: nut.saturated_fat.as_deref().and_then(|s| Decimal::from_str(s).ok()),
+                sodium_mg: nut
+                    .sodium
+                    .as_deref()
+                    .and_then(|s| Decimal::from_str(s).ok()),
+                saturated_fat_g: nut
+                    .saturated_fat
+                    .as_deref()
+                    .and_then(|s| Decimal::from_str(s).ok()),
                 per_serving: true,
             });
         }
@@ -481,18 +510,24 @@ impl RecipeService {
                 }
                 // For Hybrid, fall through to FatSecret id-based slug parsing
                 if matches!(self.source, FoodDataSource::Hybrid) {
-                    let id_str = slug_str.split('-').last()
+                    let id_str = slug_str
+                        .split('-')
+                        .last()
                         .ok_or_else(|| AppError::NotFound("Recipe".into()))?;
-                    let id = id_str.parse::<i64>()
+                    let id = id_str
+                        .parse::<i64>()
                         .map_err(|_| AppError::NotFound("Recipe".into()))?;
                     return self.get_recipe_fatsecret(id).await;
                 }
                 Err(AppError::NotFound(format!("Recipe slug {}", slug_str)))
             }
             FoodDataSource::FatSecret => {
-                let id_str = slug_str.split('-').last()
+                let id_str = slug_str
+                    .split('-')
+                    .last()
                     .ok_or_else(|| AppError::NotFound("Recipe".into()))?;
-                let id = id_str.parse::<i64>()
+                let id = id_str
+                    .parse::<i64>()
                     .map_err(|_| AppError::NotFound("Recipe".into()))?;
                 self.get_recipe_fatsecret(id).await
             }
@@ -509,11 +544,11 @@ impl RecipeService {
         req: CreateRecipeRequest,
     ) -> Result<serde_json::Value, AppError> {
         match &self.source {
-            FoodDataSource::FatSecret => {
-                Err(AppError::Internal("Not supported in FatSecret catalog".into()))
-            }
+            FoodDataSource::FatSecret => Err(AppError::Internal(
+                "Not supported in FatSecret catalog".into(),
+            )),
             FoodDataSource::Local | FoodDataSource::Hybrid | FoodDataSource::OpenFoodFacts => {
-                use crate::services::time_region::{estimate_time, classify_region};
+                use crate::services::time_region::{classify_region, estimate_time};
 
                 let servings = req.servings.unwrap_or(2);
                 let name_slug = slug::slugify(&req.name);
@@ -527,12 +562,7 @@ impl RecipeService {
                 // Infer time if not provided
                 let (prep_time_min, cook_time_min, total_time_min) =
                     if req.prep_time_min.is_none() || req.cook_time_min.is_none() {
-                        let est = estimate_time(
-                            &[],
-                            0,
-                            0,
-                            req.category.as_deref(),
-                        );
+                        let est = estimate_time(&[], 0, 0, req.category.as_deref());
                         let prep = req.prep_time_min.unwrap_or(est.prep_time_min);
                         let cook = req.cook_time_min.unwrap_or(est.cook_time_min);
                         let total = prep + cook;
@@ -545,12 +575,9 @@ impl RecipeService {
                     };
 
                 // Infer cuisine via region classifier if not provided
-                let cuisine = req.cuisine.or_else(|| {
-                    Some(classify_region(&[], &[]))
-                });
+                let cuisine = req.cuisine.or_else(|| Some(classify_region(&[], &[])));
 
-                let now: sea_orm::prelude::DateTimeWithTimeZone =
-                    chrono::Utc::now().into();
+                let now: sea_orm::prelude::DateTimeWithTimeZone = chrono::Utc::now().into();
 
                 let active_model = recipe::ActiveModel {
                     id: ActiveValue::NotSet,
@@ -596,9 +623,9 @@ impl RecipeService {
         req: UpdateRecipeRequest,
     ) -> Result<serde_json::Value, AppError> {
         match &self.source {
-            FoodDataSource::FatSecret => {
-                Err(AppError::Internal("Not supported in FatSecret catalog".into()))
-            }
+            FoodDataSource::FatSecret => Err(AppError::Internal(
+                "Not supported in FatSecret catalog".into(),
+            )),
             FoodDataSource::Local | FoodDataSource::Hybrid | FoodDataSource::OpenFoodFacts => {
                 let existing = RecipeEntity::find_by_id(recipe_id)
                     .one(&self.db)
@@ -650,8 +677,7 @@ impl RecipeService {
                     am.is_public = ActiveValue::Set(is_pub);
                 }
 
-                let now: sea_orm::prelude::DateTimeWithTimeZone =
-                    chrono::Utc::now().into();
+                let now: sea_orm::prelude::DateTimeWithTimeZone = chrono::Utc::now().into();
                 am.updated_at = ActiveValue::Set(now);
 
                 let updated = am.update(&self.db).await?;
@@ -667,9 +693,9 @@ impl RecipeService {
     /// Delete a recipe by ID
     pub async fn delete_recipe(&self, recipe_id: i64) -> Result<(), AppError> {
         match &self.source {
-            FoodDataSource::FatSecret => {
-                Err(AppError::Internal("Not supported in FatSecret catalog".into()))
-            }
+            FoodDataSource::FatSecret => Err(AppError::Internal(
+                "Not supported in FatSecret catalog".into(),
+            )),
             FoodDataSource::Local | FoodDataSource::Hybrid | FoodDataSource::OpenFoodFacts => {
                 let existing = RecipeEntity::find_by_id(recipe_id)
                     .one(&self.db)

@@ -4,9 +4,9 @@ use actix_web::{web, HttpResponse};
 use std::sync::Arc;
 use uuid::Uuid;
 
-use cookest_shared::errors::AppError;
 use crate::middleware::Claims;
 use crate::services::chat::{ChatRequest, ChatService};
+use cookest_shared::errors::AppError;
 
 /// POST /api/chat
 /// Send a message to the AI assistant (creates or continues a session)

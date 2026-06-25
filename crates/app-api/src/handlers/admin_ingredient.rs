@@ -19,10 +19,7 @@ use crate::handlers::browse::FoodApiClient;
 use crate::middleware::Claims;
 use cookest_shared::errors::AppError;
 
-async fn require_admin(
-    db: &sea_orm::DatabaseConnection,
-    claims: &Claims,
-) -> Result<(), AppError> {
+async fn require_admin(db: &sea_orm::DatabaseConnection, claims: &Claims) -> Result<(), AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::Forbidden)?;
     let user = User::find_by_id(user_id)
         .one(db)
