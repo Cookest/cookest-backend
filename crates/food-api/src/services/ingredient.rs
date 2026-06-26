@@ -5,6 +5,7 @@ use std::str::FromStr;
 use rust_decimal::Decimal;
 
 use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::sea_query::{Expr, extension::postgres::PgExpr};
 
 use crate::config::FoodDataSource;
 use crate::errors::AppError;
@@ -94,7 +95,8 @@ impl IngredientService {
 
         if let Some(search) = query.q.as_deref() {
             if !search.is_empty() {
-                q = q.filter(IngredientCol::Name.contains(search));
+                // Case-insensitive substring match so "chick" finds "Chicken".
+                q = q.filter(Expr::col(IngredientCol::Name).ilike(format!("%{}%", search)));
             }
         }
 
