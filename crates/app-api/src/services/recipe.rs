@@ -193,7 +193,7 @@ impl RecipeService {
             .collect();
 
         // Load images
-        let images = recipe_image::Entity::find()
+        let images: Vec<RecipeImageDetail> = recipe_image::Entity::find()
             .filter(recipe_image::Column::RecipeId.eq(id))
             .all(&self.db)
             .await?
@@ -225,6 +225,12 @@ impl RecipeService {
                 per_serving: n.per_serving,
             });
 
+        let primary_image_url = images
+            .iter()
+            .find(|img| img.is_primary)
+            .or_else(|| images.first())
+            .map(|img| img.url.clone());
+
         Ok(RecipeDetail {
             id: recipe.id,
             name: recipe.name,
@@ -245,6 +251,7 @@ impl RecipeService {
             source_url: recipe.source_url,
             average_rating: recipe.average_rating,
             rating_count: recipe.rating_count,
+            primary_image_url,
             ingredients,
             steps,
             images,

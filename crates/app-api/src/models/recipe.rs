@@ -78,6 +78,7 @@ pub struct RecipeDetail {
     pub source_url: Option<String>,
     pub average_rating: Option<rust_decimal::Decimal>,
     pub rating_count: i32,
+    pub primary_image_url: Option<String>,
     pub ingredients: Vec<RecipeIngredientDetail>,
     pub steps: Vec<RecipeStepDetail>,
     pub images: Vec<RecipeImageDetail>,
