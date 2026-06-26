@@ -18,7 +18,7 @@ use futures::StreamExt;
 use std::sync::Arc;
 
 use cookest_shared::errors::AppError;
-use crate::middleware::auth::AuthenticatedUser;
+use crate::middleware::auth::{AuthenticatedUser, OptionalUser};
 use crate::models::recipe::{RecipeQuery, CreateRecipeRequest, UpdateRecipeRequest};
 use crate::services::{RecipeService, SubscriptionService};
 
@@ -27,15 +27,15 @@ use crate::services::{RecipeService, SubscriptionService};
 pub async fn list_recipes(
     recipe_service: web::Data<Arc<RecipeService>>,
     query: web::Query<RecipeQuery>,
-    user: Option<AuthenticatedUser>,
+    user: OptionalUser,
 ) -> Result<HttpResponse, AppError> {
     let q = query.into_inner();
     if q.match_inventory == Some(true) {
-        let user_id = user.map(|u| u.id).ok_or(AppError::AuthenticationFailed)?;
+        let user_id = user.0.map(|u| u.id).ok_or(AppError::AuthenticationFailed)?;
         let result = recipe_service.list_recipes_with_inventory(user_id, q).await?;
         return Ok(HttpResponse::Ok().json(result));
     }
-    let result = recipe_service.list_recipes(user.map(|u| u.id), q).await?;
+    let result = recipe_service.list_recipes(user.0.map(|u| u.id), q).await?;
     Ok(HttpResponse::Ok().json(result))
 }
 

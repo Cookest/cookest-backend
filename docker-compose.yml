@@ -104,6 +104,8 @@ services:
       dockerfile: crates/app-api/Dockerfile
     container_name: cookest_app_api
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - "8080:8080"
     environment:

@@ -687,6 +687,7 @@ impl ChatService {
              You have access to the following tools. Use them proactively — do not just describe what you could do, actually do it:\n\
              - search_recipes: Find recipes by name, cuisine, dietary needs, cooking time, etc.\n\
              - get_meal_plan: See the full current week meal plan with all slots\n\
+             - generate_meal_plan: Generate a completely new full-week meal plan for the user, filling all slots based on their pantry and preferences. Use this when the user doesn't have a plan and wants one.\n\
              - update_meal_plan_slot: Replace a recipe in a specific meal slot (day + meal type)\n\
              - clear_meal_plan: Remove ALL recipes from this week's plan so the user can start fresh\n\
              - mark_meal_completed: Mark a meal as cooked/done for today\n\

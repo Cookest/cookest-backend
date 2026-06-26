@@ -68,6 +68,31 @@ impl FromRequest for AuthenticatedUser {
     }
 }
 
+/// Convenience extractor for routes where auth is optional.
+/// Distinguishes between "no token" (returns None) and "invalid token" (returns 401).
+pub struct OptionalUser(pub Option<AuthenticatedUser>);
+
+impl FromRequest for OptionalUser {
+    type Error = Error;
+    type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
+
+    fn from_request(req: &HttpRequest, payload: &mut actix_web::dev::Payload) -> Self::Future {
+        let has_auth = req.headers().contains_key("Authorization");
+        let fut = AuthenticatedUser::from_request(req, payload);
+        
+        Box::pin(async move {
+            if has_auth {
+                match fut.await {
+                    Ok(user) => Ok(OptionalUser(Some(user))),
+                    Err(e) => Err(e),
+                }
+            } else {
+                Ok(OptionalUser(None))
+            }
+        })
+    }
+}
+
 /// Middleware factory — wrap a scope with `.wrap(JwtAuth::new(token_service))`
 pub struct JwtAuth {
     token_service: Arc<TokenService>,
