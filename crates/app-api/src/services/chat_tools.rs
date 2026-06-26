@@ -341,7 +341,7 @@ impl ToolDispatch {
     }
 
     async fn get_pantry(&self, user_id: Uuid) -> String {
-        let svc = InventoryService::new(self.db.clone());
+        let svc = InventoryService::new(self.db.clone(), self.food_api_client.clone());
         match svc.list(user_id).await {
             Ok(items) if items.is_empty() => {
                 json!({"status": "empty", "message": "Pantry is empty."}).to_string()
@@ -392,7 +392,7 @@ impl ToolDispatch {
             .as_str()
             .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
 
-        let svc = InventoryService::new(self.db.clone());
+        let svc = InventoryService::new(self.db.clone(), self.food_api_client.clone());
         match svc
             .quick_add(user_id, name.clone(), quantity, unit.clone(), storage_location, expiry_date)
             .await
@@ -416,7 +416,7 @@ impl ToolDispatch {
             None => return json!({"status": "error", "message": "Missing item_id"}).to_string(),
         };
 
-        let svc = InventoryService::new(self.db.clone());
+        let svc = InventoryService::new(self.db.clone(), self.food_api_client.clone());
         match svc.delete(user_id, item_id).await {
             Ok(()) => json!({"status": "success", "message": "Item removed from pantry"}).to_string(),
             Err(AppError::NotFound(_)) => {

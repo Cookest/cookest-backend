@@ -13,14 +13,24 @@ use crate::entity::{inventory_item, inventory_deduction, ingredient, recipe_ingr
 use cookest_shared::errors::AppError;
 use crate::models::inventory::*;
 use crate::services::scan::BulkAddItem;
+use crate::services::IngredientService;
+use crate::handlers::browse::FoodApiClient;
 
 pub struct InventoryService {
     db: DatabaseConnection,
+    food_api_client: FoodApiClient,
 }
 
 impl InventoryService {
-    pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+    pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
+        Self { db, food_api_client }
+    }
+
+    /// Ingredient resolver used to mirror catalog ingredients into app-db.
+    /// The catalog (food-api) is the single source of truth; we never create
+    /// free-text ingredients here.
+    fn ingredient_service(&self) -> IngredientService {
+        IngredientService::new(self.db.clone(), self.food_api_client.clone())
     }
 
     /// List all inventory items for a user with expiry metadata
@@ -79,7 +89,9 @@ impl InventoryService {
         req: AddInventoryItem,
     ) -> Result<InventoryItemResponse, AppError> {
         let user_id = crate::services::get_effective_user_id(&self.db, user_id).await.unwrap_or(user_id);
-        // Verify ingredient exists
+        // Resolve against the master catalog, mirroring it locally if needed.
+        // Rejects ids that are not in the preset catalog.
+        self.ingredient_service().ensure_local_mirror(req.ingredient_id).await?;
         let ing = ingredient::Entity::find_by_id(req.ingredient_id)
             .one(&self.db)
             .await?
@@ -136,62 +148,24 @@ impl InventoryService {
         })
     }
 
-    /// Resolve-or-create an app-db ingredient from a FatSecret food id, then add to inventory.
-    /// Backs the barcode add-to-pantry flow so inventory references a stable local ingredient.
-    #[allow(clippy::too_many_arguments)]
-    pub async fn add_from_fatsecret(
+    /// Add to inventory by canonical catalog (food-api) id, mirroring it locally.
+    /// Backs the barcode add-to-pantry flow: food-api resolves the barcode (adding
+    /// a canonical entry when needed) and we reference that same id.
+    pub async fn add_by_food_id(
         &self,
         user_id: Uuid,
-        fs_food_id: i64,
-        name: String,
-        category: Option<String>,
+        food_id: i64,
         quantity: f64,
         unit: String,
         storage_location: Option<String>,
         expiry_date: Option<chrono::NaiveDate>,
     ) -> Result<InventoryItemResponse, AppError> {
-        // 1. Find by FatSecret id, else by exact name (backfilling fs_food_id), else create.
-        let by_fs = ingredient::Entity::find()
-            .filter(ingredient::Column::FsFoodId.eq(fs_food_id))
-            .one(&self.db)
-            .await?;
-
-        let ing = match by_fs {
-            Some(i) => i,
-            None => {
-                let by_name = ingredient::Entity::find()
-                    .filter(ingredient::Column::Name.eq(name.trim()))
-                    .one(&self.db)
-                    .await?;
-                match by_name {
-                    Some(i) => {
-                        let mut active: ingredient::ActiveModel = i.into();
-                        active.fs_food_id = Set(Some(fs_food_id));
-                        active.update(&self.db).await?
-                    }
-                    None => {
-                        let now = Utc::now().fixed_offset();
-                        let new_ing = ingredient::ActiveModel {
-                            name: Set(name.trim().to_string()),
-                            category: Set(category),
-                            fdc_id: Set(None),
-                            off_id: Set(None),
-                            fs_food_id: Set(Some(fs_food_id)),
-                            created_at: Set(now),
-                            ..Default::default()
-                        };
-                        new_ing.insert(&self.db).await?
-                    }
-                }
-            }
-        };
-
-        // 2. Add the inventory item referencing the resolved ingredient.
         let dec_qty = Decimal::from_str(&quantity.to_string()).unwrap_or(Decimal::ONE);
+        // `add` resolves + mirrors the catalog ingredient before inserting.
         self.add(
             user_id,
             AddInventoryItem {
-                ingredient_id: ing.id,
+                ingredient_id: food_id,
                 custom_name: None,
                 quantity: dec_qty,
                 unit,
@@ -537,8 +511,10 @@ impl InventoryService {
         Ok(rows)
     }
 
-    /// Find-or-create an ingredient by name, then add to inventory.
-    /// Used for quick-add and bulk-add from scan results.
+    /// Resolve an ingredient name against the master catalog, then add to inventory.
+    /// Used for quick-add and bulk-add from scan results. The catalog is preset:
+    /// if the name does not match any catalog ingredient, this returns `NotFound`
+    /// rather than inventing a new ingredient.
     pub async fn quick_add(
         &self,
         user_id: Uuid,
@@ -548,82 +524,28 @@ impl InventoryService {
         storage_location: Option<String>,
         expiry_date: Option<chrono::NaiveDate>,
     ) -> Result<InventoryItemResponse, AppError> {
-        let name_lower = name.trim().to_lowercase();
+        let ingredient_id = self
+            .ingredient_service()
+            .resolve_by_name(&name)
+            .await?
+            .ok_or_else(|| {
+                AppError::NotFound(format!("\"{}\" is not in the ingredient catalog", name.trim()))
+            })?;
 
-        // Try to find existing ingredient (case-insensitive)
-        let existing = ingredient::Entity::find()
-            .filter(ingredient::Column::Name.like(format!("%{}%", &name_lower)))
-            .order_by_asc(ingredient::Column::Name)
-            .one(&self.db)
-            .await?;
+        let dec_qty = Decimal::from_str(&quantity.to_string()).unwrap_or(Decimal::ONE);
 
-        let ing = match existing {
-            Some(i) => i,
-            None => {
-                // Create a new ingredient on-the-fly
-                let now = Utc::now().fixed_offset();
-                let new_ing = ingredient::ActiveModel {
-                    name: Set(name.trim().to_string()),
-                    category: Set(None),
-                    fdc_id: Set(None),
-                    off_id: Set(None),
-                    created_at: Set(now),
-                    ..Default::default()
-                };
-                new_ing.insert(&self.db).await?
-            }
-        };
-
-        let dec_qty = Decimal::from_str(&quantity.to_string())
-            .unwrap_or(Decimal::ONE);
-        let now = Utc::now().fixed_offset();
-        let today = Utc::now().date_naive();
-
-        let existing_item = inventory_item::Entity::find()
-            .filter(inventory_item::Column::UserId.eq(user_id))
-            .filter(inventory_item::Column::IngredientId.eq(ing.id))
-            .filter(inventory_item::Column::StorageLocation.eq(storage_location.clone()))
-            .one(&self.db)
-            .await?;
-
-        let saved = if let Some(item) = existing_item {
-            let mut active: inventory_item::ActiveModel = item.into();
-            active.quantity = Set(active.quantity.unwrap() + dec_qty);
-            active.updated_at = Set(now);
-            if expiry_date.is_some() {
-                active.expiry_date = Set(expiry_date);
-            }
-            active.update(&self.db).await?
-        } else {
-            let new_item = inventory_item::ActiveModel {
-                user_id: Set(user_id),
-                ingredient_id: Set(ing.id),
-                custom_name: Set(None),
-                quantity: Set(dec_qty),
-                unit: Set(unit.clone()),
-                expiry_date: Set(expiry_date),
-                storage_location: Set(storage_location.clone()),
-                added_at: Set(now),
-                updated_at: Set(now),
-                ..Default::default()
-            };
-            new_item.insert(&self.db).await?
-        };
-        let days_until_expiry = saved.expiry_date.map(|d| (d - today).num_days());
-        let expiry_warning = days_until_expiry.map(|d| d <= 5).unwrap_or(false);
-
-        Ok(InventoryItemResponse {
-            id: saved.id,
-            ingredient_id: saved.ingredient_id,
-            ingredient_name: ing.name,
-            custom_name: saved.custom_name,
-            quantity: saved.quantity,
-            unit: saved.unit,
-            expiry_date: saved.expiry_date,
-            storage_location: saved.storage_location,
-            days_until_expiry,
-            expiry_warning,
-        })
+        self.add(
+            user_id,
+            AddInventoryItem {
+                ingredient_id,
+                custom_name: None,
+                quantity: dec_qty,
+                unit,
+                expiry_date,
+                storage_location,
+            },
+        )
+        .await
     }
 
     /// Bulk-add items (from scan results). Find-or-create ingredients by name.

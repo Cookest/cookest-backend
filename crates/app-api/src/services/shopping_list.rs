@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::entity::shopping_list_item::{self, ActiveModel, Entity as ShoppingListItem};
+use crate::handlers::browse::FoodApiClient;
 use cookest_shared::errors::AppError;
 
 #[derive(Debug, Serialize)]
@@ -59,11 +60,12 @@ pub struct SyncItem {
 
 pub struct ShoppingListService {
     db: DatabaseConnection,
+    food_api_client: FoodApiClient,
 }
 
 impl ShoppingListService {
-    pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+    pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
+        Self { db, food_api_client }
     }
 
     /// Get all shopping list items for a user
@@ -126,7 +128,7 @@ impl ShoppingListService {
                 .unwrap_or(1.0);
             let unit_str = updated.unit.clone().unwrap_or_else(|| "piece".to_string());
 
-            let inventory_service = crate::services::InventoryService::new(self.db.clone());
+            let inventory_service = crate::services::InventoryService::new(self.db.clone(), self.food_api_client.clone());
 
             if let Some(ing_id) = updated.ingredient_id {
                 let exists = crate::entity::ingredient::Entity::find_by_id(ing_id)

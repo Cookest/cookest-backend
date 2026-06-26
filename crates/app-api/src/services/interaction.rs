@@ -28,7 +28,7 @@ impl InteractionService {
         Self {
             db,
             preference_service: PreferenceService::new(db2),
-            inventory_service: InventoryService::new(db3),
+            inventory_service: InventoryService::new(db3, food_api_client.clone()),
             food_api_client,
         }
     }

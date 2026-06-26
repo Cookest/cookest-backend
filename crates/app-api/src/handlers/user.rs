@@ -131,9 +131,8 @@ pub async fn add_by_barcode(
         .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
 
     let item = inv
-        .add_from_fatsecret(
-            user_id, detail.id, detail.name, detail.category,
-            b.quantity, b.unit, b.storage_location, expiry,
+        .add_by_food_id(
+            user_id, detail.id, b.quantity, b.unit, b.storage_location, expiry,
         )
         .await?;
     Ok(HttpResponse::Created().json(item))
