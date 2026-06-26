@@ -2,12 +2,13 @@
 
 use chrono::Utc;
 use hmac::{Hmac, Mac};
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, PaginatorTrait};
 use sha2::Sha256;
 use uuid::Uuid;
 
 use crate::entity::stripe_processed_event;
 use crate::entity::user::{self, ActiveModel as UserActiveModel, Entity as User};
+use crate::entity::{meal_plan, recipe};
 use cookest_shared::errors::AppError;
 use crate::services::token::SubscriptionTier;
 
@@ -142,7 +143,7 @@ impl SubscriptionService {
     }
 
     /// Require Pro or Family tier; returns HTTP 402 if the user is on Free tier.
-    pub async fn require_pro(&self, claims: &crate::middleware::Claims) -> Result<(), AppError> {
+    pub fn require_pro(&self, claims: &crate::middleware::Claims, feature: &str) -> Result<(), AppError> {
         if self.self_hosted {
             return Ok(());
         }
@@ -150,8 +151,55 @@ impl SubscriptionService {
         match tier {
             SubscriptionTier::Pro | SubscriptionTier::Family => Ok(()),
             SubscriptionTier::Free => Err(AppError::SubscriptionRequired {
-                feature: FEATURE_USER_RECIPES.to_string(),
+                feature: feature.to_string(),
             }),
         }
+    }
+
+    /// Block Free users from specific AI features entirely
+    pub fn require_pro_for_ai_feature(&self, claims: &crate::middleware::Claims, feature: &str) -> Result<(), AppError> {
+        self.require_pro(claims, feature)
+    }
+
+    /// Check if the user has reached their 1 AI meal plan per week limit
+    pub async fn check_ai_meal_plan_limit(&self, claims: &crate::middleware::Claims, user_id: Uuid) -> Result<(), AppError> {
+        if self.self_hosted || matches!(claims.tier.as_ref().unwrap_or(&SubscriptionTier::Free), SubscriptionTier::Pro | SubscriptionTier::Family) {
+            return Ok(());
+        }
+
+        let one_week_ago = Utc::now().fixed_offset() - chrono::Duration::days(7);
+        let recent_ai_plans = meal_plan::Entity::find()
+            .filter(meal_plan::Column::UserId.eq(user_id))
+            .filter(meal_plan::Column::IsAiGenerated.eq(true))
+            .filter(meal_plan::Column::CreatedAt.gte(one_week_ago))
+            .count(&self.db)
+            .await?;
+
+        if recent_ai_plans >= 1 {
+            return Err(AppError::SubscriptionRequired {
+                feature: "ai_meal_plan_weekly_limit".to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Check if the user has reached their 3 published community recipes limit
+    pub async fn check_published_recipes_limit(&self, claims: &crate::middleware::Claims, user_id: Uuid) -> Result<(), AppError> {
+        if self.self_hosted || matches!(claims.tier.as_ref().unwrap_or(&SubscriptionTier::Free), SubscriptionTier::Pro | SubscriptionTier::Family) {
+            return Ok(());
+        }
+
+        let published_recipes = recipe::Entity::find()
+            .filter(recipe::Column::AuthorId.eq(user_id))
+            .filter(recipe::Column::IsPublic.eq(true))
+            .count(&self.db)
+            .await?;
+
+        if published_recipes >= 3 {
+            return Err(AppError::SubscriptionRequired {
+                feature: "published_recipes_limit".to_string(),
+            });
+        }
+        Ok(())
     }
 }

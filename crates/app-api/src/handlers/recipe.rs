@@ -76,7 +76,9 @@ pub async fn create_recipe(
     body: web::Json<CreateRecipeRequest>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = user.id;
-    sub_service.require_pro(&user.claims).await?;
+    if body.is_public.unwrap_or(false) {
+        sub_service.check_published_recipes_limit(&user.claims, user.id).await?;
+    }
     let result = recipe_service.create_recipe(user_id, body.into_inner()).await?;
     Ok(HttpResponse::Created().json(result))
 }
@@ -90,7 +92,9 @@ pub async fn update_recipe(
     body: web::Json<UpdateRecipeRequest>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = user.id;
-    sub_service.require_pro(&user.claims).await?;
+    if body.is_public.unwrap_or(false) {
+        sub_service.check_published_recipes_limit(&user.claims, user.id).await?;
+    }
     let result = recipe_service.update_recipe(user_id, path.into_inner(), body.into_inner()).await?;
     Ok(HttpResponse::Ok().json(result))
 }
