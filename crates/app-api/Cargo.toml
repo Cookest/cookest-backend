@@ -61,7 +61,7 @@ rand = "0.8"
 # File upload
 actix-multipart = "0.7"
 aws-config = { version = "1", features = ["behavior-version-latest"] }
-aws-sdk-s3 = "1"
+aws-sdk-s3 = { version = "1", features = ["behavior-version-latest"] }
 
 # Base64
 base64 = "0.22"

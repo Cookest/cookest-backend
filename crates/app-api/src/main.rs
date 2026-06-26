@@ -801,6 +801,7 @@ async fn main() -> std::io::Result<()> {
         "static",
     );
     let s3_config = aws_sdk_s3::config::Builder::new()
+        .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
         .endpoint_url(&config.s3_endpoint)
         .region(aws_sdk_s3::config::Region::new(config.s3_region.clone()))
         .credentials_provider(credentials)
