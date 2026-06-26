@@ -31,6 +31,8 @@ pub enum AppError {
     Forbidden,
     /// API key invalid or missing
     ApiKeyInvalid,
+    /// Bad request — client-supplied input is invalid (safe to expose message)
+    BadRequest(String),
 }
 
 #[derive(Serialize)]
@@ -57,6 +59,7 @@ impl fmt::Display for AppError {
             }
             AppError::Forbidden => write!(f, "Forbidden"),
             AppError::ApiKeyInvalid => write!(f, "Invalid API key"),
+            AppError::BadRequest(msg) => write!(f, "Bad request: {}", msg),
         }
     }
 }
@@ -166,6 +169,13 @@ impl ResponseError for AppError {
                 actix_web::http::StatusCode::UNAUTHORIZED,
                 ErrorResponse {
                     error: "Invalid or missing API key".to_string(),
+                    details: None,
+                },
+            ),
+            AppError::BadRequest(msg) => (
+                actix_web::http::StatusCode::BAD_REQUEST,
+                ErrorResponse {
+                    error: msg.clone(),
                     details: None,
                 },
             ),
