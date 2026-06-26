@@ -42,3 +42,6 @@ pub use suggestion::configure as configure_suggestion;
 
 pub mod import;
 pub use import::configure_import_proxy;
+
+pub mod admin;
+pub use admin::{configure_admin, configure_admin_setup};

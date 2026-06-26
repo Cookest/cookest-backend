@@ -81,7 +81,10 @@ Required environment variables:
 | `DATABASE_URL` | PostgreSQL connection string |
 | `JWT_SECRET` | Secret key for signing JWTs (min 32 chars) |
 
-Optional: `OLLAMA_URL`, `STRIPE_WEBHOOK_SECRET`, `CORS_ORIGIN`, and more.
+Optional: `OLLAMA_URL`, `STRIPE_WEBHOOK_SECRET`, `CORS_ORIGIN`, `SELF_HOSTED`, and more.
+
+Set `SELF_HOSTED=true` on self-hosted deployments to unlock the one-time admin provisioning
+endpoint (`POST /admin/setup`) and grant all registered users a pro subscription tier.
 
 See [`.env.example`](.env.example) for all options or check the [environment documentation](https://docs.cookest.app/docs/backend/environment).
 

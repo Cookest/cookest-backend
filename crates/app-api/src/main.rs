@@ -38,6 +38,7 @@ use crate::handlers::{
     configure_notification,
     configure_suggestion,
     configure_import_proxy,
+    configure_admin, configure_admin_setup,
 };
 use crate::middleware::{JwtAuth, SecurityHeaders};
 use crate::services::{
@@ -909,6 +910,7 @@ async fn main() -> std::io::Result<()> {
             .configure(configure_ingredients) // /api/ingredients/* (search)
             .configure(configure_subscription) // /api/webhooks/stripe (raw body, no JWT)
             .configure(configure_polls_public) // /api/polls/* (public voting, no JWT)
+            .configure(configure_admin_setup) // /admin/setup (one-time, public)
             // Health check (public, no auth)
             .service(
                 web::resource("/health")
@@ -940,6 +942,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(configure_notification)
                     .configure(configure_suggestion)
                     .configure(configure_import_proxy)
+                    .configure(configure_admin)   // /admin/* (JWT + DB admin check)
             )
     })
     .bind(&bind_address)?
