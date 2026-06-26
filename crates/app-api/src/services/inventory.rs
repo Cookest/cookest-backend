@@ -3,7 +3,7 @@
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
-    QueryOrder, QuerySelect, PaginatorTrait,
+    QueryOrder, QuerySelect,
 };
 use uuid::Uuid;
 use rust_decimal::Decimal;

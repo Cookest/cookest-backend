@@ -66,7 +66,6 @@ pub use inventory::InventoryService;
 pub use profile::ProfileService;
 pub use interaction::InteractionService;
 pub use chat::ChatService;
-pub use embeddings::EmbeddingService;
 pub use onboarding::OnboardingService;
 pub use shopping_list::ShoppingListService;
 pub use subscription::SubscriptionService;

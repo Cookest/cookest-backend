@@ -1,7 +1,7 @@
 use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set, ColumnTrait, QueryFilter, QueryOrder};
 use uuid::Uuid;
 use chrono::Utc;
-use tracing::{info, error};
+use tracing::info;
 use std::sync::Arc;
 
 use crate::entity::notification::{self, Entity as NotificationEntity, ActiveModel as NotificationActiveModel};

@@ -4,7 +4,6 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use sea_orm::{DatabaseConnection, EntityTrait};
 use serde::Deserialize;
 use std::sync::Arc;
-use uuid::Uuid;
 
 use crate::entity::user::Entity as User;
 use cookest_shared::errors::AppError;
@@ -30,7 +29,7 @@ pub fn configure_subscription_protected(cfg: &mut web::ServiceConfig) {
 async fn get_subscription(
     user: AuthenticatedUser,
     db: web::Data<DatabaseConnection>,
-    sub_service: web::Data<Arc<SubscriptionService>>,
+    _sub_service: web::Data<Arc<SubscriptionService>>,
 ) -> Result<HttpResponse, AppError> {
     // Read fresh from DB (claims may be stale if subscription changed)
     let user_model = User::find_by_id(user.id)

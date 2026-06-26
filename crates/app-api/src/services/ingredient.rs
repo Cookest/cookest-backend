@@ -1,11 +1,10 @@
 //! Ingredient service — searches ingredients via food-api and caches/details them locally
 
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
+    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
     ActiveModelTrait, Set, TransactionTrait,
 };
 use chrono::Utc;
-use std::sync::Arc;
 
 use crate::entity::{ingredient, ingredient_nutrient, portion_size};
 use crate::handlers::browse::FoodApiClient;

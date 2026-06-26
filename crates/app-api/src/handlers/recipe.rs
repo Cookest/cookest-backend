@@ -14,7 +14,6 @@
 
 use actix_web::{web, HttpResponse};
 use std::sync::Arc;
-use uuid::Uuid;
 
 use cookest_shared::errors::AppError;
 use crate::middleware::auth::AuthenticatedUser;

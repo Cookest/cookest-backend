@@ -17,7 +17,7 @@ use actix_web::{
 };
 use futures::future::{ok, LocalBoxFuture, Ready};
 use serde_json::json;
-use std::future::{ready, Ready as StdReady};
+use std::future::ready;
 use std::rc::Rc;
 use std::sync::Arc;
 
