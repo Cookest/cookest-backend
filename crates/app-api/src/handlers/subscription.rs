@@ -29,7 +29,7 @@ pub fn configure_subscription_protected(cfg: &mut web::ServiceConfig) {
 async fn get_subscription(
     user: AuthenticatedUser,
     db: web::Data<DatabaseConnection>,
-    _sub_service: web::Data<Arc<SubscriptionService>>,
+    sub_service: web::Data<Arc<SubscriptionService>>,
 ) -> Result<HttpResponse, AppError> {
     // Read fresh from DB (claims may be stale if subscription changed)
     let user_model = User::find_by_id(user.id)
@@ -37,13 +37,18 @@ async fn get_subscription(
         .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
-    let tier = SubscriptionTier::from_str(&user_model.subscription_tier);
+    let tier = if sub_service.self_hosted {
+        SubscriptionTier::Pro
+    } else {
+        SubscriptionTier::from_str(&user_model.subscription_tier)
+    };
     let features = SubscriptionService::features_for_tier(&tier);
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
-        "tier": user_model.subscription_tier,
+        "tier": tier.as_str(),
         "valid_until": user_model.subscription_valid_until,
         "features": features,
+        "is_self_hosted": sub_service.self_hosted,
     })))
 }
 

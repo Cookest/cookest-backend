@@ -23,7 +23,7 @@ pub const FEATURE_SHOPPING_OPTIMIZER: &str = "shopping_optimizer";
 pub struct SubscriptionService {
     db: DatabaseConnection,
     stripe_webhook_secret: Option<String>,
-    self_hosted: bool,
+    pub self_hosted: bool,
 }
 
 impl SubscriptionService {
