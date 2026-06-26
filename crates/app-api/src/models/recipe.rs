@@ -171,6 +171,8 @@ pub struct CreateRecipeRequest {
     pub is_nut_free: Option<bool>,
     /// Whether this recipe is visible to other users
     pub is_public: Option<bool>,
+    pub ingredients: Option<Vec<CreateRecipeIngredientRequest>>,
+    pub steps: Option<Vec<CreateRecipeStepRequest>>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -190,6 +192,24 @@ pub struct UpdateRecipeRequest {
     pub is_dairy_free: Option<bool>,
     pub is_nut_free: Option<bool>,
     pub is_public: Option<bool>,
+    pub ingredients: Option<Vec<CreateRecipeIngredientRequest>>,
+    pub steps: Option<Vec<CreateRecipeStepRequest>>,
+}
+
+#[derive(Debug, Deserialize, Clone, Validate)]
+pub struct CreateRecipeIngredientRequest {
+    #[validate(length(min = 1, max = 200))]
+    pub ingredient_name: String,
+    pub quantity: Option<rust_decimal::Decimal>,
+    pub unit: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone, Validate)]
+pub struct CreateRecipeStepRequest {
+    #[validate(length(min = 1, max = 2000))]
+    pub instruction: String,
+    pub duration_min: Option<i32>,
 }
 
 /// Minimal pagination query params shared by endpoints that don’t need

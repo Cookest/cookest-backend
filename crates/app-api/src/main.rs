@@ -807,9 +807,11 @@ async fn main() -> std::io::Result<()> {
         config.self_hosted,
     ));
 
-    // Ensure PDF upload directory exists
+    // Ensure upload directories exist
     std::fs::create_dir_all(&config.pdf_upload_dir)
         .expect("Failed to create PDF upload directory");
+    std::fs::create_dir_all("uploads/recipes")
+        .expect("Failed to create recipe images upload directory");
 
     let store_service = Arc::new(StoreService::new(
         db.clone(),
@@ -904,6 +906,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(notification_service.clone()))
             .app_data(web::Data::new(suggestion_service.clone()))
             .app_data(web::Data::new(db.clone()))
+            // ── Static files ─────────────────────────────────────────
+            .service(actix_files::Files::new("/uploads", "uploads"))
             // ── Public routes (no JWT required) ──────────────────────────────
             .configure(configure_auth)        // /api/auth/*
             .configure(configure_recipes)     // /api/recipes/* (read-only browsing)

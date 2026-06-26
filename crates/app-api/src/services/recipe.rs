@@ -4,6 +4,7 @@ use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
     PaginatorTrait, Condition, ActiveModelTrait, Set, TransactionTrait,
 };
+use sea_orm::sea_query::{Expr, extension::postgres::PgExpr};
 use uuid::Uuid;
 use chrono::Utc;
 
@@ -52,13 +53,13 @@ impl RecipeService {
 
         // Text filters
         if let Some(cuisine) = &query.cuisine {
-            condition = condition.add(recipe::Column::Cuisine.eq(cuisine));
+            condition = condition.add(Expr::col(recipe::Column::Cuisine).ilike(cuisine));
         }
         if let Some(category) = &query.category {
-            condition = condition.add(recipe::Column::Category.eq(category));
+            condition = condition.add(Expr::col(recipe::Column::Category).ilike(category));
         }
         if let Some(difficulty) = &query.difficulty {
-            condition = condition.add(recipe::Column::Difficulty.eq(difficulty));
+            condition = condition.add(Expr::col(recipe::Column::Difficulty).ilike(difficulty));
         }
         if let Some(max_time) = query.max_time {
             condition = condition.add(recipe::Column::TotalTimeMin.lte(max_time));
@@ -67,8 +68,11 @@ impl RecipeService {
         // Full-text search on name using ILIKE (pg_trgm handles performance)
         if let Some(ref q) = query.q {
             let pattern = format!("%{}%", q);
-            condition = condition.add(recipe::Column::Name.like(pattern));
+            condition = condition.add(Expr::col(recipe::Column::Name).ilike(pattern));
         }
+
+        // Only show public recipes in general browse
+        condition = condition.add(recipe::Column::IsPublic.eq(true));
 
         let paginator = recipe::Entity::find()
             .filter(condition)
@@ -334,10 +338,10 @@ impl RecipeService {
         let model = recipe::ActiveModel {
             name: Set(req.name.clone()),
             slug: Set(slug.clone()),
-            description: Set(req.description),
-            cuisine: Set(req.cuisine),
-            category: Set(req.category),
-            difficulty: Set(req.difficulty),
+            description: Set(req.description.clone()),
+            cuisine: Set(req.cuisine.clone()),
+            category: Set(req.category.clone()),
+            difficulty: Set(req.difficulty.clone()),
             servings: Set(req.servings.unwrap_or(2)),
             prep_time_min: Set(req.prep_time_min),
             cook_time_min: Set(req.cook_time_min),
@@ -355,7 +359,61 @@ impl RecipeService {
             ..Default::default()
         };
 
-        let saved = model.insert(&self.db).await?;
+        let saved = self.db.transaction::<_, recipe::Model, AppError>(|txn| {
+            Box::pin(async move {
+                let saved_recipe = model.insert(txn).await?;
+
+                if let Some(ingredients) = req.ingredients {
+                    for (i, req_ing) in ingredients.into_iter().enumerate() {
+                        let ing_name_lower = req_ing.ingredient_name.to_lowercase();
+                        let ingredient = if let Some(existing) = ingredient::Entity::find()
+                            .filter(Expr::col(ingredient::Column::Name).ilike(&ing_name_lower))
+                            .one(txn)
+                            .await?
+                        {
+                            existing
+                        } else {
+                            let new_ing = ingredient::ActiveModel {
+                                name: Set(ing_name_lower),
+                                category: Set(None),
+                                created_at: Set(Utc::now().fixed_offset()),
+                                ..Default::default()
+                            };
+                            new_ing.insert(txn).await?
+                        };
+
+                        let ri_model = recipe_ingredient::ActiveModel {
+                            recipe_id: Set(saved_recipe.id),
+                            ingredient_id: Set(ingredient.id),
+                            quantity: Set(req_ing.quantity),
+                            unit: Set(req_ing.unit),
+                            notes: Set(req_ing.notes),
+                            display_order: Set(i as i32),
+                            ..Default::default()
+                        };
+                        ri_model.insert(txn).await?;
+                    }
+                }
+
+                if let Some(steps) = req.steps {
+                    for (i, req_step) in steps.into_iter().enumerate() {
+                        let step_model = recipe_step::ActiveModel {
+                            recipe_id: Set(saved_recipe.id),
+                            step_number: Set((i + 1) as i32),
+                            instruction: Set(req_step.instruction),
+                            duration_min: Set(req_step.duration_min),
+                            ..Default::default()
+                        };
+                        step_model.insert(txn).await?;
+                    }
+                }
+
+                Ok(saved_recipe)
+            })
+        }).await.map_err(|e| match e {
+            sea_orm::TransactionError::Connection(de) => AppError::from(de),
+            sea_orm::TransactionError::Transaction(ae) => ae,
+        })?;
 
         Ok(serde_json::json!({
             "id": saved.id,
@@ -363,7 +421,7 @@ impl RecipeService {
             "name": saved.name,
             "is_public": saved.is_public,
             "author_id": saved.author_id,
-            "message": "Recipe created. Use POST /api/recipes/:id/ingredients and /steps to add content."
+            "message": "Recipe created successfully."
         }))
     }
 
@@ -386,11 +444,11 @@ impl RecipeService {
         let now = Utc::now().fixed_offset();
         let mut model: recipe::ActiveModel = existing.into();
 
-        if let Some(name) = req.name { model.name = Set(name); }
-        if let Some(desc) = req.description { model.description = Set(Some(desc)); }
-        if let Some(c) = req.cuisine { model.cuisine = Set(Some(c)); }
-        if let Some(c) = req.category { model.category = Set(Some(c)); }
-        if let Some(d) = req.difficulty { model.difficulty = Set(Some(d)); }
+        if let Some(name) = &req.name { model.name = Set(name.clone()); }
+        if let Some(desc) = &req.description { model.description = Set(Some(desc.clone())); }
+        if let Some(c) = &req.cuisine { model.cuisine = Set(Some(c.clone())); }
+        if let Some(c) = &req.category { model.category = Set(Some(c.clone())); }
+        if let Some(d) = &req.difficulty { model.difficulty = Set(Some(d.clone())); }
         if let Some(s) = req.servings { model.servings = Set(s); }
         if let Some(p) = req.prep_time_min { model.prep_time_min = Set(Some(p)); }
         if let Some(c) = req.cook_time_min { model.cook_time_min = Set(Some(c)); }
@@ -402,7 +460,73 @@ impl RecipeService {
         if let Some(p) = req.is_public { model.is_public = Set(p); }
         model.updated_at = Set(now);
 
-        let saved = model.update(&self.db).await?;
+        let saved = self.db.transaction::<_, recipe::Model, AppError>(|txn| {
+            Box::pin(async move {
+                let saved_recipe = model.update(txn).await?;
+
+                if let Some(ingredients) = req.ingredients {
+                    // Delete existing ingredients
+                    recipe_ingredient::Entity::delete_many()
+                        .filter(recipe_ingredient::Column::RecipeId.eq(saved_recipe.id))
+                        .exec(txn)
+                        .await?;
+
+                    for (i, req_ing) in ingredients.into_iter().enumerate() {
+                        let ing_name_lower = req_ing.ingredient_name.to_lowercase();
+                        let ingredient = if let Some(existing) = ingredient::Entity::find()
+                            .filter(Expr::col(ingredient::Column::Name).ilike(&ing_name_lower))
+                            .one(txn)
+                            .await?
+                        {
+                            existing
+                        } else {
+                            let new_ing = ingredient::ActiveModel {
+                                name: Set(ing_name_lower),
+                                category: Set(None),
+                                created_at: Set(Utc::now().fixed_offset()),
+                                ..Default::default()
+                            };
+                            new_ing.insert(txn).await?
+                        };
+
+                        let ri_model = recipe_ingredient::ActiveModel {
+                            recipe_id: Set(saved_recipe.id),
+                            ingredient_id: Set(ingredient.id),
+                            quantity: Set(req_ing.quantity),
+                            unit: Set(req_ing.unit),
+                            notes: Set(req_ing.notes),
+                            display_order: Set(i as i32),
+                            ..Default::default()
+                        };
+                        ri_model.insert(txn).await?;
+                    }
+                }
+
+                if let Some(steps) = req.steps {
+                    // Delete existing steps
+                    recipe_step::Entity::delete_many()
+                        .filter(recipe_step::Column::RecipeId.eq(saved_recipe.id))
+                        .exec(txn)
+                        .await?;
+
+                    for (i, req_step) in steps.into_iter().enumerate() {
+                        let step_model = recipe_step::ActiveModel {
+                            recipe_id: Set(saved_recipe.id),
+                            step_number: Set((i + 1) as i32),
+                            instruction: Set(req_step.instruction),
+                            duration_min: Set(req_step.duration_min),
+                            ..Default::default()
+                        };
+                        step_model.insert(txn).await?;
+                    }
+                }
+
+                Ok(saved_recipe)
+            })
+        }).await.map_err(|e| match e {
+            sea_orm::TransactionError::Connection(de) => AppError::from(de),
+            sea_orm::TransactionError::Transaction(ae) => ae,
+        })?;
 
         Ok(serde_json::json!({
             "id": saved.id,
@@ -430,16 +554,103 @@ impl RecipeService {
         Ok(())
     }
 
+    /// Upload an image for a recipe
+    pub async fn upload_recipe_image(
+        &self,
+        user_id: Uuid,
+        recipe_id: i64,
+        image_bytes: Vec<u8>,
+        file_ext: &str,
+    ) -> Result<serde_json::Value, AppError> {
+        let existing = recipe::Entity::find_by_id(recipe_id)
+            .one(&self.db)
+            .await?
+            .ok_or(AppError::NotFound("Recipe".into()))?;
+
+        if existing.author_id != Some(user_id) {
+            return Err(AppError::Forbidden);
+        }
+
+        let file_name = format!("{}.{}", uuid::Uuid::new_v4(), file_ext);
+        let file_path = format!("uploads/recipes/{}", file_name);
+        
+        tokio::fs::write(&file_path, &image_bytes).await
+            .map_err(|e| AppError::Internal(format!("Failed to save image: {}", e)))?;
+
+        let url = format!("/uploads/recipes/{}", file_name);
+        let url_clone = url.clone();
+
+        self.db.transaction::<_, (), AppError>(|txn| {
+            Box::pin(async move {
+                recipe_image::Entity::update_many()
+                    .col_expr(recipe_image::Column::IsPrimary, Expr::val(false).into())
+                    .filter(recipe_image::Column::RecipeId.eq(recipe_id))
+                    .exec(txn)
+                    .await?;
+
+                let img_model = recipe_image::ActiveModel {
+                    recipe_id: Set(recipe_id),
+                    url: Set(url_clone),
+                    is_primary: Set(true),
+                    ..Default::default()
+                };
+                img_model.insert(txn).await?;
+                Ok(())
+            })
+        }).await.map_err(|e| match e {
+            sea_orm::TransactionError::Connection(de) => AppError::from(de),
+            sea_orm::TransactionError::Transaction(ae) => ae,
+        })?;
+
+        Ok(serde_json::json!({
+            "url": url,
+            "message": "Image uploaded successfully"
+        }))
+    }
+
     /// List recipes created by this user
     pub async fn list_my_recipes(
         &self,
         user_id: Uuid,
-        page: u64,
-        per_page: u64,
+        query: RecipeQuery,
     ) -> Result<PaginatedResponse<RecipeListItem>, AppError> {
-        let per_page = per_page.min(50);
+        let page = query.page.unwrap_or(1).max(1);
+        let per_page = query.per_page.unwrap_or(20).min(50);
+
+        let mut condition = Condition::all().add(recipe::Column::AuthorId.eq(user_id));
+
+        // Dietary filters
+        if query.vegetarian == Some(true) {
+            condition = condition.add(recipe::Column::IsVegetarian.eq(true));
+        }
+        if query.vegan == Some(true) {
+            condition = condition.add(recipe::Column::IsVegan.eq(true));
+        }
+        if query.gluten_free == Some(true) {
+            condition = condition.add(recipe::Column::IsGlutenFree.eq(true));
+        }
+        if query.dairy_free == Some(true) {
+            condition = condition.add(recipe::Column::IsDairyFree.eq(true));
+        }
+
+        // Text filters
+        if let Some(cuisine) = &query.cuisine {
+            condition = condition.add(Expr::col(recipe::Column::Cuisine).ilike(cuisine));
+        }
+        if let Some(category) = &query.category {
+            condition = condition.add(Expr::col(recipe::Column::Category).ilike(category));
+        }
+        if let Some(difficulty) = &query.difficulty {
+            condition = condition.add(Expr::col(recipe::Column::Difficulty).ilike(difficulty));
+        }
+
+        if let Some(ref q) = query.q {
+            let pattern = format!("%{}%", q);
+            condition = condition.add(Expr::col(recipe::Column::Name).ilike(pattern));
+        }
+
         let paginator = recipe::Entity::find()
-            .filter(recipe::Column::AuthorId.eq(user_id))
+            .filter(condition)
             .order_by_desc(recipe::Column::CreatedAt)
             .paginate(&self.db, per_page);
 

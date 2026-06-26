@@ -13,6 +13,8 @@
 //!   DELETE /api/recipes/:id               — delete own recipe
 
 use actix_web::{web, HttpResponse};
+use actix_multipart::Multipart;
+use futures::StreamExt;
 use std::sync::Arc;
 
 use cookest_shared::errors::AppError;
@@ -59,12 +61,10 @@ pub async fn get_recipe_by_slug(
 pub async fn list_my_recipes(
     recipe_service: web::Data<Arc<RecipeService>>,
     user: AuthenticatedUser,
-    query: web::Query<crate::models::recipe::PaginationQuery>,
+    query: web::Query<crate::models::recipe::RecipeQuery>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = user.id;
-    let page = query.page.unwrap_or(1);
-    let per_page = query.per_page.unwrap_or(20);
-    let result = recipe_service.list_my_recipes(user_id, page, per_page).await?;
+    let result = recipe_service.list_my_recipes(user_id, query.into_inner()).await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -106,6 +106,66 @@ pub async fn delete_recipe(
     Ok(HttpResponse::Ok().json(serde_json::json!({ "message": "Recipe deleted" })))
 }
 
+/// POST /api/recipes/:id/image — upload an image for the recipe
+pub async fn upload_recipe_image(
+    recipe_service: web::Data<Arc<RecipeService>>,
+    user: AuthenticatedUser,
+    path: web::Path<i64>,
+    mut payload: Multipart,
+) -> Result<HttpResponse, AppError> {
+    let user_id = user.id;
+    let recipe_id = path.into_inner();
+
+    let mut image_bytes: Option<Vec<u8>> = None;
+    let mut file_ext = "jpg".to_string();
+
+    while let Some(field) = payload.next().await {
+        let mut field = field.map_err(|e| AppError::Internal(format!("Multipart error: {}", e)))?;
+        let content_disposition = field.content_disposition();
+        let field_name = content_disposition.and_then(|cd| cd.get_name()).unwrap_or("");
+
+        if field_name == "image" {
+            if let Some(cd) = content_disposition {
+                if let Some(filename) = cd.get_filename() {
+                    if let Some(ext) = filename.split('.').last() {
+                        file_ext = ext.to_string();
+                    }
+                }
+            }
+
+            let mut bytes = Vec::new();
+            while let Some(chunk) = field.next().await {
+                let chunk = chunk.map_err(|e| AppError::Internal(format!("Chunk error: {}", e)))?;
+                bytes.extend_from_slice(&chunk);
+                // Max 10 MB
+                if bytes.len() > 10 * 1024 * 1024 {
+                    return Err(AppError::Validation({
+                        let mut errors = validator::ValidationErrors::new();
+                        let mut e = validator::ValidationError::new("too_large");
+                        e.message = Some("Image must be under 10 MB".into());
+                        errors.add("image", e);
+                        errors
+                    }));
+                }
+            }
+            if !bytes.is_empty() {
+                image_bytes = Some(bytes);
+            }
+        }
+    }
+
+    let bytes = image_bytes.ok_or_else(|| AppError::Validation({
+        let mut errors = validator::ValidationErrors::new();
+        let mut e = validator::ValidationError::new("missing");
+        e.message = Some("Image field is required".into());
+        errors.add("image", e);
+        errors
+    }))?;
+
+    let result = recipe_service.upload_recipe_image(user_id, recipe_id, bytes, &file_ext).await?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
 /// Configure all recipe routes in a single scope.
 /// Public GET routes (list, slug, by-id) work without auth.
 /// Write routes and /mine use AuthenticatedUser which self-validates the JWT.
@@ -119,7 +179,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/slug/{slug}", web::get().to(get_recipe_by_slug))
             .route("/{id}", web::get().to(get_recipe))
             .route("/{id}", web::put().to(update_recipe))
-            .route("/{id}", web::delete().to(delete_recipe)),
+            .route("/{id}", web::delete().to(delete_recipe))
+            .route("/{id}/image", web::post().to(upload_recipe_image)),
     );
 }
 
