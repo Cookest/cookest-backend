@@ -42,6 +42,34 @@ Cookest is an AI-assisted meal planning and kitchen management platform. This re
 
 ---
 
+## 🐳 Docker Images
+
+Pre-built images are published to the GitHub Container Registry on every push to `main`:
+
+| Image | Registry |
+|-------|----------|
+| App API | `ghcr.io/cookest/app-api:latest` |
+| Food API | `ghcr.io/cookest/food-api:latest` |
+
+These are the images used by default when you run `cookest up`.
+
+### Building from Source
+
+If you want to build the images yourself (e.g. after making custom changes):
+
+```bash
+# Using the Cookest CLI (recommended)
+cookest build
+
+# Or manually with Docker
+docker build -t cookest/app-api:local -f crates/app-api/Dockerfile .
+docker build -t cookest/food-api:local -f crates/food-api/Dockerfile .
+```
+
+Then initialise with `cookest init --from-source` to use your locally built images.
+
+---
+
 ## 🚀 Quick Start
 
 ### Prerequisites
