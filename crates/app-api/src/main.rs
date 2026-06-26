@@ -39,6 +39,7 @@ use crate::handlers::{
     configure_suggestion,
     configure_import_proxy,
     configure_admin, configure_admin_setup,
+    configure_admin_ingredients,
 };
 use crate::middleware::{JwtAuth, SecurityHeaders};
 use crate::services::{
@@ -790,28 +791,44 @@ async fn main() -> std::io::Result<()> {
 
     let token_service = Arc::new(TokenService::new(&config));
     let auth_service = Arc::new(AuthService::new(db.clone(), TokenService::new(&config), config.self_hosted, email_service.clone()));
-    let recipe_service = Arc::new(RecipeService::new(db.clone(), food_api_client.clone()));
+    
+    // Initialize S3 client
+    let credentials = aws_sdk_s3::config::Credentials::new(
+        &config.s3_access_key,
+        config.s3_secret_key.expose_secret(),
+        None,
+        None,
+        "static",
+    );
+    let s3_config = aws_sdk_s3::config::Builder::new()
+        .endpoint_url(&config.s3_endpoint)
+        .region(aws_sdk_s3::config::Region::new(config.s3_region.clone()))
+        .credentials_provider(credentials)
+        .force_path_style(true)
+        .build();
+    let s3_client = aws_sdk_s3::Client::from_conf(s3_config);
+
+    let recipe_service = Arc::new(RecipeService::new(db.clone(), food_api_client.clone())
+        .with_s3(
+            s3_client,
+            config.s3_bucket.clone(),
+            config.s3_public_url.clone(),
+        ));
     let ingredient_service = Arc::new(IngredientService::new(db.clone(), food_api_client.clone()));
     let meal_plan_service = Arc::new(MealPlanService::new(db.clone(), food_api_client.clone()));
-    let inventory_service = Arc::new(InventoryService::new(db.clone()));
+    let inventory_service = Arc::new(InventoryService::new(db.clone(), food_api_client.clone()));
     let profile_service = Arc::new(ProfileService::new(db.clone()));
     let interaction_service = Arc::new(InteractionService::new(db.clone(), food_api_client.clone()));
     let preference_service = Arc::new(PreferenceService::new(db.clone()));
     let chat_service = Arc::new(ChatService::new(db.clone(), food_api_client.clone()));
     let onboarding_service = Arc::new(OnboardingService::new(db.clone()));
     let taste_profile_service = Arc::new(TasteProfileService::new(db.clone()));
-    let shopping_list_service = Arc::new(ShoppingListService::new(db.clone()));
+    let shopping_list_service = Arc::new(ShoppingListService::new(db.clone(), food_api_client.clone()));
     let subscription_service = Arc::new(SubscriptionService::new(
         db.clone(),
         config.stripe_webhook_secret.clone(),
         config.self_hosted,
     ));
-
-    // Ensure upload directories exist
-    std::fs::create_dir_all(&config.pdf_upload_dir)
-        .expect("Failed to create PDF upload directory");
-    std::fs::create_dir_all("uploads/recipes")
-        .expect("Failed to create recipe images upload directory");
 
     let store_service = Arc::new(StoreService::new(
         db.clone(),
@@ -823,7 +840,7 @@ async fn main() -> std::io::Result<()> {
 
     let push_token_service = Arc::new(PushTokenService::new(db.clone()));
     let scan_service = Arc::new(ScanService::new());
-    let recipe_gen_service = Arc::new(RecipeGenService::new(db.clone()));
+    let recipe_gen_service = Arc::new(RecipeGenService::new(db.clone(), food_api_client.clone()));
     let nutrition_service = Arc::new(NutritionService::new(db.clone()));
     let household_service = Arc::new(HouseholdService::new(db.clone()));
     let meal_poll_service = Arc::new(MealPollService::new(db.clone()));
@@ -907,7 +924,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(suggestion_service.clone()))
             .app_data(web::Data::new(db.clone()))
             // ── Static files ─────────────────────────────────────────
-            .service(actix_files::Files::new("/uploads", "uploads"))
+
             // ── Public routes (no JWT required) ──────────────────────────────
             .configure(configure_auth)        // /api/auth/*
             .configure(configure_recipes)     // /api/recipes/* (read-only browsing)
@@ -946,6 +963,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(configure_notification)
                     .configure(configure_suggestion)
                     .configure(configure_import_proxy)
+                    .configure(configure_admin_ingredients) // /admin/ingredients/* (proxy to food-api)
                     .configure(configure_admin)   // /admin/* (JWT + DB admin check)
             )
     })
