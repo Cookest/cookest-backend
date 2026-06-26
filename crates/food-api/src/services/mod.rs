@@ -11,3 +11,5 @@ pub mod openfoodfacts;
 
 pub mod import;
 pub use import::ImportService;
+
+pub mod seed;

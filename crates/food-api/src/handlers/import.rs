@@ -63,6 +63,28 @@ pub async fn execute_import(
     }))
 }
 
+#[derive(Deserialize)]
+pub struct IngredientImportRequest {
+    pub folder: Option<String>,
+    pub filename: String,
+}
+
+/// POST /api/v1/admin/import/ingredients
+/// Import a simple ingredient-list CSV (name,category,calories,protein_g,carbs_g,fat_g)
+/// from a file in the import folder.
+pub async fn import_ingredients(
+    import_svc: web::Data<Arc<ImportService>>,
+    body: web::Json<IngredientImportRequest>,
+) -> Result<HttpResponse, AppError> {
+    let folder = body.folder.as_deref().unwrap_or("/data/imports");
+    let result = import_svc.import_ingredients_file(folder, &body.filename).await?;
+    Ok(HttpResponse::Ok().json(ExecuteResponse {
+        success: true,
+        rows_imported: result.rows_imported,
+        message: result.message,
+    }))
+}
+
 #[derive(Serialize)]
 pub struct FoodSourceResponse {
     pub source: String,
@@ -114,7 +136,8 @@ pub fn configure_import(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api/v1/admin/import")
             .route("/scan", web::get().to(scan_folder))
-            .route("/execute", web::post().to(execute_import)),
+            .route("/execute", web::post().to(execute_import))
+            .route("/ingredients", web::post().to(import_ingredients)),
     );
     cfg.service(
         web::scope("/api/v1/admin/settings")

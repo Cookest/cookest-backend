@@ -192,6 +192,110 @@ impl ImportService {
         })
     }
 
+    /// Import a simple ingredient-list file (seed CSV format:
+    /// `name,category,calories,protein_g,carbs_g,fat_g`) into the catalog.
+    pub async fn import_ingredients_file(
+        &self,
+        folder: &str,
+        filename: &str,
+    ) -> Result<ImportResult, AppError> {
+        if folder.contains("..") || filename.contains("..") {
+            return Err(AppError::Forbidden);
+        }
+        let path = PathBuf::from(folder).join(filename);
+        if !path.exists() {
+            return Err(AppError::NotFound(format!("File '{}' not found", filename)));
+        }
+        let file = std::fs::File::open(&path)
+            .map_err(|e| AppError::Internal(format!("Failed to open file: {}", e)))?;
+        let imported = self.import_ingredients_reader(file).await?;
+        Ok(ImportResult {
+            rows_imported: imported,
+            rows_skipped: 0,
+            message: format!("Imported {} ingredients", imported),
+        })
+    }
+
+    /// Core ingredient upsert from a CSV reader, shared by the startup seed and
+    /// the directory import. Columns: `name,category,calories,protein_g,carbs_g,fat_g`
+    /// (header required; extra columns ignored; numeric cells optional). Upserts by
+    /// name so re-running is idempotent.
+    pub async fn import_ingredients_reader<R: std::io::Read>(
+        &self,
+        reader: R,
+    ) -> Result<usize, AppError> {
+        use std::str::FromStr;
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .flexible(true)
+            .from_reader(reader);
+
+        let parse_dec = |s: Option<&str>| -> Option<rust_decimal::Decimal> {
+            let t = s.unwrap_or("").trim();
+            if t.is_empty() {
+                None
+            } else {
+                rust_decimal::Decimal::from_str(t).ok()
+            }
+        };
+
+        let now = chrono::Utc::now().fixed_offset();
+        let txn = self.db.begin().await?;
+        let mut imported = 0usize;
+
+        for record in rdr.records() {
+            let record =
+                record.map_err(|e| AppError::Internal(format!("csv parse error: {}", e)))?;
+            let name = record.get(0).unwrap_or("").trim();
+            if name.is_empty() {
+                continue;
+            }
+            let category = record.get(1).map(str::trim).filter(|s| !s.is_empty());
+            let calories = parse_dec(record.get(2));
+            let protein = parse_dec(record.get(3));
+            let carbs = parse_dec(record.get(4));
+            let fat = parse_dec(record.get(5));
+
+            let ing_row = txn
+                .query_one(sea_orm::Statement::from_sql_and_values(
+                    sea_orm::DatabaseBackend::Postgres,
+                    "INSERT INTO ingredients (name, category, created_at) VALUES ($1, $2, $3) \
+                     ON CONFLICT (name) DO UPDATE SET \
+                       category = COALESCE(EXCLUDED.category, ingredients.category) \
+                     RETURNING id",
+                    [name.into(), category.into(), now.into()],
+                ))
+                .await?;
+
+            if let Some(row) = ing_row {
+                let ing_id: i64 = row.try_get("", "id")?;
+                imported += 1;
+                if calories.is_some() || protein.is_some() || carbs.is_some() || fat.is_some() {
+                    txn.execute(sea_orm::Statement::from_sql_and_values(
+                        sea_orm::DatabaseBackend::Postgres,
+                        "INSERT INTO ingredient_nutrients \
+                           (ingredient_id, calories, protein_g, carbs_g, fat_g) \
+                         VALUES ($1, $2, $3, $4, $5) \
+                         ON CONFLICT (ingredient_id) DO UPDATE SET \
+                           calories=EXCLUDED.calories, protein_g=EXCLUDED.protein_g, \
+                           carbs_g=EXCLUDED.carbs_g, fat_g=EXCLUDED.fat_g",
+                        [
+                            ing_id.into(),
+                            calories.into(),
+                            protein.into(),
+                            carbs.into(),
+                            fat.into(),
+                        ],
+                    ))
+                    .await?;
+                }
+            }
+        }
+
+        txn.commit().await?;
+        Ok(imported)
+    }
+
     async fn import_openfoodfacts(
         &self,
         folder: &str,

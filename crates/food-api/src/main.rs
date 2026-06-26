@@ -274,6 +274,14 @@ async fn main() -> std::io::Result<()> {
 
     tracing::info!("All food migrations complete");
 
+    // Seed a small base catalog the first time the DB comes up empty so the app
+    // has a usable preset ingredient list out of the box.
+    match crate::services::seed::seed_if_empty(&db).await {
+        Ok(0) => {}
+        Ok(n) => tracing::info!("Base catalog seeded: {} ingredients", n),
+        Err(e) => tracing::warn!("Base catalog seed skipped: {}", e),
+    }
+
     // Initialize services
     let fatsecret_client: Option<Arc<FatSecretClient>> =
         config.fs_client_id.as_ref().zip(config.fs_client_secret.as_ref()).map(|(id, secret)| {
