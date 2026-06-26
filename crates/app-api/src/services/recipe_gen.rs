@@ -14,6 +14,8 @@ use std::time::Duration;
 use uuid::Uuid;
 
 use crate::entity::{ingredient, inventory_item, user};
+use crate::handlers::browse::FoodApiClient;
+use crate::services::IngredientService;
 use cookest_shared::errors::AppError;
 
 /// Maximum number of generate → score → refine cycles before returning the
@@ -74,6 +76,11 @@ pub struct GenIngredient {
     pub quantity: f64,
     pub unit: String,
     pub is_pantry_item: bool,
+    /// Resolved master-catalog id, filled in after generation by matching `name`
+    /// against the catalog. `None` means no catalog match (the recipe can't be
+    /// saved until the user picks a substitute). Not produced by the LLM.
+    #[serde(default)]
+    pub ingredient_id: Option<i64>,
 }
 
 /// Macronutrient breakdown per serving, computed by the LLM and passed
@@ -120,6 +127,31 @@ pub struct GeneratedRecipeResponse {
     pub score: RecipeScore,
 }
 
+/// A generated ingredient the client wants to persist. `ingredient_id` must be
+/// present (resolved against the catalog) — recipes only reference preset items.
+#[derive(Debug, Deserialize)]
+pub struct SaveGenIngredient {
+    pub name: String,
+    pub ingredient_id: Option<i64>,
+    pub quantity: Option<f64>,
+    pub unit: Option<String>,
+}
+
+/// Request body for saving a generated recipe into the user's own recipes.
+#[derive(Debug, Deserialize)]
+pub struct SaveGeneratedRecipeRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub cuisine: Option<String>,
+    pub difficulty: Option<String>,
+    pub prep_minutes: Option<i32>,
+    pub cook_minutes: Option<i32>,
+    pub servings: Option<i32>,
+    pub ingredients: Vec<SaveGenIngredient>,
+    pub steps: Vec<String>,
+    pub is_public: Option<bool>,
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 /// Generates personalised recipes via Ollama using the user’s pantry,
@@ -129,6 +161,7 @@ pub struct GeneratedRecipeResponse {
 /// holds only immutable config alongside the connection pool.
 pub struct RecipeGenService {
     db: DatabaseConnection,
+    food_api_client: FoodApiClient,
     http: Client,
     ollama_url: String,
     model: String,
@@ -142,18 +175,40 @@ impl RecipeGenService {
     /// same binary can target different models per environment.
     /// The HTTP client uses a 180-second timeout to accommodate slow
     /// local hardware that may take minutes for a full generation pass.
-    pub fn new(db: DatabaseConnection) -> Self {
+    pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
         let http = Client::builder()
             .timeout(Duration::from_secs(180))
             .build()
             .unwrap_or_default();
         Self {
             db,
+            food_api_client,
             http,
             ollama_url: std::env::var("OLLAMA_URL")
                 .unwrap_or_else(|_| "http://localhost:11434".to_string()),
             model: std::env::var("OLLAMA_MODEL")
                 .unwrap_or_else(|_| "llama3.1:8b".to_string()),
+        }
+    }
+
+    /// Ingredient resolver for mapping generated names to catalog ids.
+    fn ingredient_service(&self) -> IngredientService {
+        IngredientService::new(self.db.clone(), self.food_api_client.clone())
+    }
+
+    /// Best-effort: resolve each generated ingredient name to a master-catalog id
+    /// so the recipe can later be saved referencing preset ingredients. Unmatched
+    /// items keep `ingredient_id = None` (surfaced to the user, blocked on save).
+    async fn map_ingredients_to_catalog(&self, ingredients: &mut [GenIngredient]) {
+        let ing_svc = self.ingredient_service();
+        for ing in ingredients.iter_mut() {
+            match ing_svc.resolve_by_name(&ing.name).await {
+                Ok(id) => ing.ingredient_id = id,
+                Err(e) => {
+                    tracing::warn!("ingredient mapping failed for '{}': {}", ing.name, e);
+                    ing.ingredient_id = None;
+                }
+            }
         }
     }
 
@@ -221,6 +276,10 @@ impl RecipeGenService {
             );
 
             if overall >= SCORE_THRESHOLD || iteration >= MAX_ITERATIONS as u32 {
+                let mut ingredients = recipe.ingredients;
+                // Map generated ingredient names onto the preset catalog so the
+                // result can be saved with real ingredient ids.
+                self.map_ingredients_to_catalog(&mut ingredients).await;
                 return Ok(GeneratedRecipeResponse {
                     name: recipe.name,
                     description: recipe.description,
@@ -229,7 +288,7 @@ impl RecipeGenService {
                     prep_minutes: recipe.prep_minutes,
                     cook_minutes: recipe.cook_minutes,
                     servings: recipe.servings,
-                    ingredients: recipe.ingredients,
+                    ingredients,
                     steps: recipe.steps,
                     macros_per_serving: recipe.macros_per_serving,
                     tags: recipe.tags,
