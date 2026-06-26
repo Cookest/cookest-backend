@@ -34,6 +34,12 @@ pub struct Config {
     pub overpass_url: String,
     pub rag_top_k: u64,
     pub self_hosted: bool,
+    pub s3_endpoint: String,
+    pub s3_access_key: String,
+    pub s3_secret_key: SecretString,
+    pub s3_bucket: String,
+    pub s3_region: String,
+    pub s3_public_url: Option<String>,
 }
 
 impl Config {
@@ -129,6 +135,23 @@ impl Config {
             .map(|v| v.to_lowercase() == "true")
             .unwrap_or(false);
 
+        let s3_endpoint = env::var("S3_ENDPOINT")
+            .unwrap_or_else(|_| "http://localhost:9000".to_string());
+            
+        let s3_access_key = env::var("S3_ACCESS_KEY")
+            .unwrap_or_else(|_| "minioadmin".to_string());
+            
+        let s3_secret_key = SecretString::from(env::var("S3_SECRET_KEY")
+            .unwrap_or_else(|_| "minioadmin".to_string()));
+            
+        let s3_bucket = env::var("S3_BUCKET")
+            .unwrap_or_else(|_| "cookest-images".to_string());
+            
+        let s3_region = env::var("S3_REGION")
+            .unwrap_or_else(|_| "us-east-1".to_string());
+            
+        let s3_public_url = env::var("S3_PUBLIC_URL").ok();
+
         Ok(Self {
             database_url: SecretString::from(database_url),
             jwt_secret: SecretString::from(jwt_secret),
@@ -149,6 +172,12 @@ impl Config {
             overpass_url,
             rag_top_k,
             self_hosted,
+            s3_endpoint,
+            s3_access_key,
+            s3_secret_key,
+            s3_bucket,
+            s3_region,
+            s3_public_url,
         })
     }
 
