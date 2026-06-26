@@ -1,0 +1,140 @@
+name,category,calories,protein_g,carbs_g,fat_g
+Chicken breast,protein,165,31,0,3.6
+Chicken thigh,protein,209,26,0,10.9
+Ground beef,protein,250,26,0,15
+Beef steak,protein,271,25,0,19
+Pork chop,protein,231,26,0,14
+Bacon,protein,541,37,1.4,42
+Ham,protein,145,21,1.5,5.5
+Turkey breast,protein,135,30,0,1
+Lamb,protein,294,25,0,21
+Salmon,seafood,208,20,0,13
+Tuna,seafood,132,28,0,1
+Shrimp,seafood,99,24,0.2,0.3
+Cod,seafood,82,18,0,0.7
+Tilapia,seafood,96,20,0,1.7
+Egg,protein,143,13,0.7,9.5
+Egg white,protein,52,11,0.7,0.2
+Tofu,protein,76,8,1.9,4.8
+Tempeh,protein,192,20,7.6,11
+Black beans,legume,132,8.9,24,0.5
+Chickpeas,legume,164,8.9,27,2.6
+Lentils,legume,116,9,20,0.4
+Kidney beans,legume,127,8.7,23,0.5
+Green peas,legume,81,5.4,14,0.4
+Edamame,legume,121,12,9,5
+Milk,dairy,42,3.4,5,1
+Whole milk,dairy,61,3.2,4.8,3.3
+Skim milk,dairy,34,3.4,5,0.1
+Greek yogurt,dairy,59,10,3.6,0.4
+Yogurt,dairy,59,3.5,4.7,3.3
+Butter,dairy,717,0.9,0.1,81
+Cheddar cheese,dairy,403,25,1.3,33
+Mozzarella cheese,dairy,280,28,3.1,17
+Parmesan cheese,dairy,431,38,4.1,29
+Cream cheese,dairy,342,6,4.1,34
+Heavy cream,dairy,340,2.8,2.8,36
+Sour cream,dairy,198,2.4,4.6,19
+Feta cheese,dairy,264,14,4.1,21
+Cottage cheese,dairy,98,11,3.4,4.3
+Rice,grain,130,2.7,28,0.3
+Brown rice,grain,123,2.7,26,1
+White rice,grain,130,2.7,28,0.3
+Pasta,grain,131,5,25,1.1
+Spaghetti,grain,158,5.8,31,0.9
+Bread,grain,265,9,49,3.2
+Whole wheat bread,grain,247,13,41,4.2
+Flour,baking,364,10,76,1
+Whole wheat flour,baking,340,13,72,2.5
+Oats,grain,389,17,66,7
+Quinoa,grain,120,4.4,21,1.9
+Couscous,grain,112,3.8,23,0.2
+Cornmeal,grain,370,7,79,3.6
+Tortilla,grain,237,6,49,2.5
+Noodles,grain,138,4.5,25,2.1
+Barley,grain,354,12,73,2.3
+Potato,vegetable,77,2,17,0.1
+Sweet potato,vegetable,86,1.6,20,0.1
+Onion,vegetable,40,1.1,9.3,0.1
+Garlic,vegetable,149,6.4,33,0.5
+Tomato,vegetable,18,0.9,3.9,0.2
+Carrot,vegetable,41,0.9,10,0.2
+Broccoli,vegetable,34,2.8,7,0.4
+Cauliflower,vegetable,25,1.9,5,0.3
+Spinach,vegetable,23,2.9,3.6,0.4
+Lettuce,vegetable,15,1.4,2.9,0.2
+Kale,vegetable,49,4.3,9,0.9
+Bell pepper,vegetable,31,1,6,0.3
+Cucumber,vegetable,15,0.7,3.6,0.1
+Zucchini,vegetable,17,1.2,3.1,0.3
+Eggplant,vegetable,25,1,6,0.2
+Mushroom,vegetable,22,3.1,3.3,0.3
+Celery,vegetable,16,0.7,3,0.2
+Corn,vegetable,86,3.2,19,1.2
+Green beans,vegetable,31,1.8,7,0.2
+Cabbage,vegetable,25,1.3,6,0.1
+Peas,vegetable,81,5.4,14,0.4
+Asparagus,vegetable,20,2.2,3.9,0.1
+Leek,vegetable,61,1.5,14,0.3
+Beet,vegetable,43,1.6,10,0.2
+Pumpkin,vegetable,26,1,6.5,0.1
+Apple,fruit,52,0.3,14,0.2
+Banana,fruit,89,1.1,23,0.3
+Orange,fruit,47,0.9,12,0.1
+Lemon,fruit,29,1.1,9.3,0.3
+Lime,fruit,30,0.7,11,0.2
+Strawberry,fruit,32,0.7,7.7,0.3
+Blueberry,fruit,57,0.7,14,0.3
+Raspberry,fruit,52,1.2,12,0.7
+Grape,fruit,69,0.7,18,0.2
+Pineapple,fruit,50,0.5,13,0.1
+Mango,fruit,60,0.8,15,0.4
+Avocado,fruit,160,2,9,15
+Peach,fruit,39,0.9,10,0.3
+Pear,fruit,57,0.4,15,0.1
+Watermelon,fruit,30,0.6,8,0.2
+Coconut,fruit,354,3.3,15,33
+Olive oil,fat,884,0,0,100
+Vegetable oil,fat,884,0,0,100
+Sunflower oil,fat,884,0,0,100
+Coconut oil,fat,862,0,0,100
+Sesame oil,fat,884,0,0,100
+Almonds,nut,579,21,22,50
+Walnuts,nut,654,15,14,65
+Cashews,nut,553,18,30,44
+Peanuts,nut,567,26,16,49
+Peanut butter,nut,588,25,20,50
+Pistachios,nut,560,20,28,45
+Chia seeds,seed,486,17,42,31
+Flax seeds,seed,534,18,29,42
+Sunflower seeds,seed,584,21,20,51
+Salt,spice,0,0,0,0
+Black pepper,spice,251,10,64,3.3
+Paprika,spice,282,14,54,13
+Cumin,spice,375,18,44,22
+Cinnamon,spice,247,4,81,1.2
+Turmeric,spice,312,9.7,67,3.2
+Chili powder,spice,282,13,50,14
+Oregano,herb,265,9,69,4.3
+Basil,herb,23,3.2,2.7,0.6
+Parsley,herb,36,3,6,0.8
+Cilantro,herb,23,2.1,3.7,0.5
+Thyme,herb,101,5.6,24,1.7
+Rosemary,herb,131,3.3,21,5.9
+Ginger,spice,80,1.8,18,0.8
+Bay leaf,spice,313,7.6,75,8.4
+Sugar,sweetener,387,0,100,0
+Brown sugar,sweetener,380,0,98,0
+Honey,sweetener,304,0.3,82,0
+Maple syrup,sweetener,260,0,67,0
+Soy sauce,condiment,53,8,4.9,0.6
+Ketchup,condiment,101,1.3,27,0.4
+Mustard,condiment,66,4.4,5.8,4
+Mayonnaise,condiment,680,1,0.6,75
+Vinegar,condiment,18,0,0.9,0
+Tomato paste,condiment,82,4.3,19,0.5
+Tomato sauce,condiment,29,1.3,7,0.2
+Coconut milk,dairy,230,2.3,6,24
+Vegetable broth,other,12,0.5,2,0.2
+Chicken broth,other,15,1.5,1,0.5
+Water,beverage,0,0,0,0

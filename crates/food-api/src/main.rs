@@ -21,7 +21,7 @@ use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
-use crate::handlers::{configure_ingredients, configure_recipes, configure_import};
+use crate::handlers::{configure_ingredients, configure_admin_ingredients, configure_recipes, configure_import};
 use crate::services::{IngredientService, RecipeService, FatSecretClient, ImportService};
 use crate::middleware::security_headers::SecurityHeaders;
 
@@ -332,6 +332,7 @@ async fn main() -> std::io::Result<()> {
             )
             // API v1 routes
             .configure(configure_ingredients)
+            .configure(configure_admin_ingredients)
             .configure(configure_recipes)
             .configure(configure_import)
     })

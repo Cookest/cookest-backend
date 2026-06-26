@@ -25,6 +25,8 @@ pub enum AppError {
     Forbidden,
     /// Bad Request
     BadRequest(String),
+    /// Conflict — request conflicts with current state (e.g. duplicate, in-use resource)
+    Conflict(String),
 }
 
 #[derive(Serialize)]
@@ -46,6 +48,7 @@ impl fmt::Display for AppError {
             AppError::RateLimitExceeded => write!(f, "Too many requests"),
             AppError::Forbidden => write!(f, "Forbidden"),
             AppError::BadRequest(msg) => write!(f, "Bad request: {}", msg),
+            AppError::Conflict(msg) => write!(f, "Conflict: {}", msg),
         }
     }
 }
@@ -117,6 +120,13 @@ impl ResponseError for AppError {
             ),
             AppError::BadRequest(msg) => (
                 actix_web::http::StatusCode::BAD_REQUEST,
+                ErrorResponse {
+                    error: msg.clone(),
+                    details: None,
+                },
+            ),
+            AppError::Conflict(msg) => (
+                actix_web::http::StatusCode::CONFLICT,
                 ErrorResponse {
                     error: msg.clone(),
                     details: None,

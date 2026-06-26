@@ -2,6 +2,7 @@ pub mod ingredient;
 pub mod recipe;
 
 pub use ingredient::configure as configure_ingredients;
+pub use ingredient::configure_admin as configure_admin_ingredients;
 pub use recipe::configure as configure_recipes;
 
 pub mod import;

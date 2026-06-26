@@ -48,3 +48,25 @@ pub struct PortionDetail {
     pub weight_grams: rust_decimal::Decimal,
     pub unit: Option<String>,
 }
+
+/// Admin: create a new catalog ingredient
+#[derive(Debug, Deserialize)]
+pub struct CreateIngredientRequest {
+    pub name: String,
+    pub category: Option<String>,
+    pub image_url: Option<String>,
+    pub fdc_id: Option<i32>,
+    pub off_id: Option<String>,
+    pub nutrients: Option<IngredientNutrientDetail>,
+}
+
+/// Admin: update an existing catalog ingredient. Only provided fields are changed.
+#[derive(Debug, Deserialize)]
+pub struct UpdateIngredientRequest {
+    pub name: Option<String>,
+    pub category: Option<String>,
+    pub image_url: Option<String>,
+    pub fdc_id: Option<i32>,
+    pub off_id: Option<String>,
+    pub nutrients: Option<IngredientNutrientDetail>,
+}

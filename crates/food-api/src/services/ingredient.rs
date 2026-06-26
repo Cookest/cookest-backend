@@ -14,6 +14,7 @@ use crate::services::FatSecretClient;
 use crate::entity::ingredient::{Entity as IngredientEntity, Column as IngredientCol};
 use crate::entity::ingredient_nutrient::Entity as NutrientEntity;
 use crate::entity::portion_size::Entity as PortionEntity;
+use crate::entity::recipe_ingredient::Entity as RecipeIngredientEntity;
 
 pub struct IngredientService {
     db: sea_orm::DatabaseConnection,
@@ -465,5 +466,180 @@ impl IngredientService {
             .ok_or_else(|| AppError::NotFound(format!("No food found for barcode {}", barcode)))?;
 
         self.get_ingredient_fatsecret(food_id).await
+    }
+
+    // -------------------------------------------------------------------------
+    // admin CRUD — always operate on the LOCAL master catalog, regardless of
+    // the active read source. The catalog is the single source of truth.
+    // -------------------------------------------------------------------------
+
+    /// List the distinct, non-empty ingredient categories (for filter dropdowns).
+    pub async fn list_categories(&self) -> Result<Vec<String>, AppError> {
+        use sea_orm::{ConnectionTrait, Statement};
+        let rows = self
+            .db
+            .query_all(Statement::from_string(
+                sea_orm::DatabaseBackend::Postgres,
+                "SELECT DISTINCT category FROM ingredients \
+                 WHERE category IS NOT NULL AND category <> '' ORDER BY category"
+                    .to_string(),
+            ))
+            .await?;
+        let categories = rows
+            .into_iter()
+            .filter_map(|r| r.try_get::<String>("", "category").ok())
+            .collect();
+        Ok(categories)
+    }
+
+    /// Create a new catalog ingredient. Rejects duplicate names (the catalog is canonical).
+    pub async fn create_ingredient(
+        &self,
+        req: CreateIngredientRequest,
+    ) -> Result<IngredientDetail, AppError> {
+        use sea_orm::{ActiveModelTrait, Set};
+
+        let name = req.name.trim().to_string();
+        if name.is_empty() {
+            return Err(AppError::BadRequest("Ingredient name is required".to_string()));
+        }
+
+        if IngredientEntity::find()
+            .filter(IngredientCol::Name.eq(&name))
+            .one(&self.db)
+            .await?
+            .is_some()
+        {
+            return Err(AppError::Conflict(format!("Ingredient '{}' already exists", name)));
+        }
+
+        let now = chrono::Utc::now().fixed_offset();
+        let model = crate::entity::ingredient::ActiveModel {
+            name: Set(name),
+            category: Set(req.category),
+            fdc_id: Set(req.fdc_id),
+            off_id: Set(req.off_id),
+            image_url: Set(req.image_url),
+            created_at: Set(now),
+            ..Default::default()
+        };
+        let saved = model.insert(&self.db).await?;
+
+        if let Some(n) = req.nutrients {
+            self.upsert_nutrients(saved.id, &n).await?;
+        }
+
+        self.get_ingredient_local(saved.id).await
+    }
+
+    /// Update an existing catalog ingredient. Only provided fields are changed.
+    pub async fn update_ingredient(
+        &self,
+        id: i64,
+        req: UpdateIngredientRequest,
+    ) -> Result<IngredientDetail, AppError> {
+        use sea_orm::{ActiveModelTrait, Set};
+
+        let existing = IngredientEntity::find_by_id(id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("Ingredient {}", id)))?;
+
+        let mut active: crate::entity::ingredient::ActiveModel = existing.into();
+
+        if let Some(name) = req.name {
+            let name = name.trim().to_string();
+            if name.is_empty() {
+                return Err(AppError::BadRequest("Ingredient name cannot be empty".to_string()));
+            }
+            // Disallow colliding with a different ingredient's name.
+            if let Some(other) = IngredientEntity::find()
+                .filter(IngredientCol::Name.eq(&name))
+                .one(&self.db)
+                .await?
+            {
+                if other.id != id {
+                    return Err(AppError::Conflict(format!("Ingredient '{}' already exists", name)));
+                }
+            }
+            active.name = Set(name);
+        }
+        if let Some(category) = req.category {
+            active.category = Set(Some(category));
+        }
+        if let Some(image_url) = req.image_url {
+            active.image_url = Set(Some(image_url));
+        }
+        if let Some(fdc_id) = req.fdc_id {
+            active.fdc_id = Set(Some(fdc_id));
+        }
+        if let Some(off_id) = req.off_id {
+            active.off_id = Set(Some(off_id));
+        }
+        active.update(&self.db).await?;
+
+        if let Some(n) = req.nutrients {
+            self.upsert_nutrients(id, &n).await?;
+        }
+
+        self.get_ingredient_local(id).await
+    }
+
+    /// Delete a catalog ingredient. Blocked (409) when still referenced by any recipe.
+    pub async fn delete_ingredient(&self, id: i64) -> Result<(), AppError> {
+        IngredientEntity::find_by_id(id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("Ingredient {}", id)))?;
+
+        let ref_count = RecipeIngredientEntity::find()
+            .filter(crate::entity::recipe_ingredient::Column::IngredientId.eq(id))
+            .count(&self.db)
+            .await?;
+        if ref_count > 0 {
+            return Err(AppError::Conflict(format!(
+                "Ingredient is used by {} recipe(s) and cannot be deleted",
+                ref_count
+            )));
+        }
+
+        IngredientEntity::delete_by_id(id).exec(&self.db).await?;
+        Ok(())
+    }
+
+    /// Upsert the per-100g nutrient row for an ingredient.
+    async fn upsert_nutrients(
+        &self,
+        ingredient_id: i64,
+        n: &IngredientNutrientDetail,
+    ) -> Result<(), AppError> {
+        use sea_orm::{ConnectionTrait, Statement};
+        self.db
+            .execute(Statement::from_sql_and_values(
+                sea_orm::DatabaseBackend::Postgres,
+                "INSERT INTO ingredient_nutrients \
+                   (ingredient_id, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, \
+                    sodium_mg, saturated_fat_g, cholesterol_mg) \
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) \
+                 ON CONFLICT (ingredient_id) DO UPDATE SET \
+                   calories=EXCLUDED.calories, protein_g=EXCLUDED.protein_g, carbs_g=EXCLUDED.carbs_g, \
+                   fat_g=EXCLUDED.fat_g, fiber_g=EXCLUDED.fiber_g, sugar_g=EXCLUDED.sugar_g, \
+                   sodium_mg=EXCLUDED.sodium_mg, saturated_fat_g=EXCLUDED.saturated_fat_g, \
+                   cholesterol_mg=EXCLUDED.cholesterol_mg",
+                [
+                    ingredient_id.into(),
+                    n.calories.into(),
+                    n.protein_g.into(),
+                    n.carbs_g.into(),
+                    n.fat_g.into(),
+                    n.fiber_g.into(),
+                    n.sugar_g.into(),
+                    n.sodium_mg.into(),
+                    n.saturated_fat_g.into(),
+                    n.cholesterol_mg.into(),
+                ],
+            ))
+            .await?;
+        Ok(())
     }
 }
