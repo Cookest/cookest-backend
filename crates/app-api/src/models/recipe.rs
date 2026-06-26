@@ -200,8 +200,9 @@ pub struct UpdateRecipeRequest {
 
 #[derive(Debug, Deserialize, Clone, Validate)]
 pub struct CreateRecipeIngredientRequest {
-    #[validate(length(min = 1, max = 200))]
-    pub ingredient_name: String,
+    /// Catalog ingredient id (from the master ingredient catalog). Recipes may only
+    /// reference preset ingredients — free-text ingredient names are not accepted.
+    pub ingredient_id: i64,
     pub quantity: Option<rust_decimal::Decimal>,
     pub unit: Option<String>,
     pub notes: Option<String>,

@@ -20,11 +20,51 @@ use crate::models::recipe::*;
 pub struct RecipeService {
     db: DatabaseConnection,
     food_api_client: FoodApiClient,
+    s3_client: Option<aws_sdk_s3::Client>,
+    s3_bucket: Option<String>,
+    s3_public_url: Option<String>,
 }
 
 impl RecipeService {
     pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
-        Self { db, food_api_client }
+        Self { 
+            db, 
+            food_api_client, 
+            s3_client: None, 
+            s3_bucket: None, 
+            s3_public_url: None,
+        }
+    }
+
+    pub fn with_s3(
+        mut self,
+        s3_client: aws_sdk_s3::Client,
+        s3_bucket: String,
+        s3_public_url: Option<String>,
+    ) -> Self {
+        self.s3_client = Some(s3_client);
+        self.s3_bucket = Some(s3_bucket);
+        self.s3_public_url = s3_public_url;
+        self
+    }
+
+    /// Ingredient resolver used to validate + mirror catalog ingredients.
+    fn ingredient_service(&self) -> IngredientService {
+        IngredientService::new(self.db.clone(), self.food_api_client.clone())
+    }
+
+    /// Validate that every referenced ingredient exists in the master catalog and
+    /// is mirrored locally (so the recipe_ingredient FK resolves). Rejects unknown
+    /// ids — recipes may only use preset catalog ingredients.
+    async fn ensure_ingredients_mirrored(
+        &self,
+        ingredients: &[CreateRecipeIngredientRequest],
+    ) -> Result<(), AppError> {
+        let ing_svc = self.ingredient_service();
+        for req_ing in ingredients {
+            ing_svc.ensure_local_mirror(req_ing.ingredient_id).await?;
+        }
+        Ok(())
     }
 
     /// List recipes with filters and pagination
@@ -352,6 +392,12 @@ impl RecipeService {
         // Ensure unique slug by appending a short random suffix if needed
         let slug = format!("{}-{}", base_slug, &uuid::Uuid::new_v4().to_string()[..8]);
 
+        // Validate + mirror catalog ingredients up front (rejects unknown ids before
+        // any recipe row is created).
+        if let Some(ings) = &req.ingredients {
+            self.ensure_ingredients_mirrored(ings).await?;
+        }
+
         let model = recipe::ActiveModel {
             name: Set(req.name.clone()),
             slug: Set(slug.clone()),
@@ -382,26 +428,9 @@ impl RecipeService {
 
                 if let Some(ingredients) = req.ingredients {
                     for (i, req_ing) in ingredients.into_iter().enumerate() {
-                        let ing_name_lower = req_ing.ingredient_name.to_lowercase();
-                        let ingredient = if let Some(existing) = ingredient::Entity::find()
-                            .filter(Expr::col(ingredient::Column::Name).ilike(&ing_name_lower))
-                            .one(txn)
-                            .await?
-                        {
-                            existing
-                        } else {
-                            let new_ing = ingredient::ActiveModel {
-                                name: Set(ing_name_lower),
-                                category: Set(None),
-                                created_at: Set(Utc::now().fixed_offset()),
-                                ..Default::default()
-                            };
-                            new_ing.insert(txn).await?
-                        };
-
                         let ri_model = recipe_ingredient::ActiveModel {
                             recipe_id: Set(saved_recipe.id),
-                            ingredient_id: Set(ingredient.id),
+                            ingredient_id: Set(req_ing.ingredient_id),
                             quantity: Set(req_ing.quantity),
                             unit: Set(req_ing.unit),
                             notes: Set(req_ing.notes),
@@ -458,6 +487,11 @@ impl RecipeService {
             return Err(AppError::Forbidden);
         }
 
+        // Validate + mirror catalog ingredients up front (rejects unknown ids).
+        if let Some(ings) = &req.ingredients {
+            self.ensure_ingredients_mirrored(ings).await?;
+        }
+
         let now = Utc::now().fixed_offset();
         let mut model: recipe::ActiveModel = existing.into();
 
@@ -489,26 +523,9 @@ impl RecipeService {
                         .await?;
 
                     for (i, req_ing) in ingredients.into_iter().enumerate() {
-                        let ing_name_lower = req_ing.ingredient_name.to_lowercase();
-                        let ingredient = if let Some(existing) = ingredient::Entity::find()
-                            .filter(Expr::col(ingredient::Column::Name).ilike(&ing_name_lower))
-                            .one(txn)
-                            .await?
-                        {
-                            existing
-                        } else {
-                            let new_ing = ingredient::ActiveModel {
-                                name: Set(ing_name_lower),
-                                category: Set(None),
-                                created_at: Set(Utc::now().fixed_offset()),
-                                ..Default::default()
-                            };
-                            new_ing.insert(txn).await?
-                        };
-
                         let ri_model = recipe_ingredient::ActiveModel {
                             recipe_id: Set(saved_recipe.id),
-                            ingredient_id: Set(ingredient.id),
+                            ingredient_id: Set(req_ing.ingredient_id),
                             quantity: Set(req_ing.quantity),
                             unit: Set(req_ing.unit),
                             notes: Set(req_ing.notes),
@@ -589,12 +606,26 @@ impl RecipeService {
         }
 
         let file_name = format!("{}.{}", uuid::Uuid::new_v4(), file_ext);
-        let file_path = format!("uploads/recipes/{}", file_name);
-        
-        tokio::fs::write(&file_path, &image_bytes).await
-            .map_err(|e| AppError::Internal(format!("Failed to save image: {}", e)))?;
+        let object_key = format!("recipes/{}", file_name);
 
-        let url = format!("/uploads/recipes/{}", file_name);
+        let s3_client = self.s3_client.as_ref().ok_or_else(|| AppError::Internal("S3 not configured".to_string()))?;
+        let s3_bucket = self.s3_bucket.as_ref().ok_or_else(|| AppError::Internal("S3 bucket not configured".to_string()))?;
+
+        s3_client
+            .put_object()
+            .bucket(s3_bucket)
+            .key(&object_key)
+            .body(image_bytes.into())
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to upload image to S3: {}", e)))?;
+
+        let url = if let Some(pub_url) = &self.s3_public_url {
+            format!("{}/{}", pub_url, object_key)
+        } else {
+            // Fallback: assume the client handles it or it's mapped directly
+            format!("/{}", object_key)
+        };
         let url_clone = url.clone();
 
         self.db.transaction::<_, (), AppError>(|txn| {
