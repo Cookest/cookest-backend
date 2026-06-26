@@ -30,6 +30,7 @@ impl RecipeService {
     /// List recipes with filters and pagination
     pub async fn list_recipes(
         &self,
+        user_id: Option<Uuid>,
         query: RecipeQuery,
     ) -> Result<PaginatedResponse<RecipeListItem>, AppError> {
         let page = query.page.unwrap_or(1).max(1);
@@ -71,8 +72,16 @@ impl RecipeService {
             condition = condition.add(Expr::col(recipe::Column::Name).ilike(pattern));
         }
 
-        // Only show public recipes in general browse
-        condition = condition.add(recipe::Column::IsPublic.eq(true));
+        // Show public recipes OR recipes owned by the current user
+        if let Some(uid) = user_id {
+            condition = condition.add(
+                Condition::any()
+                    .add(recipe::Column::IsPublic.eq(true))
+                    .add(recipe::Column::AuthorId.eq(uid))
+            );
+        } else {
+            condition = condition.add(recipe::Column::IsPublic.eq(true));
+        }
 
         let paginator = recipe::Entity::find()
             .filter(condition)
@@ -256,6 +265,7 @@ impl RecipeService {
             steps,
             images,
             nutrition,
+            author_id: recipe.author_id,
         })
     }
 
@@ -287,7 +297,7 @@ impl RecipeService {
                 .map(|i| i.ingredient_id)
                 .collect();
 
-        let mut result = self.list_recipes(query).await?;
+        let mut result = self.list_recipes(Some(user_id), query).await?;
 
         // For each recipe in the page, compute match_pct
         let recipe_ids: Vec<i64> = result.data.iter().map(|r| r.id).collect();
@@ -848,5 +858,128 @@ impl RecipeService {
             .ok_or_else(|| AppError::Internal("Failed to load cached recipe model".into()))?;
 
         Ok(r)
+    }
+
+    /// Import a community recipe into the user's collection (as a private clone)
+    pub async fn import_recipe(
+        &self,
+        user_id: Uuid,
+        recipe_id: i64,
+    ) -> Result<serde_json::Value, AppError> {
+        // 1. Fetch source recipe details
+        let source_recipe = self.get_recipe(recipe_id).await?;
+
+        // 2. Generate slug
+        use slug::slugify;
+        let base_slug = slugify(&source_recipe.name);
+        let slug = format!("{}-{}", base_slug, &uuid::Uuid::new_v4().to_string()[..8]);
+        let now = Utc::now().fixed_offset();
+
+        // 3. Start transaction
+        let txn_db = self.db.clone();
+        let saved = txn_db.transaction::<_, recipe::Model, AppError>(move |txn| {
+            Box::pin(async move {
+                // Insert main recipe record
+                let rec_model = recipe::ActiveModel {
+                    name: Set(source_recipe.name.clone()),
+                    slug: Set(slug),
+                    description: Set(source_recipe.description.clone()),
+                    cuisine: Set(source_recipe.cuisine.clone()),
+                    category: Set(source_recipe.category.clone()),
+                    difficulty: Set(source_recipe.difficulty.clone()),
+                    servings: Set(source_recipe.servings),
+                    prep_time_min: Set(source_recipe.prep_time_min),
+                    cook_time_min: Set(source_recipe.cook_time_min),
+                    total_time_min: Set(source_recipe.total_time_min),
+                    is_vegetarian: Set(source_recipe.is_vegetarian),
+                    is_vegan: Set(source_recipe.is_vegan),
+                    is_gluten_free: Set(source_recipe.is_gluten_free),
+                    is_dairy_free: Set(source_recipe.is_dairy_free),
+                    is_nut_free: Set(source_recipe.is_nut_free),
+                    source_url: Set(source_recipe.source_url.clone()),
+                    author_id: Set(Some(user_id)),
+                    is_public: Set(false), // Imported recipes are private by default
+                    rating_count: Set(0),
+                    average_rating: Set(None),
+                    created_at: Set(now),
+                    updated_at: Set(now),
+                    ..Default::default()
+                };
+
+                let saved_recipe = rec_model.insert(txn).await?;
+
+                // Copy ingredients
+                for ri in &source_recipe.ingredients {
+                    let ri_model = recipe_ingredient::ActiveModel {
+                        recipe_id: Set(saved_recipe.id),
+                        ingredient_id: Set(ri.ingredient_id),
+                        quantity: Set(ri.quantity),
+                        unit: Set(ri.unit.clone()),
+                        notes: Set(ri.notes.clone()),
+                        display_order: Set(ri.display_order),
+                        ..Default::default()
+                    };
+                    ri_model.insert(txn).await?;
+                }
+
+                // Copy steps
+                for step in &source_recipe.steps {
+                    let step_model = recipe_step::ActiveModel {
+                        recipe_id: Set(saved_recipe.id),
+                        step_number: Set(step.step_number),
+                        instruction: Set(step.instruction.clone()),
+                        duration_min: Set(step.duration_min),
+                        image_url: Set(step.image_url.clone()),
+                        tip: Set(step.tip.clone()),
+                        ..Default::default()
+                    };
+                    step_model.insert(txn).await?;
+                }
+
+                // Copy images
+                for img in &source_recipe.images {
+                    let img_model = recipe_image::ActiveModel {
+                        recipe_id: Set(saved_recipe.id),
+                        url: Set(img.url.clone()),
+                        image_type: Set(img.image_type.clone()),
+                        is_primary: Set(img.is_primary),
+                        width: Set(img.width),
+                        height: Set(img.height),
+                        ..Default::default()
+                    };
+                    img_model.insert(txn).await?;
+                }
+
+                // Copy nutrition
+                if let Some(ref nut) = source_recipe.nutrition {
+                    let nut_model = recipe_nutrition::ActiveModel {
+                        recipe_id: Set(saved_recipe.id),
+                        calories: Set(nut.calories),
+                        protein_g: Set(nut.protein_g),
+                        carbs_g: Set(nut.carbs_g),
+                        fat_g: Set(nut.fat_g),
+                        fiber_g: Set(nut.fiber_g),
+                        sugar_g: Set(nut.sugar_g),
+                        sodium_mg: Set(nut.sodium_mg),
+                        saturated_fat_g: Set(nut.saturated_fat_g),
+                        per_serving: Set(nut.per_serving),
+                        ..Default::default()
+                    };
+                    nut_model.insert(txn).await?;
+                }
+
+                Ok(saved_recipe)
+            })
+        }).await.map_err(|e| match e {
+            sea_orm::TransactionError::Connection(de) => AppError::from(de),
+            sea_orm::TransactionError::Transaction(ae) => ae,
+        })?;
+
+        Ok(serde_json::json!({
+            "id": saved.id,
+            "slug": saved.slug,
+            "name": saved.name,
+            "message": "Recipe imported successfully."
+        }))
     }
 }

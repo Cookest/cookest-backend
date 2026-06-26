@@ -10,23 +10,26 @@ use uuid::Uuid;
 use crate::entity::{recipe, recipe_rating, user_favorite, cooking_history};
 use cookest_shared::errors::AppError;
 use crate::models::interaction::*;
-use crate::services::{InventoryService, PreferenceService};
+use crate::services::{InventoryService, PreferenceService, RecipeService};
 use crate::services::preference::PreferenceSignal;
+use crate::handlers::browse::FoodApiClient;
 
 pub struct InteractionService {
     db: DatabaseConnection,
     preference_service: PreferenceService,
     inventory_service: InventoryService,
+    food_api_client: FoodApiClient,
 }
 
 impl InteractionService {
-    pub fn new(db: DatabaseConnection) -> Self {
+    pub fn new(db: DatabaseConnection, food_api_client: FoodApiClient) -> Self {
         let db2 = db.clone();
         let db3 = db.clone();
         Self {
             db,
             preference_service: PreferenceService::new(db2),
             inventory_service: InventoryService::new(db3),
+            food_api_client,
         }
     }
 
@@ -38,11 +41,11 @@ impl InteractionService {
         rating: i16,
         comment: Option<String>,
     ) -> Result<InteractionResponse, AppError> {
-        // Verify recipe exists
-        recipe::Entity::find_by_id(recipe_id)
-            .one(&self.db)
-            .await?
-            .ok_or(AppError::NotFound("Recipe".into()))?;
+        // Verify recipe exists, importing it if missing
+        if recipe::Entity::find_by_id(recipe_id).one(&self.db).await?.is_none() {
+            let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
+            recipe_service.get_recipe_or_import(recipe_id).await?;
+        }
 
         let now = Utc::now().fixed_offset();
 
@@ -83,10 +86,11 @@ impl InteractionService {
         user_id: Uuid,
         recipe_id: i64,
     ) -> Result<FavouriteResponse, AppError> {
-        recipe::Entity::find_by_id(recipe_id)
-            .one(&self.db)
-            .await?
-            .ok_or(AppError::NotFound("Recipe".into()))?;
+        // Verify recipe exists, importing it if missing
+        if recipe::Entity::find_by_id(recipe_id).one(&self.db).await?.is_none() {
+            let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
+            recipe_service.get_recipe_or_import(recipe_id).await?;
+        }
 
         let existing = user_favorite::Entity::find()
             .filter(user_favorite::Column::UserId.eq(user_id))
@@ -133,10 +137,13 @@ impl InteractionService {
         recipe_id: i64,
         servings_made: i32,
     ) -> Result<InteractionResponse, AppError> {
-        let recipe = recipe::Entity::find_by_id(recipe_id)
-            .one(&self.db)
-            .await?
-            .ok_or(AppError::NotFound("Recipe".into()))?;
+        let recipe = match recipe::Entity::find_by_id(recipe_id).one(&self.db).await? {
+            Some(r) => r,
+            None => {
+                let recipe_service = RecipeService::new(self.db.clone(), self.food_api_client.clone());
+                recipe_service.get_recipe_or_import(recipe_id).await?
+            }
+        };
 
         // Log cooking history first so deductions can reference it (enables undo)
         let now = Utc::now().fixed_offset();

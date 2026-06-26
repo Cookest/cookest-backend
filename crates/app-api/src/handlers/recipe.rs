@@ -35,7 +35,7 @@ pub async fn list_recipes(
         let result = recipe_service.list_recipes_with_inventory(user_id, q).await?;
         return Ok(HttpResponse::Ok().json(result));
     }
-    let result = recipe_service.list_recipes(q).await?;
+    let result = recipe_service.list_recipes(user.map(|u| u.id), q).await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -170,6 +170,17 @@ pub async fn upload_recipe_image(
     Ok(HttpResponse::Ok().json(result))
 }
 
+/// POST /api/recipes/:id/import — import a community recipe
+pub async fn import_recipe(
+    recipe_service: web::Data<Arc<RecipeService>>,
+    user: AuthenticatedUser,
+    path: web::Path<i64>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = user.id;
+    let result = recipe_service.import_recipe(user_id, path.into_inner()).await?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
 /// Configure all recipe routes in a single scope.
 /// Public GET routes (list, slug, by-id) work without auth.
 /// Write routes and /mine use AuthenticatedUser which self-validates the JWT.
@@ -184,7 +195,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/{id}", web::get().to(get_recipe))
             .route("/{id}", web::put().to(update_recipe))
             .route("/{id}", web::delete().to(delete_recipe))
-            .route("/{id}/image", web::post().to(upload_recipe_image)),
+            .route("/{id}/image", web::post().to(upload_recipe_image))
+            .route("/{id}/import", web::post().to(import_recipe)),
     );
 }
 

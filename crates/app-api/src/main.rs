@@ -795,7 +795,7 @@ async fn main() -> std::io::Result<()> {
     let meal_plan_service = Arc::new(MealPlanService::new(db.clone(), food_api_client.clone()));
     let inventory_service = Arc::new(InventoryService::new(db.clone()));
     let profile_service = Arc::new(ProfileService::new(db.clone()));
-    let interaction_service = Arc::new(InteractionService::new(db.clone()));
+    let interaction_service = Arc::new(InteractionService::new(db.clone(), food_api_client.clone()));
     let preference_service = Arc::new(PreferenceService::new(db.clone()));
     let chat_service = Arc::new(ChatService::new(db.clone(), food_api_client.clone()));
     let onboarding_service = Arc::new(OnboardingService::new(db.clone()));

@@ -83,6 +83,7 @@ pub struct RecipeDetail {
     pub steps: Vec<RecipeStepDetail>,
     pub images: Vec<RecipeImageDetail>,
     pub nutrition: Option<RecipeNutritionDetail>,
+    pub author_id: Option<uuid::Uuid>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
