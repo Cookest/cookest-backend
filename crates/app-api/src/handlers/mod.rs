@@ -45,3 +45,6 @@ pub use import::configure_import_proxy;
 
 pub mod admin;
 pub use admin::{configure_admin, configure_admin_setup};
+
+pub mod admin_ingredient;
+pub use admin_ingredient::configure_admin_ingredients;

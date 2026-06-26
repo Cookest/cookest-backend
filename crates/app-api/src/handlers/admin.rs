@@ -13,6 +13,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::entity::user::{self, ActiveModel, Entity as User};
+use crate::handlers::browse::FoodApiClient;
 use crate::middleware::auth::AuthenticatedUser;
 use crate::services::token::{SubscriptionTier, TokenService};
 use crate::validation::normalize_email;
@@ -306,6 +307,7 @@ pub async fn update_user(
 pub async fn get_stats(
     auth: AuthenticatedUser,
     db: web::Data<DatabaseConnection>,
+    food: web::Data<FoodApiClient>,
 ) -> Result<HttpResponse, AppError> {
     require_admin(auth.id, db.get_ref()).await?;
 
@@ -315,9 +317,12 @@ pub async fn get_stats(
         .count(db.get_ref())
         .await?;
 
-    let total_ingredients = crate::entity::ingredient::Entity::find()
-        .count(db.get_ref())
-        .await?;
+    // Count the master catalog (food-api), not the local mirror. Fall back to the
+    // local mirror count if food-api is unreachable.
+    let total_ingredients = match fetch_catalog_count(&food).await {
+        Ok(n) => n,
+        Err(_) => crate::entity::ingredient::Entity::find().count(db.get_ref()).await?,
+    };
 
     let active_meal_plans = crate::entity::meal_plan::Entity::find()
         .count(db.get_ref())
@@ -389,6 +394,22 @@ pub async fn update_settings(
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Fetch the total ingredient count from the master catalog (food-api).
+async fn fetch_catalog_count(food: &FoodApiClient) -> Result<u64, AppError> {
+    let resp = food
+        .client
+        .get(format!("{}/api/v1/ingredients?per_page=1", food.base_url))
+        .header("X-API-Key", food.api_key.as_deref().unwrap_or(""))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("food-api stats error: {}", e)))?;
+    let v: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("food-api stats decode error: {}", e)))?;
+    Ok(v.get("total").and_then(|t| t.as_u64()).unwrap_or(0))
+}
 
 fn hash_password(password: &str) -> Result<String, AppError> {
     let params = Params::new(19 * 1024, 2, 1, None)
