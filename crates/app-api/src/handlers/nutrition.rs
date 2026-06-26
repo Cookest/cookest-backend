@@ -14,9 +14,11 @@ use crate::services::nutrition::{NutritionService, RecipeSuggestRequest, WhatToB
 
 pub async fn what_to_buy(
     svc: web::Data<Arc<NutritionService>>,
+    sub_service: web::Data<Arc<crate::services::subscription::SubscriptionService>>,
     claims: web::ReqData<Claims>,
     body: web::Json<WhatToBuyRequest>,
 ) -> Result<HttpResponse, AppError> {
+    sub_service.require_pro_for_ai_feature(&claims, "ai_grocery_suggestions")?;
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
     let res = svc.what_to_buy(user_id, body.into_inner().goal).await?;
     Ok(HttpResponse::Ok().json(res))
@@ -24,9 +26,11 @@ pub async fn what_to_buy(
 
 pub async fn recipe_suggestions(
     svc: web::Data<Arc<NutritionService>>,
+    sub_service: web::Data<Arc<crate::services::subscription::SubscriptionService>>,
     claims: web::ReqData<Claims>,
     body: web::Json<RecipeSuggestRequest>,
 ) -> Result<HttpResponse, AppError> {
+    sub_service.require_pro_for_ai_feature(&claims, "ai_recipe_suggestions")?;
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
     let res = svc.recipe_suggestions(user_id, body.into_inner().count.unwrap_or(5)).await?;
     Ok(HttpResponse::Ok().json(res))

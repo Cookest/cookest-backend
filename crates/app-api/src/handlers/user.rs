@@ -11,7 +11,7 @@ use crate::models::inventory::{AddInventoryItem, UpdateInventoryItem, QuickAddIt
 use crate::models::profile::UpdateProfileRequest;
 use crate::models::interaction::RateRecipeRequest;
 use crate::models::meal_plan::GenerateMealPlanRequest;
-use crate::services::{InventoryService, ProfileService, InteractionService, MealPlanService, PushTokenService, PreferenceService, ScanService};
+use crate::services::{InventoryService, ProfileService, InteractionService, MealPlanService, PushTokenService, PreferenceService, ScanService, SubscriptionService};
 use crate::services::scan::BulkAddItem;
 use crate::handlers::browse::FoodApiClient;
 use crate::middleware::Claims;
@@ -322,10 +322,12 @@ pub async fn get_cooking_history(
 pub async fn generate_meal_plan(
     meal_svc: web::Data<Arc<MealPlanService>>,
     profile_svc: web::Data<Arc<ProfileService>>,
+    sub_service: web::Data<Arc<SubscriptionService>>,
     claims: web::ReqData<Claims>,
     body: web::Json<GenerateMealPlanRequest>,
 ) -> Result<HttpResponse, AppError> {
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    sub_service.check_ai_meal_plan_limit(&claims, user_id).await?;
     let profile = profile_svc.get_profile(user_id).await?;
     let plan = meal_svc
         .generate_week_plan(user_id, profile.household_size, body.week_start)

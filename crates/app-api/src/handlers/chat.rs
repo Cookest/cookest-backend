@@ -12,9 +12,11 @@ use crate::services::chat::{ChatRequest, ChatService};
 /// Send a message to the AI assistant (creates or continues a session)
 pub async fn send_message(
     chat_svc: web::Data<Arc<ChatService>>,
+    sub_service: web::Data<Arc<crate::services::subscription::SubscriptionService>>,
     claims: web::ReqData<Claims>,
     body: web::Json<ChatRequest>,
 ) -> Result<HttpResponse, AppError> {
+    sub_service.require_pro_for_ai_feature(&claims, "ai_chat")?;
     let user_id = Uuid::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
     if body.message.trim().is_empty() {
         return Err(cookest_shared::errors::AppError::Validation({
